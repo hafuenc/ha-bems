@@ -17,7 +17,6 @@ def main() -> None:
         target_soc_percent=100.0,
         charge_efficiency=0.95,
         max_charge_power_w=5000.0,
-        monthly_min_soc_percent=(20.0,) * 12,
     )
     result = calculate_fbc(
         forecast,

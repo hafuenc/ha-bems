@@ -1,0 +1,86 @@
+{
+  "title": "HA-BEMS",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Battery settings",
+        "description": "Name this battery and choose the source for its Battery seasonal SOC min threshold. This first version exposes the shared threshold only; FBC forecast input and device control are not connected yet.",
+        "data": {
+          "name": "Battery name",
+          "seasonal_soc_source": "Threshold source"
+        }
+      },
+      "monthly": {
+        "title": "Battery seasonal SOC min threshold",
+        "description": "Set one minimum SOC threshold per calendar month. Florian's values are editable suggestions; review them for your battery. FBC allows maximum charging power below this threshold. This setting alone does not prevent discharge.",
+        "data": {
+          "january": "January",
+          "february": "February",
+          "march": "March",
+          "april": "April",
+          "may": "May",
+          "june": "June",
+          "july": "July",
+          "august": "August",
+          "september": "September",
+          "october": "October",
+          "november": "November",
+          "december": "December"
+        }
+      },
+      "existing_entity": {
+        "title": "Battery seasonal SOC min threshold",
+        "description": "Select an existing sensor, number or input_number that supplies the current threshold in percent (unit %). It must currently have a numeric value from 0 to 100. Your entity manages any seasonal changes. An unavailable source makes the HA-BEMS threshold unavailable; there is no automatic fallback to the monthly schedule.",
+        "data": {
+          "seasonal_soc_entity": "Existing threshold entity"
+        }
+      }
+    },
+    "error": {
+      "invalid_threshold": "Enter twelve percentages between 0 and 100.",
+      "invalid_entity": "Select an available entity with a numeric value from 0 to 100 and unit %. This is the threshold source, not the measured battery SOC.",
+      "self_reference": "Select an external entity. This battery cannot use its own HA-BEMS output as its source."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Battery seasonal SOC min threshold",
+        "description": "Edit the monthly schedule or select an existing threshold entity.",
+        "data": {
+          "seasonal_soc_source": "Threshold source"
+        }
+      },
+      "monthly": {
+        "title": "Battery seasonal SOC min threshold",
+        "description": "Set one minimum SOC threshold per calendar month. Florian's values are editable suggestions; review them for your battery. FBC allows maximum charging power below this threshold. This setting alone does not prevent discharge.",
+        "data": {
+          "january": "January",
+          "february": "February",
+          "march": "March",
+          "april": "April",
+          "may": "May",
+          "june": "June",
+          "july": "July",
+          "august": "August",
+          "september": "September",
+          "october": "October",
+          "november": "November",
+          "december": "December"
+        }
+      },
+      "existing_entity": {
+        "title": "Battery seasonal SOC min threshold",
+        "description": "Select an existing sensor, number or input_number that supplies the current threshold in percent (unit %). It must currently have a numeric value from 0 to 100. Your entity manages any seasonal changes. An unavailable source makes the HA-BEMS threshold unavailable; there is no automatic fallback to the monthly schedule.",
+        "data": {
+          "seasonal_soc_entity": "Existing threshold entity"
+        }
+      }
+    },
+    "error": {
+      "invalid_threshold": "Enter twelve percentages between 0 and 100.",
+      "invalid_entity": "Select an available entity with a numeric value from 0 to 100 and unit %. This is the threshold source, not the measured battery SOC.",
+      "self_reference": "Select an external entity. This battery cannot use its own HA-BEMS output as its source."
+    }
+  }
+}
