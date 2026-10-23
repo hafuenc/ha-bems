@@ -1,0 +1,36 @@
+# Local project handover and machine-specific settings
+PROJECT_CONTEXT.txt
+.env
+.env.*
+!.env.example
+secrets.yaml
+secrets.yml
+*.pem
+*.key
+.venv/
+venv/
+.vscode/
+.idea/
+
+# Python and test tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Private runtime data and logs
+local_data/
+.storage/
+home-assistant.log*
+*.log
+
+# Operating system files
+Thumbs.db
+Desktop.ini
+.DS_Store
