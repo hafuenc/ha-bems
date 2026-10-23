@@ -8,8 +8,9 @@ calculation. Heat-pump and energy-community (EEG) control are planned for later.
 
 ## Current status
 
-Repository preparation only. No installable integration or device control exists
-yet. The existing MATLAB automation remains the operational controller.
+The first Python FBC calculation is available for manual result review. No
+installable integration or device control exists yet. The existing MATLAB
+automation remains the operational controller. See [FBC notes](docs/fbc.md).
 
 ## Initial scope
 
@@ -35,7 +36,7 @@ appropriate project license must be clarified before public release.
 ## Planned integration location
 
 The Home Assistant integration will live in `custom_components/ha_bems/`.
-This directory will be created when integration development starts.
+Currently this directory contains only the independent FBC calculation.
 
 ## Development data
 
