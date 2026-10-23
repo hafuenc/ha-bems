@@ -1,0 +1,11 @@
+{
+  "domain": "ha_bems",
+  "name": "HA-BEMS",
+  "codeowners": ["@hafuenc"],
+  "config_flow": true,
+  "documentation": "https://github.com/hafuenc/ha-bems",
+  "issue_tracker": "https://github.com/hafuenc/ha-bems/issues",
+  "iot_class": "calculated",
+  "requirements": [],
+  "version": "0.1.0"
+}

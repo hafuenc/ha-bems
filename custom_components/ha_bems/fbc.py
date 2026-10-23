@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from math import floor, isfinite
 from typing import Sequence
 
+from .const import DEFAULT_MONTHLY_MIN_SOC
+from .seasonal_soc import validate_threshold
+
 
 @dataclass(frozen=True)
 class FBCSettings:
@@ -18,7 +21,7 @@ class FBCSettings:
     target_soc_percent: float
     charge_efficiency: float
     max_charge_power_w: float
-    monthly_min_soc_percent: tuple[float, ...]
+    monthly_min_soc_percent: tuple[float, ...] = DEFAULT_MONTHLY_MIN_SOC
     # Separate from max_charge_power_w, as in the original POST expression.
     output_limit_w: float = 5000.0
 
@@ -34,6 +37,7 @@ class FBCResult:
     charge_limit_w: float
     limitation_disabled: bool
     override_reasons: tuple[str, ...]
+    seasonal_soc_min_threshold_percent: float
 
 
 def _nonnegative_finite(name: str, value: float) -> None:
@@ -60,6 +64,7 @@ def calculate_fbc(
     current_soc_percent: float,
     current_month: int,
     settings: FBCSettings,
+    seasonal_soc_min_threshold_percent: float | None = None,
 ) -> FBCResult:
     """Calculate the legacy FBC profile for a prepared, equally spaced horizon.
 
@@ -67,6 +72,8 @@ def calculate_fbc(
     current control interval and ending at the selected local day-end horizon.
     The caller handles timestamps, horizon selection and forecast freshness.
     current_month is the current local calendar month (1..12), as in MATLAB.
+    seasonal_soc_min_threshold_percent can supply the shared threshold resolved
+    from an existing entity. If omitted, the configured monthly schedule is used.
 
     Invalid inputs raise ValueError and produce no recommendation. This is an
     explicit boundary around inputs for which the legacy fragment is undefined;
@@ -94,6 +101,12 @@ def calculate_fbc(
     for value in settings.monthly_min_soc_percent:
         _soc("monthly minimum SOC", value)
 
+    active_threshold = validate_threshold(
+        settings.monthly_min_soc_percent[current_month - 1]
+        if seasonal_soc_min_threshold_percent is None
+        else seasonal_soc_min_threshold_percent
+    )
+
     required_energy = (
         max(0.0, settings.target_soc_percent - current_soc_percent)
         / 100
@@ -116,7 +129,7 @@ def calculate_fbc(
 
     profile = tuple(_round_nonnegative(max(0.0, power - selected_limit), 1) for power in forecast)
     reasons: list[str] = []
-    if current_soc_percent < settings.monthly_min_soc_percent[current_month - 1]:
+    if current_soc_percent < active_threshold:
         profile = (settings.max_charge_power_w,) * len(forecast)
         reasons.append("below_monthly_soc_threshold")
 
@@ -133,4 +146,5 @@ def calculate_fbc(
         charge_limit_w=max(0.0, min(profile[0], settings.output_limit_w)),
         limitation_disabled=bool(reasons),
         override_reasons=tuple(reasons),
+        seasonal_soc_min_threshold_percent=active_threshold,
     )

@@ -2,8 +2,9 @@
 
 The Python calculation in `custom_components/ha_bems/fbc.py` is a direct port
 of the calculation in `matlab_reference/fbc_original_excerpt.m`. It is independent
-of Home Assistant and performs no device writes. It is not yet an installable
-integration. Its results still need review with the actual system inputs.
+of Home Assistant and performs no device writes. Its results still need review
+with the actual system inputs. The initial integration exposes the shared
+[Battery seasonal SOC min threshold](seasonal_soc.md); it does not run FBC yet.
 
 ## Preserved calculation
 
@@ -13,7 +14,7 @@ integration. Its results still need review with the actual system inputs.
    Choose the first threshold with the smallest absolute energy mismatch.
 3. For each interval, charge power is `max(0, pv_dc_w - threshold_w)`, rounded
    to 0.1 W. Forecast energy uses the fixed interval duration in hours.
-4. When SOC is below the current month's threshold, replace the entire profile
+4. When SOC is below the active seasonal threshold, replace the entire profile
    with the configured maximum charging power.
 5. Compare the first resulting profile value with the first PV value, both
    rounded to whole watts. If equal, replace the entire profile with maximum
@@ -24,6 +25,9 @@ integration. Its results still need review with the actual system inputs.
 
 The selected threshold and energy above it describe the calculation before any
 override. `override_reasons` explains why the final profile allows maximum power.
+The threshold defaults to the configured month. An explicitly supplied
+`seasonal_soc_min_threshold_percent` can instead use a shared entity-derived value.
+`seasonal_soc_min_threshold_percent` in the result reports the active value.
 
 ## Inputs still required from the actual system
 

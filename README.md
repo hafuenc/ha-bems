@@ -8,8 +8,12 @@ calculation. Heat-pump and energy-community (EEG) control are planned for later.
 
 ## Current status
 
-The first Python FBC calculation is available for manual result review. No
-installable integration or device control exists yet. The existing MATLAB
+The Python FBC calculation is available for manual result review. The initial
+Home Assistant integration provides setup, settings and a shared **Battery
+seasonal SOC min threshold** sensor, using a monthly schedule or an existing
+entity. See [seasonal SOC setup](docs/seasonal_soc.md).
+
+FBC forecast input and device control are not connected yet. The existing MATLAB
 automation remains the operational controller. See [FBC notes](docs/fbc.md).
 
 ## Initial scope
@@ -36,7 +40,9 @@ appropriate project license must be clarified before public release.
 ## Planned integration location
 
 The Home Assistant integration will live in `custom_components/ha_bems/`.
-Currently this directory contains only the independent FBC calculation.
+It currently contains the independent FBC calculation and the first shared
+battery threshold setup and sensor. The HA setup has not been verified in a
+running Home Assistant instance yet.
 
 ## Development data
 
