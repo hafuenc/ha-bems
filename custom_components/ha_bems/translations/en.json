@@ -92,18 +92,18 @@
       },
       "fbc_battery": {
         "title": "Battery parameters",
-        "description": "Use the usable (net) battery capacity corresponding to the selected SOC sensor's full 0–100% range. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power. The device output cap must be at least this maximum.",
+        "description": "Use the usable (net) battery capacity corresponding to the selected SOC sensor's full 0–100% range. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power.",
         "data": {
-          "capacity_kwh": "Usable battery capacity (net)",
-          "target_soc_percent": "Target SOC",
+          "capacity_kwh": "Usable battery capacity (net) in kWh",
+          "target_soc_percent": "Target SOC in %",
           "charge_efficiency": "PV forecast-to-battery storage efficiency",
-          "max_charge_power_w": "Maximum charging power",
-          "output_limit_w": "Device output power cap"
+          "max_charge_power_w": "Maximum charging power in W"
         },
         "data_description": {
           "charge_efficiency": "Factor from 0 to 1: 0.95 means that 95% of forecast PV energy becomes stored battery energy. A constant factor cannot recover PV peaks already clipped in the forecast.",
-          "output_limit_w": "Set this to the physical output limit. It must not be lower than maximum charging power; equal values are normally appropriate.",
-          "capacity_kwh": "Enter the usable energy in kWh corresponding to a change from 0% to 100% on the selected battery SOC sensor."
+          "capacity_kwh": "Enter the usable energy in kWh corresponding to a change from 0% to 100% on the selected battery SOC sensor.",
+          "target_soc_percent": "SOC that FBC aims to reach by the end of the day. Keep this value aligned with the maximum SOC configured in your battery system.",
+          "max_charge_power_w": "Maximum charging power supported by your battery system, in W. Also used as the output limit."
         }
       },
       "fbc_forecast": {
@@ -151,7 +151,6 @@
       "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
       "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
       "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
-      "output_limit_below_maximum": "The output cap must be at least the maximum charging power. Review both values.",
       "no_pv_import": "No PV input is registered yet. Add HA-BEMS again, choose BEMS entity importer → PV generation forecast, and complete its test before setting up FBC."
     }
   },
@@ -229,18 +228,18 @@
       },
       "fbc_battery": {
         "title": "Battery parameters",
-        "description": "Use the usable (net) battery capacity corresponding to the selected SOC sensor's full 0–100% range. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power. The device output cap must be at least this maximum.",
+        "description": "Use the usable (net) battery capacity corresponding to the selected SOC sensor's full 0–100% range. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power.",
         "data": {
-          "capacity_kwh": "Usable battery capacity (net)",
-          "target_soc_percent": "Target SOC",
+          "capacity_kwh": "Usable battery capacity (net) in kWh",
+          "target_soc_percent": "Target SOC in %",
           "charge_efficiency": "PV forecast-to-battery storage efficiency",
-          "max_charge_power_w": "Maximum charging power",
-          "output_limit_w": "Device output power cap"
+          "max_charge_power_w": "Maximum charging power in W"
         },
         "data_description": {
           "charge_efficiency": "Factor from 0 to 1: 0.95 means that 95% of forecast PV energy becomes stored battery energy. A constant factor cannot recover PV peaks already clipped in the forecast.",
-          "output_limit_w": "Set this to the physical output limit. It must not be lower than maximum charging power; equal values are normally appropriate.",
-          "capacity_kwh": "Enter the usable energy in kWh corresponding to a change from 0% to 100% on the selected battery SOC sensor."
+          "capacity_kwh": "Enter the usable energy in kWh corresponding to a change from 0% to 100% on the selected battery SOC sensor.",
+          "target_soc_percent": "SOC that FBC aims to reach by the end of the day. Keep this value aligned with the maximum SOC configured in your battery system.",
+          "max_charge_power_w": "Maximum charging power supported by your battery system, in W. Also used as the output limit."
         }
       },
       "import_pv": {
@@ -265,7 +264,6 @@
       "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
       "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
       "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
-      "output_limit_below_maximum": "The output cap must be at least the maximum charging power. Review both values.",
       "no_pv_import": "No PV input is registered yet. Add HA-BEMS again, choose BEMS entity importer → PV generation forecast, and complete its test before setting up FBC."
     }
   }

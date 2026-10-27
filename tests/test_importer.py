@@ -156,6 +156,15 @@ class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('forecast_max_age_minutes', result['data'])
         self.assertEqual(options.config_entry.entry_id, 'pv-main')
 
+    async def test_fbc_saves_with_one_power_parameter(self):
+        self.flow._draft={'name':'Battery','pv_import_entry_id':'pv-main'}
+        result=await self.flow.async_step_fbc_battery({
+            'capacity_kwh':10,'target_soc_percent':90,'charge_efficiency':0.95,
+            'max_charge_power_w':7500})
+        self.assertEqual(result['type'],'create_entry')
+        self.assertEqual(result['data']['max_charge_power_w'],7500)
+        self.assertNotIn('output_limit_w',result['data'])
+
 
 if __name__ == '__main__':
     unittest.main()

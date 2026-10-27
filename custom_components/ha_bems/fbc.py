@@ -22,8 +22,6 @@ class FBCSettings:
     charge_efficiency: float
     max_charge_power_w: float
     monthly_min_soc_percent: tuple[float, ...] = DEFAULT_MONTHLY_MIN_SOC
-    # Separate from max_charge_power_w, as in the original POST expression.
-    output_limit_w: float = 5000.0
 
 
 @dataclass(frozen=True)
@@ -95,9 +93,6 @@ def calculate_fbc(
     if not isfinite(settings.charge_efficiency) or not 0 < settings.charge_efficiency <= 1:
         raise ValueError("charge_efficiency must be a factor greater than 0 and at most 1")
     _nonnegative_finite("max_charge_power_w", settings.max_charge_power_w)
-    _nonnegative_finite("output_limit_w", settings.output_limit_w)
-    if settings.output_limit_w < settings.max_charge_power_w:
-        raise ValueError("Device output cap must not be lower than maximum charging power")
     if len(settings.monthly_min_soc_percent) != 12:
         raise ValueError("monthly_min_soc_percent must contain 12 values, January to December")
     for value in settings.monthly_min_soc_percent:
@@ -145,7 +140,7 @@ def calculate_fbc(
         required_energy_kwh=required_energy,
         energy_above_limit_kwh=selected_energy,
         charge_profile_w=profile,
-        charge_limit_w=max(0.0, min(profile[0], settings.output_limit_w)),
+        charge_limit_w=max(0.0, min(profile[0], settings.max_charge_power_w)),
         limitation_disabled=bool(reasons),
         override_reasons=tuple(reasons),
         seasonal_soc_min_threshold_percent=active_threshold,

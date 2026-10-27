@@ -53,7 +53,7 @@ class BEMSCoordinator(DataUpdateCoordinator):
         intervals = daily_forecast(intervals, now, ZoneInfo(self.hass.config.time_zone))
         settings = FBCSettings(**{key: self.config[key] for key in (
             "capacity_kwh", "target_soc_percent", "charge_efficiency",
-            "max_charge_power_w", "output_limit_w",
+            "max_charge_power_w",
         )})
         result = calculate_fbc(
             [record["power_w"] for record in intervals], step_hours=0.25,
@@ -73,8 +73,6 @@ class BEMSCoordinator(DataUpdateCoordinator):
 
     def _maximum_charging_plan(self, threshold, now):
         maximum = self.config["max_charge_power_w"]
-        if self.config["output_limit_w"] < maximum:
-            raise ValueError("Device output cap must not be lower than maximum charging power; review battery settings")
         cursor = now.astimezone(UTC).replace(second=0, microsecond=0)
         cursor -= timedelta(minutes=cursor.minute % 15)
         end = (now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).astimezone(UTC)
