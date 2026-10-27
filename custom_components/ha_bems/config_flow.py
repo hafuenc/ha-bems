@@ -5,12 +5,16 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er, selector
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENTITY, CONF_MODULE, CONF_MONTHLY, CONF_SOURCE, DEFAULT_MONTHLY_MIN_SOC,
     DOMAIN, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MONTHS, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
 from .seasonal_soc import resolve_threshold
+from .seasonal_soc import validate_threshold
+from .forecast_input import async_read_pv_forecast
+from .forecast_sources import CUSTOM_TEMPLATE, GENERIC_RECORDS, OPEN_METEO, TEMPLATE_EXAMPLE
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -26,6 +30,12 @@ def _choice(options):
 
 def _entity():
     return selector.EntitySelector({"domain": ["sensor", "number", "input_number"]})
+
+
+def _percentage_entity():
+    return selector.EntitySelector({"filter": [{
+        "domain": ["sensor", "number", "input_number"], "unit_of_measurement": "%",
+    }]})
 
 
 class _ModuleSteps:
@@ -117,7 +127,7 @@ class _ModuleSteps:
                 if user_input.get("holiday_country"):
                     await self.hass.async_add_executor_job(
                         lambda: holidays.country_holidays(user_input["holiday_country"],
-                            subdiv=user_input.get("holiday_subdivision") or None, years=2026)
+                            subdiv=user_input.get("holiday_subdivision") or None, years=dt_util.now().year)
                     )
             except (ValueError, KeyError, NotImplementedError):
                 errors["base"] = "invalid_load_profile"
@@ -128,7 +138,11 @@ class _ModuleSteps:
         fields = self._name_fields("Non-flexible building load")
         annual = vol.Required("annual_consumption_kwh", default=values["annual_consumption_kwh"]) if "annual_consumption_kwh" in values else vol.Required("annual_consumption_kwh")
         fields[annual] = _number(0, 10000000, "kWh/year", "any")
-        fields[vol.Required("load_profile", default=values.get("load_profile", "H0"))] = _choice(["H0", "H25", {"value": "constant", "label": "Constant throughout the year"}])
+        fields[vol.Required("load_profile", default=values.get("load_profile", "H0"))] = _choice([
+            {"value": "H0", "label": "H0"},
+            {"value": "H25", "label": "H25"},
+            {"value": "constant", "label": "Constant throughout the year"},
+        ])
         fields[vol.Required("holiday_country", default=values.get("holiday_country", "AT"))] = _choice([
             {"value": "AT", "label": "Austria"}, {"value": "DE", "label": "Germany"},
             {"value": "", "label": "Weekends only (no public holidays)"},
@@ -137,39 +151,127 @@ class _ModuleSteps:
         return self.async_show_form(step_id="load_profile", errors=errors, data_schema=vol.Schema(fields))
 
     async def async_step_fbc(self, user_input=None):
+        errors = {}
         if user_input is not None:
-            self._remember(user_input)
-            return await self.async_step_fbc_forecast()
-        values = self._values()
-        fields = self._name_fields("Home battery FBC")
+            for key in ("soc_entity", CONF_ENTITY):
+                state = self.hass.states.get(user_input[key])
+                try:
+                    if state is None or state.attributes.get("unit_of_measurement") != "%":
+                        raise ValueError
+                    validate_threshold(state.state)
+                except ValueError:
+                    errors[key] = "invalid_entity"
+            if not errors:
+                self._remember(user_input)
+                return await self.async_step_fbc_forecast()
+        values = {**self._values(), **(user_input or {})}
+        fields = self._name_fields("FBC Battery 1")
         fields[vol.Required("battery_strategy", default="fbc_legacy_dc")] = _choice([
-            {"value": "fbc_legacy_dc", "label": "FBC — Florian's DC forecast algorithm"},
+            {"value": "fbc_legacy_dc", "label": "FBC v1.0 - only PV generation considered"},
         ])
         for key in ("soc_entity", CONF_ENTITY):
             field = vol.Required(key, default=values[key]) if key in values else vol.Required(key)
-            fields[field] = _entity()
-        return self.async_show_form(step_id="fbc", data_schema=vol.Schema(fields))
+            fields[field] = _percentage_entity()
+        return self.async_show_form(step_id="fbc", errors=errors, data_schema=vol.Schema(fields))
 
     async def async_step_fbc_forecast(self, user_input=None):
         if user_input is not None:
             self._remember(user_input)
-            return await self.async_step_fbc_battery()
+            source = user_input["forecast_source"]
+            if source == OPEN_METEO:
+                return await self.async_step_fbc_open_meteo()
+            if source == CUSTOM_TEMPLATE:
+                return await self.async_step_fbc_template()
+            return await self.async_step_fbc_mapping()
         values = self._values()
-        entity_field = vol.Required("forecast_entity", default=values["forecast_entity"]) if "forecast_entity" in values else vol.Required("forecast_entity")
-        fields = {entity_field: selector.EntitySelector({"domain": "sensor"})}
+        default = values.get("forecast_source", GENERIC_RECORDS if "forecast_entity" in values else OPEN_METEO)
+        return self.async_show_form(step_id="fbc_forecast", data_schema=vol.Schema({
+            vol.Required("forecast_source", default=default): _choice([
+                {"value": OPEN_METEO, "label": "Open-Meteo Solar Forecast"},
+                {"value": CUSTOM_TEMPLATE, "label": "Custom forecast template"},
+                {"value": GENERIC_RECORDS, "label": "Advanced: existing interval records"},
+            ]),
+        }))
+
+    def _forecast_source_fields(self, values, provider=False):
+        field = vol.Required("forecast_entity", default=values["forecast_entity"]) if "forecast_entity" in values else vol.Required("forecast_entity")
+        filters = {"domain": "sensor"}
+        if provider:
+            filters["integration"] = OPEN_METEO
+        return {
+            field: selector.EntitySelector({"filter": [filters]}),
+            vol.Required("forecast_max_age_minutes", default=values.get("forecast_max_age_minutes", 180)): _number(1, 1440, "min"),
+        }
+
+    async def _preview_forecast(self, user_input):
+        self._remember(user_input)
+        try:
+            intervals, details = await async_read_pv_forecast(self.hass, self._values())
+        except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
+            return None, {"base": "invalid_forecast"}, {"reason": str(err)}
+        self._forecast_preview = {
+            "adapter": details["forecast_adapter"], "count": str(len(intervals)),
+            "start": intervals[0]["start"], "end": intervals[-1]["end"],
+            "peak": str(round(max(row["power_dc_w"] for row in intervals), 1)),
+            "energy": str(round(sum(row["power_dc_w"] * 0.25 / 1000 for row in intervals), 3)),
+            "age": str(details["source_age_minutes"]),
+        }
+        return await self.async_step_fbc_preview(), {}, {}
+
+    async def async_step_fbc_open_meteo(self, user_input=None):
+        errors, placeholders = {}, {"reason": ""}
+        if user_input is not None:
+            result, errors, placeholders = await self._preview_forecast(user_input)
+            if result is not None:
+                return result
+        return self.async_show_form(step_id="fbc_open_meteo", errors=errors,
+            description_placeholders=placeholders,
+            data_schema=vol.Schema(self._forecast_source_fields(self._values(), provider=True)))
+
+    async def async_step_fbc_template(self, user_input=None):
+        errors, placeholders = {}, {"reason": ""}
+        if user_input is not None:
+            result, errors, placeholders = await self._preview_forecast(user_input)
+            if result is not None:
+                return result
+        values = self._values()
+        fields = self._forecast_source_fields(values)
+        fields[vol.Required("forecast_template", default=values.get("forecast_template", TEMPLATE_EXAMPLE))] = selector.TemplateSelector()
+        return self.async_show_form(step_id="fbc_template", errors=errors,
+            description_placeholders=placeholders, data_schema=vol.Schema(fields))
+
+    async def async_step_fbc_mapping(self, user_input=None):
+        errors, placeholders = {}, {"reason": ""}
+        if user_input is not None:
+            result, errors, placeholders = await self._preview_forecast(user_input)
+            if result is not None:
+                return result
+        values = self._values()
+        fields = self._forecast_source_fields(values)
         for key, default in (("forecast_attribute", "forecast"), ("timestamp_key", "start"),
                              ("end_key", "end"), ("value_key", "power_dc_w")):
             fields[vol.Required(key, default=values.get(key, default))] = str
         fields[vol.Required("forecast_unit", default=values.get("forecast_unit", "W"))] = _choice(["W", "kW", "Wh", "kWh"])
         fields[vol.Required("forecast_interval_minutes", default=values.get("forecast_interval_minutes", 15))] = _number(1, 240, "min")
         fields[vol.Required("forecast_max_age_minutes", default=values.get("forecast_max_age_minutes", 180))] = _number(1, 1440, "min")
-        return self.async_show_form(step_id="fbc_forecast", data_schema=vol.Schema(fields))
+        return self.async_show_form(step_id="fbc_mapping", errors=errors,
+            description_placeholders=placeholders, data_schema=vol.Schema(fields))
+
+    async def async_step_fbc_preview(self, user_input=None):
+        if user_input is not None:
+            return await self.async_step_fbc_battery()
+        return self.async_show_form(step_id="fbc_preview", data_schema=vol.Schema({}),
+                                    description_placeholders=self._forecast_preview)
 
     async def async_step_fbc_battery(self, user_input=None):
+        errors = {}
         if user_input is not None:
-            self._remember(user_input)
-            return self._finish(MODULE_FBC)
-        values = self._values()
+            if user_input["output_limit_w"] < user_input["max_charge_power_w"]:
+                errors["output_limit_w"] = "output_limit_below_maximum"
+            else:
+                self._remember(user_input)
+                return self._finish(MODULE_FBC)
+        values = {**self._values(), **(user_input or {})}
         capacity = vol.Required("capacity_kwh", default=values["capacity_kwh"]) if "capacity_kwh" in values else vol.Required("capacity_kwh")
         fields = {capacity: _number(0.01, 10000, "kWh", "any")}
         for key, default, minimum, maximum, unit, step in (
@@ -179,7 +281,7 @@ class _ModuleSteps:
             ("output_limit_w", 5000, 0, 1000000, "W", "any"),
         ):
             fields[vol.Required(key, default=values.get(key, default))] = _number(minimum, maximum, unit, step)
-        return self.async_show_form(step_id="fbc_battery", data_schema=vol.Schema(fields))
+        return self.async_show_form(step_id="fbc_battery", errors=errors, data_schema=vol.Schema(fields))
 
 
 class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
