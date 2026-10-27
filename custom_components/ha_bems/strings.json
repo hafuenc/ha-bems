@@ -106,7 +106,7 @@
       },
       "fbc_forecast": {
         "title": "PV generation forecast input",
-        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before continuing. [Helper design and example](https://github.com/hafuenc/ha-bems/blob/main/docs/pv_forecast_helper.md).\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before continuing. [Helper design and example]({helper_docs_url}).\n\n{reason}",
         "data": {
           "forecast_entity": "PV generation forecast entity",
           "forecast_max_age_minutes": "Maximum original source update age"
@@ -193,7 +193,7 @@
       },
       "fbc_forecast": {
         "title": "PV generation forecast input",
-        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before continuing. [Helper design and example](https://github.com/hafuenc/ha-bems/blob/main/docs/pv_forecast_helper.md).\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before continuing. [Helper design and example]({helper_docs_url}).\n\n{reason}",
         "data": {
           "forecast_entity": "PV generation forecast entity",
           "forecast_max_age_minutes": "Maximum original source update age"

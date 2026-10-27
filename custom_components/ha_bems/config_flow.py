@@ -178,7 +178,10 @@ class _ModuleSteps:
         return self.async_show_form(step_id="fbc", errors=errors, data_schema=vol.Schema(fields))
 
     async def async_step_fbc_forecast(self, user_input=None):
-        errors, placeholders = {}, {"reason": ""}
+        errors, placeholders = {}, {
+            "reason": "",
+            "helper_docs_url": "https://github.com/hafuenc/ha-bems/blob/main/docs/pv_forecast_helper.md",
+        }
         if user_input is not None:
             self._remember(user_input)
             try:
