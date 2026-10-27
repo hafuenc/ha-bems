@@ -2,7 +2,7 @@
 
 **Home Assistant Building Energy Management System**
 
-Modular planning for flexible devices and energy storage. Version **0.4.0**
+Modular planning for flexible devices and energy storage. Version **0.4.1**
 creates reusable BEMS entities and forecast-based battery charging plans.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
 them to your equipment.** Direct device control is outside the scope of every
