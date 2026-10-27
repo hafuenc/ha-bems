@@ -110,7 +110,7 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
         await super().async_added_to_hass()
 
         @callback
-        def refresh(_event):
+        def refresh(_event=None):
             self.hass.async_create_task(self.coordinator.async_request_refresh())
 
         self.async_on_remove(async_track_time_change(
@@ -123,7 +123,7 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
             ))
             if entry_id := config.get(CONF_PV_IMPORT):
                 self.async_on_remove(async_dispatcher_connect(
-                    self.hass, import_signal(entry_id), lambda: refresh(None),
+                    self.hass, import_signal(entry_id), refresh,
                 ))
                 # Also pick up an importer that finished loading while this
                 # entity was being added during HA startup.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix imported PV notifications running outside HA's event loop, which prevented
+  FBC from recovering after quarter-hour forecast updates. Register the decorated
+  callback directly and add a thread-aware notification regression test.
+
 - Label target SOC explicitly in % and explain the day-end target and alignment
   with the battery system's own maximum SOC. Label usable capacity in kWh.
 - Merge charging power and output cap into one Maximum charging power in W
