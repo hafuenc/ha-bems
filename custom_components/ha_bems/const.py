@@ -12,3 +12,8 @@ CONF_MONTHLY = "monthly_min_soc_percent"
 CONF_ENTITY = "seasonal_soc_entity"
 SOURCE_MONTHLY = "monthly"
 SOURCE_ENTITY = "entity"
+
+CONF_MODULE = "module"
+MODULE_SOC = "seasonal_soc"
+MODULE_LOAD = "non_flexible_load"
+MODULE_FBC = "battery_fbc"

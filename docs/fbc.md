@@ -3,8 +3,9 @@
 The Python calculation in `custom_components/ha_bems/fbc.py` is a direct port
 of the calculation in `matlab_reference/fbc_original_excerpt.m`. It is independent
 of Home Assistant and performs no device writes. Its results still need review
-with the actual system inputs. The initial integration exposes the shared
-[Battery seasonal SOC min threshold](seasonal_soc.md); it does not run FBC yet.
+with the actual system inputs. Version 0.2 connects the calculation to selected
+HA source entities and exposes a recommendation sensor. It never writes battery
+setpoints. Select **Electrical storage management → FBC** during setup.
 
 ## Preserved calculation
 
@@ -37,13 +38,46 @@ The threshold defaults to the configured month. An explicitly supplied
   maximum charging power and 12 monthly SOC thresholds.
 - Recalculation schedule.
 
-The caller must prepare the remaining local day-end horizon, validate timestamps
-and freshness, and normalize the forecast. This port does not implement that
-adapter yet. It does not use forecast household demand: that value is calculated
+The first adapter prepares the remaining local day-end horizon, checks source
+update age, and normalizes explicit interval records. It does not use forecast household demand: that value is calculated
 but unused in the MATLAB FBC fragment.
 
 Empty forecasts, negative/nonfinite power, invalid SOC, invalid efficiency or
-invalid settings raise an error. No device fallback has been selected yet.
+invalid settings make the recommendation unavailable. No device fallback or
+automatic battery control has been selected yet.
+
+## First forecast adapter
+
+Select a forecast sensor and the attribute containing its list of records. The
+default contract is:
+
+```json
+[
+  {"start": "2026-10-27T12:00:00+01:00", "end": "2026-10-27T12:15:00+01:00", "power_dc_w": 3200}
+]
+```
+
+Map the start, end and value keys in setup; select W/kW for interval-average
+power or Wh/kWh for interval energy. A missing end uses the configured source
+interval duration. All timestamps require timezone offsets. Records are sorted,
+overlaps and duplicates rejected, and complete intervals resampled to 15 minutes.
+The first interval is the quarter-hour containing the current time; the horizon
+ends at local midnight, including on DST transition days. Zero-power nighttime
+records must be explicit. Missing values are not treated as zero. Source update
+age is checked against the selected entity's `last_updated`; provider-specific
+forecast generation timestamps are not supported yet.
+
+The generic adapter requires a list of flat records. Nested or action-response
+forecasts need an external template translating them to this contract until
+dedicated provider adapters are added. An AC-clipped forecast cannot recover
+the missing DC power above the inverter limit.
+
+Recalculation occurs at each local quarter-hour and when input entities change.
+Numerical work runs outside the HA event loop. The sensor's state is the first
+charging recommendation in W; its `forecast` attribute holds the remaining
+profile with interval start/end timestamps. Status is `observation_only`.
+Invalid input makes the sensor unavailable and removes the last forecast from
+its exposed attributes. `reason` explains the missing recommendation.
 
 ## Reviewing a Python result
 

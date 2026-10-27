@@ -6,7 +6,8 @@ threshold**.
 
 ## Setup and later changes
 
-Add HA-BEMS in Home Assistant's Devices & services and enter a battery name.
+Add HA-BEMS in Home Assistant's Devices & services, choose **BEMS entity creator
+→ Battery seasonal SOC min threshold**, and enter a name.
 Choose one of these sources:
 
 - **Monthly schedule:** twelve percentage fields, January to December. The
@@ -41,17 +42,16 @@ reserve. That module and its reserve enforcement are not implemented yet.
 The pure Python FBC function accepts the active value through
 `seasonal_soc_min_threshold_percent`. When that argument is omitted, it uses the
 monthly schedule in `FBCSettings`, which now defaults to Florian's values. A
-future runtime caller must stop calculation when an entity source is unavailable;
+runtime caller must stop calculation when an entity source is unavailable;
 it must not substitute `None`, which intentionally selects monthly mode in the
 standalone calculation API.
 
 ## Current implementation limits
 
-The initial integration now contains setup, options and the shared threshold
-sensor. The FBC calculation is still independent: forecast ingestion, periodic
-FBC calculation and battery writes are not connected. No changes have been made
-to the running Home Assistant installation. The UI has not been exercised inside
-Home Assistant yet.
+The integration includes setup, options and the shared threshold sensor. FBC can
+select this sensor or any existing valid percentage entity and calculate
+recommendations. Battery writes remain disabled. The setup has not been exercised
+inside the user's Home Assistant installation yet.
 
 For manual installation, copy `custom_components/ha_bems` to the Home Assistant
 configuration directory's `custom_components` folder, restart Home Assistant,
