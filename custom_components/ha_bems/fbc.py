@@ -70,7 +70,7 @@ def calculate_fbc(
 
     pv_dc_w contains interval-average DC PV power in watts, starting at the
     current control interval and ending at the selected local day-end horizon.
-    The caller handles timestamps, horizon selection and forecast freshness.
+    The caller handles timestamps, horizon selection and input availability.
     current_month is the current local calendar month (1..12), as in MATLAB.
     seasonal_soc_min_threshold_percent can supply the shared threshold resolved
     from an existing entity. If omitted, the configured monthly schedule is used.

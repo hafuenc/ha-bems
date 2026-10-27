@@ -97,7 +97,7 @@ First register one prepared **PV generation forecast entity** under **BEMS
 entity importer → PV generation forecast**. Its `forecast` attribute
 must contain gap-free 15-minute records (`start`, `end`, `power_w`) covering the
 current interval and at least the next 72 hours. Setup tests the format, coverage
-and original source age, then shows a successful preview. The former provider,
+then shows a successful preview. Source age is informational only. The former provider,
 custom-template and field-mapping options are removed.
 [Helper format and Open-Meteo example](docs/pv_forecast_helper.md).
 Then select the named imported input in FBC. Several modules can share it. The
@@ -146,9 +146,9 @@ quarter, covering at least now + 72 hours. Use UTC stepping across DST; no gaps,
 duplicates or overlaps. Convert source units and point-power/interval-energy
 semantics correctly. Include explicit source-backed nighttime zeros; never
 invent missing data or future days. Make the sensor unavailable on missing data.
-Preserve original source freshness: use the oldest contributing source update,
-not now() on helper regeneration. Default importer maximum source age is 180
-minutes, configurable; timestamps >5 minutes in the future are rejected.
+Preserve the original source update timestamp: use the oldest contributing source update,
+not now() on helper regeneration. Source age is informational; there is no
+maximum-age rejection. Timestamps >5 minutes in the future are rejected.
 
 Return complete YAML with a unique_id, availability handling, source-change,
 quarter-hour and startup updates, plus an initial refresh method. Explain safe

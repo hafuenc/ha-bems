@@ -180,7 +180,6 @@ class ImportedPVStatusSensor(CoordinatorEntity, SensorEntity):
         attributes = {
             "input_type": "pv_generation_forecast",
             "source_entity": self.coordinator.config["forecast_entity"],
-            "maximum_source_age_minutes": self.coordinator.config.get("forecast_max_age_minutes", 180),
         }
         if self.coordinator.last_update_success and self.coordinator.data:
             attributes.update({key: value for key, value in self.coordinator.data.items() if key != "forecast"})

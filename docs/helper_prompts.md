@@ -88,8 +88,9 @@ template reload steps.
 Also provide a read-only verification template or procedure checking the native
 attribute types, current interval, exact 900-second durations, timezone-aware
 timestamps, continuity and final end >= now + 72 hours. Check source_updated_at:
-HA-BEMS defaults to a maximum original source age of 180 minutes (configurable
-on the importer), and rejects timestamps more than five minutes in the future.
+Source age is informational only: do not add a maximum-age input or an
+age-based availability cutoff. HA-BEMS still rejects timestamps more than five
+minutes in the future.
 Explain how to register the resulting entity under HA-BEMS → BEMS entity importer
 → PV generation forecast, pass its test, then select the named import in FBC.
 ```
@@ -151,7 +152,9 @@ https://github.com/hafuenc/ha-bems/blob/main/examples/pv_generation_forecast_72h
 
 Verify native attribute types, timezone-aware timestamps, quarter-hour alignment,
 no gaps/overlaps/duplicates, current-interval coverage, >=72-hour future coverage
-and source age (default importer limit 180 minutes; future tolerance 5 minutes).
+and source timestamp format. Report source age for information only; do not
+introduce a maximum-age setting or age-based cutoff. Future timestamp tolerance
+is five minutes.
 Explain registering the sensor under HA-BEMS → BEMS entity importer → PV
 generation forecast and selecting that registered input in FBC. Do not change
 the provider's PV model, battery controls or any device setpoints.
@@ -177,9 +180,8 @@ as timezone-aware ISO 8601; and forecast as a native ordered list of objects
 with timezone-aware start/end and numeric nonnegative interval-average power_w.
 Intervals must be aligned, exactly 900 seconds long, contiguous and duplicate-
 free, including the current quarter and extending at least 72 hours from now.
-Normally a rolling helper needs 289 intervals. Default source age limit is
-180 minutes, configurable on the importer; timestamps >5 minutes in the future
-are rejected.
+Normally a rolling helper needs 289 intervals. Source age is informational,
+without a maximum-age limit; timestamps >5 minutes in the future are rejected.
 
 Distinguish missing source data from conversion/template errors. Do not fix a
 failure by inventing forecast data, zero-filling gaps, refreshing source_updated_at

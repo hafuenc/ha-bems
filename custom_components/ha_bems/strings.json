@@ -107,18 +107,18 @@
       },
       "fbc_forecast": {
         "title": "Select shared PV generation forecast",
-        "description": "Select a PV input registered under BEMS entity importer. Register your prepared forecast helper there first, then return to FBC setup. Format, full next-72-hour coverage and source freshness are checked before continuing. Source selection and age settings belong to the importer and can be changed there for all consuming modules.\n\n{reason}",
+        "description": "Select a PV input registered under BEMS entity importer. Register your prepared forecast helper there first, then return to FBC setup. Format, full next-72-hour coverage are checked before continuing. Source selection belongs to the importer and can be changed there for all consuming modules.\n\n{reason}",
         "data": {
           "pv_import_entry_id": "Imported PV generation forecast"
         }
       },
       "fbc_preview": {
         "title": "PV forecast test passed",
-        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours and source freshness passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age: {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
+        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age (information only): {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
       },
       "entity_importer": {
         "title": "BEMS entity importer",
-        "description": "Register existing forecast entities as shared inputs. HA-BEMS tests their format, coverage and source age, and exposes an input status. Modules reuse the same validated input.",
+        "description": "Register existing forecast entities as shared inputs. HA-BEMS tests their format and coverage, and exposes an input status. Modules reuse the same validated input.",
         "menu_options": {
           "import_pv": "PV generation forecast",
           "future_imports": "Electricity prices and additional forecasts — coming soon"
@@ -130,20 +130,18 @@
       },
       "import_pv": {
         "title": "Import PV generation forecast",
-        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before registering this input for reuse by modules. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format and coverage before registering this input for reuse by modules. Source age is informational and does not reject an input. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason}",
         "data": {
           "name": "Shared input name",
-          "forecast_entity": "PV generation forecast entity",
-          "forecast_max_age_minutes": "Maximum original source update age"
+          "forecast_entity": "PV generation forecast entity"
         },
         "data_description": {
-          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format.",
-          "forecast_max_age_minutes": "Checked against source_updated_at, not the time the helper was regenerated."
+          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format."
         }
       },
       "import_preview": {
         "title": "PV input test passed",
-        "description": "The forecast format, 15-minute continuity, complete next 72 hours and original source freshness passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak power: {peak} W\nEnergy over this period: {energy} kWh\nSource age: {age} minutes\n\nTimestamps use UTC. Submit to register this shared input. The source is checked again before saving and whenever it changes, and at least once a minute. Multiple modules can use this input."
+        "description": "The forecast format, 15-minute continuity, complete next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak power: {peak} W\nEnergy over this period: {energy} kWh\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register this shared input. The source is checked again before saving and whenever it changes, and at least once a minute. Multiple modules can use this input."
       }
     },
     "error": {
@@ -219,14 +217,14 @@
       },
       "fbc_forecast": {
         "title": "Select shared PV generation forecast",
-        "description": "Select a PV input registered under BEMS entity importer. Register your prepared forecast helper there first, then return to FBC setup. Format, full next-72-hour coverage and source freshness are checked before continuing. Source selection and age settings belong to the importer and can be changed there for all consuming modules.\n\n{reason}",
+        "description": "Select a PV input registered under BEMS entity importer. Register your prepared forecast helper there first, then return to FBC setup. Format, full next-72-hour coverage are checked before continuing. Source selection belongs to the importer and can be changed there for all consuming modules.\n\n{reason}",
         "data": {
           "pv_import_entry_id": "Imported PV generation forecast"
         }
       },
       "fbc_preview": {
         "title": "PV forecast test passed",
-        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours and source freshness passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age: {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
+        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age (information only): {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
       },
       "fbc_battery": {
         "title": "Battery parameters",
@@ -245,20 +243,18 @@
       },
       "import_pv": {
         "title": "Import PV generation forecast",
-        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before registering this input for reuse by modules. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format and coverage before registering this input for reuse by modules. Source age is informational and does not reject an input. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason}",
         "data": {
           "name": "Shared input name",
-          "forecast_entity": "PV generation forecast entity",
-          "forecast_max_age_minutes": "Maximum original source update age"
+          "forecast_entity": "PV generation forecast entity"
         },
         "data_description": {
-          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format.",
-          "forecast_max_age_minutes": "Checked against source_updated_at, not the time the helper was regenerated."
+          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format."
         }
       },
       "import_preview": {
         "title": "PV input test passed",
-        "description": "The forecast format, 15-minute continuity, complete next 72 hours and original source freshness passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak power: {peak} W\nEnergy over this period: {energy} kWh\nSource age: {age} minutes\n\nTimestamps use UTC. Submit to register this shared input. The source is checked again before saving and whenever it changes, and at least once a minute. Multiple modules can use this input."
+        "description": "The forecast format, 15-minute continuity, complete next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak power: {peak} W\nEnergy over this period: {energy} kWh\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register this shared input. The source is checked again before saving and whenever it changes, and at least once a minute. Multiple modules can use this input."
       }
     },
     "error": {

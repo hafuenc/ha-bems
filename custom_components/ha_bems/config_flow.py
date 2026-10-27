@@ -57,10 +57,12 @@ class _ModuleSteps:
 
     def _finish(self, module):
         values = {**self._values(), CONF_MODULE: module}
+        # Retired setting is ignored at runtime and dropped on options save.
+        values.pop("forecast_max_age_minutes", None)
         if module == MODULE_FBC:
             for key in ("forecast_source", "forecast_template", "forecast_attribute",
                         "timestamp_key", "end_key", "value_key", "forecast_unit", "forecast_interval_minutes",
-                        "forecast_entity", "forecast_max_age_minutes"):
+                        "forecast_entity"):
                 values.pop(key, None)
         if isinstance(self, config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=values)
@@ -206,7 +208,6 @@ class _ModuleSteps:
         fields = self._name_fields("PV generation forecast")
         fields.update({
                 field: selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": "W"}]}),
-                vol.Required("forecast_max_age_minutes", default=values.get("forecast_max_age_minutes", 180)): _number(1, 1440, "min"),
             })
         return self.async_show_form(step_id="import_pv", errors=errors,
             description_placeholders=placeholders, data_schema=vol.Schema(fields))

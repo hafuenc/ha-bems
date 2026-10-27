@@ -54,7 +54,8 @@ daylight-saving changes; do not assume each local day contains 96 quarters.
 each helper regeneration. When combining sources, use the oldest update time
 of the sources actually used. Use a provider's forecast issue timestamp when
 available; otherwise its HA source-state update time is a documented proxy.
-The default maximum age is 180 minutes and can be configured on the shared importer.
+Source age is informational only. There is no maximum-age setting or age-based
+rejection, including for previously saved age limits.
 Timestamps more than five minutes in the future are rejected as clock errors.
 
 ## Example: Open-Meteo Solar Forecast
@@ -101,15 +102,15 @@ reconstruct peaks already lost through inverter clipping.
 
 In **BEMS entity importer → PV generation forecast**, name the input,
 select the prepared sensor and submit. Setup checks availability, W units,
-schema version, source age, timestamp format, numeric power, quarter-hour
+schema version, timestamp format, numeric power, quarter-hour
 alignment, ordering, continuity, the current interval and the complete 72-hour
 future horizon. A failure stays on the selection form and explains the reason.
 A successful test shows interval count, first/last timestamps, peak power,
 energy over the displayed period and original source update age.
 
 The importer checks again before registration, on source changes and at least
-once a minute. FBC validates the selected shared snapshot and its current age
-and coverage before calculating; later gaps or stale data invalidate its recommendation. The existing seasonal SOC safeguard can
+once a minute. FBC validates the selected shared snapshot and its current
+coverage before calculating; later gaps or unavailable data invalidate its recommendation. The existing seasonal SOC safeguard can
 still recommend maximum charging without a PV forecast. Initial setup always
 requires the forecast test to pass, even when that safeguard is active.
 

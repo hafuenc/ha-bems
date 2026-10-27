@@ -52,11 +52,9 @@ class ForecastEntityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(details['source_age_minutes'], 60)
         self.assertEqual(details['input_forecast_end'], rows[-1]['end'])
 
-    async def test_original_source_age_cannot_be_hidden_by_helper_regeneration(self):
+    async def test_old_source_is_accepted_and_age_remains_informational(self):
         self.attributes['source_updated_at'] = (NOW - timedelta(hours=4)).isoformat()
-        with self.assertRaisesRegex(ValueError, 'stale'):
-            await self.read()
-        self.config['forecast_max_age_minutes'] = 300
+        self.config['forecast_max_age_minutes'] = 1  # Retired saved setting is ignored.
         self.assertEqual((await self.read())[1]['source_age_minutes'], 240)
 
     async def test_required_attributes_units_and_future_update(self):

@@ -24,7 +24,7 @@ def coordinators(hass):
 def read_pv_import(hass, config, now):
     """Read one shared snapshot without triggering a refresh/notification loop.
 
-    Recheck time-dependent age and coverage at consumption time; a successful
+    Recheck time-dependent coverage at consumption time; a successful
     validation in the past must never imply a valid current operating plan.
     """
     entry_id = config.get(CONF_PV_IMPORT)
@@ -37,8 +37,7 @@ def read_pv_import(hass, config, now):
     if not coordinator.last_update_success or not coordinator.data:
         raise ForecastUnavailable(f"PV input is {coordinator.input_status}: {coordinator.last_exception}")
     snapshot = coordinator.data
-    age, updated = source_age(snapshot["source_updated_at"], now,
-                              coordinator.config.get("forecast_max_age_minutes", 180))
+    age, updated = source_age(snapshot["source_updated_at"], now)
     current = now.astimezone(UTC).replace(second=0, microsecond=0)
     current -= timedelta(minutes=current.minute % 15)
     rows = [row for row in snapshot["forecast"] if parse_timestamp(row["start"]) >= current]

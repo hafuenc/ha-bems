@@ -56,11 +56,9 @@ class SharedInputTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(rows_a[0], rows_b[0])
         self.assertEqual(len(rows_a), 289)
 
-    async def test_cached_success_cannot_bypass_source_age_or_horizon(self):
+    async def test_source_age_does_not_reject_cache_but_horizon_still_expires(self):
         self.coordinator.config['forecast_max_age_minutes'] = 60
-        with self.assertRaisesRegex(ValueError, 'stale'):
-            read_pv_import(self.hass, self.config, NOW + timedelta(seconds=1))
-        self.coordinator.config['forecast_max_age_minutes'] = 180
+        self.assertEqual(len(read_pv_import(self.hass, self.config, NOW + timedelta(seconds=1))[0]), 289)
         with self.assertRaisesRegex(ValueError, '72 hours'):
             read_pv_import(self.hass, self.config, NOW + timedelta(minutes=8))
 
@@ -88,7 +86,6 @@ class SharedInputTests(unittest.IsolatedAsyncioTestCase):
         attributes = deepcopy(self.hass.state.attributes)
         for expected, state, attrs in [
             ('unavailable', 'unavailable', attributes),
-            ('stale', '0', {**attributes, 'source_updated_at': '2020-01-01T00:00:00Z'}),
             ('invalid', '0', {**attributes, 'forecast': attributes['forecast'][:288]})]:
             self.hass.state.state = state
             self.hass.state.attributes = attrs
@@ -111,9 +108,7 @@ class SharedInputTests(unittest.IsolatedAsyncioTestCase):
         await self.coordinator.async_refresh()
         self.hass.state.attributes = {**attrs, 'source_updated_at': '2020-01-01T00:00:00Z'}
         await self.coordinator.async_refresh()
-        self.hass.state.attributes = attrs
-        await self.coordinator.async_refresh()
-        self.assertEqual(seen, ['unavailable', 'invalid', 'stale', 'ready'])
+        self.assertEqual(seen, ['unavailable', 'invalid', 'ready'])
 
 
 class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
@@ -158,7 +153,7 @@ class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
                                                     'forecast_max_age_minutes': 120})
         self.assertEqual(result['step_id'], 'import_preview')
         result = await options.async_step_import_preview({})
-        self.assertEqual(result['data']['forecast_max_age_minutes'], 120)
+        self.assertNotIn('forecast_max_age_minutes', result['data'])
         self.assertEqual(options.config_entry.entry_id, 'pv-main')
 
 
