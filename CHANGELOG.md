@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - Fix imported PV notifications running outside HA's event loop, which prevented
   FBC from recovering after quarter-hour forecast updates. Register the decorated
@@ -20,6 +20,10 @@
 - Keep source timestamps/age as information; retain timestamp format/clock checks
   and complete, gap-free 72-hour forecast validation.
 - Update setup wording, helper documentation and copy-and-paste AI prompts.
+
+Update through HACS and restart Home Assistant to load the corrected notification
+handler. Existing FBC entries keep their configured maximum charging power as
+the single output limit; no device commands are sent by HA-BEMS.
 
 ## 0.4.0
 
