@@ -30,9 +30,10 @@ change that device setting.
 
 Maximum charging power is the single setting for both the charging-power
 overrides and the current output limit. The separate device output cap has been
-removed. Existing entries are migrated to the lower of their previous two
-limits, so merging the settings cannot increase previously allowed power.
-Battery settings and entity IDs are preserved; review the merged value using Configure.
+removed. Existing entries retain their configured maximum charging power;
+the old independent cap is discarded. The current output is capped directly
+at that maximum, including when the old cap was lower. Battery settings and
+entity IDs are preserved.
 
 ## PV generation forecast input
 
