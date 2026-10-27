@@ -2,6 +2,11 @@
 
 **Home Assistant Building Energy Management System**
 
+> **Development notice:** HA-BEMS is under active development and is not yet
+> intended for public use of any kind. This public repository is provided for
+> development transparency only. Features, interfaces and behaviour may change
+> without notice.
+
 Modular planning for flexible devices and energy storage. Version **0.4.1**
 creates reusable BEMS entities and forecast-based battery charging plans.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
