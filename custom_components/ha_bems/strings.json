@@ -3,16 +3,44 @@
   "config": {
     "step": {
       "user": {
-        "title": "Battery settings",
-        "description": "Name this battery and choose the source for its Battery seasonal SOC min threshold. This first version exposes the shared threshold only; FBC forecast input and device control are not connected yet.",
+        "title": "HA-BEMS",
+        "description": "Add reusable BEMS entities or a flexible-device management module. Add further modules independently later.",
+        "menu_options": {
+          "entity_creator": "BEMS entity creator",
+          "electrical_storage": "Electrical storage management",
+          "thermal_storage": "Thermal storage management \u2014 coming soon"
+        }
+      },
+      "entity_creator": {
+        "title": "BEMS entity creator",
+        "description": "Create only the shared entities you need. Modules can also use existing entities.",
+        "menu_options": {
+          "soc": "Battery seasonal SOC min threshold",
+          "load_profile": "Non-flexible load profile"
+        }
+      },
+      "electrical_storage": {
+        "title": "Electrical storage management",
+        "description": "FBC is available in this first version. Night feed-in and the alternative coordinated battery MILP are planned.",
+        "menu_options": {
+          "fbc": "Forecast-based battery charging (FBC)"
+        }
+      },
+      "thermal_storage": {
+        "title": "Thermal storage management \u2014 coming soon",
+        "description": "Planned: local feed-forward MILP for domestic hot water and building heating, using tunable energy demand, electricity prices, PV availability and a simple COP. Domestic hot water runs first; heating respects its reserved heat-pump windows. No indoor-temperature feedback or historical model training is planned for this first thermal approach. Submit to return to the main menu."
+      },
+      "soc": {
+        "title": "Battery seasonal SOC min threshold",
+        "description": "Create a reusable seasonal SOC threshold. Choose editable monthly values or an existing percentage entity. This threshold can be selected by battery modules.",
         "data": {
-          "name": "Battery name",
+          "name": "Entity group name",
           "seasonal_soc_source": "Threshold source"
         }
       },
       "monthly": {
         "title": "Battery seasonal SOC min threshold",
-        "description": "Set one minimum SOC threshold per calendar month. Florian's values are editable suggestions; review them for your battery. FBC allows maximum charging power below this threshold. This setting alone does not prevent discharge.",
+        "description": "January to December. Florian's values are editable suggestions. Below this threshold FBC allows maximum charging power; this setting alone does not prevent discharge.",
         "data": {
           "january": "January",
           "february": "February",
@@ -30,30 +58,78 @@
       },
       "existing_entity": {
         "title": "Battery seasonal SOC min threshold",
-        "description": "Select an existing sensor, number or input_number that supplies the current threshold in percent (unit %). It must currently have a numeric value from 0 to 100. Your entity manages any seasonal changes. An unavailable source makes the HA-BEMS threshold unavailable; there is no automatic fallback to the monthly schedule.",
+        "description": "Select an available sensor, number or input_number containing the active threshold from 0 to 100 with unit %. Its calendar logic stays with that entity. No automatic fallback is used if it becomes unavailable.",
         "data": {
           "seasonal_soc_entity": "Existing threshold entity"
+        }
+      },
+      "load_profile": {
+        "title": "Non-flexible load profile",
+        "description": "Estimate the non-flexible behind-the-meter building demand at 15-minute resolution. Enter annual consumption excluding separately modelled flexible heat pumps, EVs and battery losses. Choose H0, H25 or a constant profile. H25 contains some average PV self-consumption influence. Country and region select the holiday calendar; leave region empty for national holidays. All fields can be changed later.",
+        "data": {
+          "name": "Entity group name",
+          "annual_consumption_kwh": "Non-flexible annual consumption",
+          "load_profile": "Standard load profile",
+          "holiday_country": "Public holiday calendar",
+          "holiday_subdivision": "Holiday region (optional; e.g. AT: 1 for Burgenland, DE: BY for Bavaria)"
+        }
+      },
+      "fbc": {
+        "title": "Electrical storage management \u2014 FBC",
+        "description": "Select the battery SOC and a seasonal SOC threshold entity. You can create the threshold under BEMS entity creator first or use an existing percentage entity. This first version displays charging recommendations only and does not write battery setpoints. Additional FBC algorithms, night feed-in and a coordinated battery MILP are planned.",
+        "data": {
+          "name": "Battery name",
+          "battery_strategy": "Battery strategy",
+          "soc_entity": "Actual battery SOC entity",
+          "seasonal_soc_entity": "Battery seasonal SOC min threshold entity"
+        }
+      },
+      "fbc_forecast": {
+        "title": "DC PV forecast input",
+        "description": "First adapter: a sensor attribute containing a list of interval records, using ISO 8601 timestamps with timezone offsets. Map the keys below to your source. Values must describe full DC PV production. The complete remaining day, including zero-power nighttime intervals, must be covered. If an end timestamp is missing, the configured source interval duration is used. Other provider formats will need a template or future adapter.",
+        "data": {
+          "forecast_entity": "DC PV forecast source entity",
+          "forecast_attribute": "Attribute containing the forecast list",
+          "timestamp_key": "Interval start timestamp key",
+          "end_key": "Interval end timestamp key",
+          "value_key": "DC PV power or interval-energy key",
+          "forecast_unit": "Source value unit",
+          "forecast_interval_minutes": "Source interval duration if end is absent",
+          "forecast_max_age_minutes": "Maximum source update age"
+        }
+      },
+      "fbc_battery": {
+        "title": "Battery parameters",
+        "description": "Capacity must use the same SOC basis as the battery sensor. Efficiency is a factor (e.g. 0.95). The maximum charging power is used when the FBC limitation is disabled. The separate output cap corresponds to the legacy 5000 W clamp. Recommendations are recalculated on source changes and each quarter-hour.",
+        "data": {
+          "capacity_kwh": "Battery capacity",
+          "target_soc_percent": "Target SOC",
+          "charge_efficiency": "Charging efficiency factor",
+          "max_charge_power_w": "Maximum charging power",
+          "output_limit_w": "Device output power cap"
         }
       }
     },
     "error": {
       "invalid_threshold": "Enter twelve percentages between 0 and 100.",
-      "invalid_entity": "Select an available entity with a numeric value from 0 to 100 and unit %. This is the threshold source, not the measured battery SOC.",
-      "self_reference": "Select an external entity. This battery cannot use its own HA-BEMS output as its source."
+      "invalid_entity": "Choose an available numeric percentage entity from 0 to 100 with unit %.",
+      "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
+      "invalid_load_profile": "Check the annual consumption and the holiday country/region combination."
     }
   },
   "options": {
     "step": {
-      "init": {
+      "soc": {
         "title": "Battery seasonal SOC min threshold",
-        "description": "Edit the monthly schedule or select an existing threshold entity.",
+        "description": "Create a reusable seasonal SOC threshold. Choose editable monthly values or an existing percentage entity. This threshold can be selected by battery modules.",
         "data": {
+          "name": "Entity group name",
           "seasonal_soc_source": "Threshold source"
         }
       },
       "monthly": {
         "title": "Battery seasonal SOC min threshold",
-        "description": "Set one minimum SOC threshold per calendar month. Florian's values are editable suggestions; review them for your battery. FBC allows maximum charging power below this threshold. This setting alone does not prevent discharge.",
+        "description": "January to December. Florian's values are editable suggestions. Below this threshold FBC allows maximum charging power; this setting alone does not prevent discharge.",
         "data": {
           "january": "January",
           "february": "February",
@@ -71,16 +147,63 @@
       },
       "existing_entity": {
         "title": "Battery seasonal SOC min threshold",
-        "description": "Select an existing sensor, number or input_number that supplies the current threshold in percent (unit %). It must currently have a numeric value from 0 to 100. Your entity manages any seasonal changes. An unavailable source makes the HA-BEMS threshold unavailable; there is no automatic fallback to the monthly schedule.",
+        "description": "Select an available sensor, number or input_number containing the active threshold from 0 to 100 with unit %. Its calendar logic stays with that entity. No automatic fallback is used if it becomes unavailable.",
         "data": {
           "seasonal_soc_entity": "Existing threshold entity"
+        }
+      },
+      "load_profile": {
+        "title": "Non-flexible load profile",
+        "description": "Estimate the non-flexible behind-the-meter building demand at 15-minute resolution. Enter annual consumption excluding separately modelled flexible heat pumps, EVs and battery losses. Choose H0, H25 or a constant profile. H25 contains some average PV self-consumption influence. Country and region select the holiday calendar; leave region empty for national holidays. All fields can be changed later.",
+        "data": {
+          "name": "Entity group name",
+          "annual_consumption_kwh": "Non-flexible annual consumption",
+          "load_profile": "Standard load profile",
+          "holiday_country": "Public holiday calendar",
+          "holiday_subdivision": "Holiday region (optional; e.g. AT: 1 for Burgenland, DE: BY for Bavaria)"
+        }
+      },
+      "fbc": {
+        "title": "Electrical storage management \u2014 FBC",
+        "description": "Select the battery SOC and a seasonal SOC threshold entity. You can create the threshold under BEMS entity creator first or use an existing percentage entity. This first version displays charging recommendations only and does not write battery setpoints. Additional FBC algorithms, night feed-in and a coordinated battery MILP are planned.",
+        "data": {
+          "name": "Battery name",
+          "battery_strategy": "Battery strategy",
+          "soc_entity": "Actual battery SOC entity",
+          "seasonal_soc_entity": "Battery seasonal SOC min threshold entity"
+        }
+      },
+      "fbc_forecast": {
+        "title": "DC PV forecast input",
+        "description": "First adapter: a sensor attribute containing a list of interval records, using ISO 8601 timestamps with timezone offsets. Map the keys below to your source. Values must describe full DC PV production. The complete remaining day, including zero-power nighttime intervals, must be covered. If an end timestamp is missing, the configured source interval duration is used. Other provider formats will need a template or future adapter.",
+        "data": {
+          "forecast_entity": "DC PV forecast source entity",
+          "forecast_attribute": "Attribute containing the forecast list",
+          "timestamp_key": "Interval start timestamp key",
+          "end_key": "Interval end timestamp key",
+          "value_key": "DC PV power or interval-energy key",
+          "forecast_unit": "Source value unit",
+          "forecast_interval_minutes": "Source interval duration if end is absent",
+          "forecast_max_age_minutes": "Maximum source update age"
+        }
+      },
+      "fbc_battery": {
+        "title": "Battery parameters",
+        "description": "Capacity must use the same SOC basis as the battery sensor. Efficiency is a factor (e.g. 0.95). The maximum charging power is used when the FBC limitation is disabled. The separate output cap corresponds to the legacy 5000 W clamp. Recommendations are recalculated on source changes and each quarter-hour.",
+        "data": {
+          "capacity_kwh": "Battery capacity",
+          "target_soc_percent": "Target SOC",
+          "charge_efficiency": "Charging efficiency factor",
+          "max_charge_power_w": "Maximum charging power",
+          "output_limit_w": "Device output power cap"
         }
       }
     },
     "error": {
       "invalid_threshold": "Enter twelve percentages between 0 and 100.",
-      "invalid_entity": "Select an available entity with a numeric value from 0 to 100 and unit %. This is the threshold source, not the measured battery SOC.",
-      "self_reference": "Select an external entity. This battery cannot use its own HA-BEMS output as its source."
+      "invalid_entity": "Choose an available numeric percentage entity from 0 to 100 with unit %.",
+      "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
+      "invalid_load_profile": "Check the annual consumption and the holiday country/region combination."
     }
   }
 }

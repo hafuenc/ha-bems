@@ -1,4 +1,4 @@
-"""HA-BEMS: shared battery settings first; FBC control will follow."""
+"""HA-BEMS: reusable entities and observation-only battery recommendations."""
 
 from typing import TYPE_CHECKING
 
