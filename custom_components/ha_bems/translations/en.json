@@ -92,9 +92,9 @@
       },
       "fbc_battery": {
         "title": "Battery parameters",
-        "description": "Capacity must use the same SOC basis as the selected battery sensor. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power. The device output cap must be at least this maximum.",
+        "description": "Use the usable (net) battery capacity corresponding to the selected SOC sensor's full 0–100% range. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power. The device output cap must be at least this maximum.",
         "data": {
-          "capacity_kwh": "Battery capacity",
+          "capacity_kwh": "Usable battery capacity (net)",
           "target_soc_percent": "Target SOC",
           "charge_efficiency": "PV forecast-to-battery storage efficiency",
           "max_charge_power_w": "Maximum charging power",
@@ -102,7 +102,8 @@
         },
         "data_description": {
           "charge_efficiency": "Factor from 0 to 1: 0.95 means that 95% of forecast PV energy becomes stored battery energy. A constant factor cannot recover PV peaks already clipped in the forecast.",
-          "output_limit_w": "Set this to the physical output limit. It must not be lower than maximum charging power; equal values are normally appropriate."
+          "output_limit_w": "Set this to the physical output limit. It must not be lower than maximum charging power; equal values are normally appropriate.",
+          "capacity_kwh": "Enter the usable energy in kWh corresponding to a change from 0% to 100% on the selected battery SOC sensor."
         }
       },
       "fbc_forecast": {
@@ -228,9 +229,9 @@
       },
       "fbc_battery": {
         "title": "Battery parameters",
-        "description": "Capacity must use the same SOC basis as the selected battery sensor. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power. The device output cap must be at least this maximum.",
+        "description": "Use the usable (net) battery capacity corresponding to the selected SOC sensor's full 0–100% range. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power. The device output cap must be at least this maximum.",
         "data": {
-          "capacity_kwh": "Battery capacity",
+          "capacity_kwh": "Usable battery capacity (net)",
           "target_soc_percent": "Target SOC",
           "charge_efficiency": "PV forecast-to-battery storage efficiency",
           "max_charge_power_w": "Maximum charging power",
@@ -238,7 +239,8 @@
         },
         "data_description": {
           "charge_efficiency": "Factor from 0 to 1: 0.95 means that 95% of forecast PV energy becomes stored battery energy. A constant factor cannot recover PV peaks already clipped in the forecast.",
-          "output_limit_w": "Set this to the physical output limit. It must not be lower than maximum charging power; equal values are normally appropriate."
+          "output_limit_w": "Set this to the physical output limit. It must not be lower than maximum charging power; equal values are normally appropriate.",
+          "capacity_kwh": "Enter the usable energy in kWh corresponding to a change from 0% to 100% on the selected battery SOC sensor."
         }
       },
       "import_pv": {
