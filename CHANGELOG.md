@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Remove the maximum original source update age parameter and all age-based
+  rejection in PV import setup and FBC runtime. Previously saved limits are ignored.
+- Keep source timestamps/age as information; retain timestamp format/clock checks
+  and complete, gap-free 72-hour forecast validation.
+- Update setup wording, helper documentation and copy-and-paste AI prompts.
+
 ## 0.4.0
 
 - Add BEMS entity importer as a separate setup category, initially for shared PV

@@ -17,22 +17,22 @@ HA-BEMS separates shared input preparation from device strategies.
    [Copy-and-paste AI prompts](helper_prompts.md) help build a compatible helper
    from your provider's actual entities and attributes.
 2. Add HA-BEMS → **BEMS entity importer → PV generation forecast**.
-3. Name the shared input, select the prepared sensor and set its maximum original
-   source age. Submit to test, review the 72-hour preview, then submit to register.
+3. Name the shared input and select the prepared sensor. Submit to test, review the 72-hour preview, then submit to register.
 4. Add or configure **Electrical storage management → FBC** and select that named
    imported PV input. Several batteries can select the same registration.
 
 The importer exposes an **Input status** sensor on a virtual **BEMS entity
-importer** device. Its states are `ready`, `stale`, `unavailable` and `invalid`.
+importer** device. Its states are `ready`, `unavailable` and `invalid`.
 Attributes identify the source, accepted horizon, source age, validation time
 and a failure reason when relevant. The original helper retains the forecast;
 the status entity does not duplicate its large forecast attribute.
 
-Source changes trigger validation, and a one-minute periodic check detects age
+Source changes trigger validation, and a one-minute periodic check detects format failures
 and horizon expiry even if the source stops updating. Consumers receive input
-change notifications and also check age/current coverage before calculating.
+change notifications and also check current coverage before calculating.
+Source age is reported for information only, without a rejection threshold.
 They never use a retained successful snapshot after the importer reports failure.
-Changing the importer's source or age setting updates all its consumers without
+Changing the importer's source updates all its consumers without
 reconfiguring them. Disable/delete/unload makes the selected input unavailable;
 reloading it reconnects consumers through the stable registration ID. No fallback
 to another import or an old direct entity selection is made.

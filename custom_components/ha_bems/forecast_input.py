@@ -11,19 +11,13 @@ class ForecastUnavailable(ValueError):
     """The source cannot currently be read."""
 
 
-class ForecastStale(ValueError):
-    """The original forecast source is too old."""
-
-
-def source_age(updated, now, maximum_minutes):
-    """Check original source freshness even when reading a cached snapshot."""
+def source_age(updated, now):
+    """Report source age as information, without an age-based rejection."""
     updated = parse_timestamp(updated)
     seconds = (now - updated).total_seconds()
     if seconds < -300:
         raise ValueError("source_updated_at is in the future; check timestamps and clock settings")
     age = max(0.0, seconds / 60)
-    if age > maximum_minutes:
-        raise ForecastStale("PV forecast source_updated_at is stale; check the upstream forecast update")
     return age, updated.isoformat()
 
 
@@ -43,8 +37,7 @@ async def async_read_pv_forecast(hass, config):
     version = state.attributes.get("schema_version")
     if type(version) is not int or version != 1:
         raise ValueError("PV forecast entity requires the numeric attribute schema_version: 1")
-    age, updated = source_age(state.attributes.get("source_updated_at"), now,
-                              config.get("forecast_max_age_minutes", 180))
+    age, updated = source_age(state.attributes.get("source_updated_at"), now)
     intervals = await hass.async_add_executor_job(
         validate_forecast, state.attributes.get("forecast"), now,
     )

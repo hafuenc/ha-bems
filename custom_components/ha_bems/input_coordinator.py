@@ -7,7 +7,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .forecast_input import ForecastStale, ForecastUnavailable, async_read_pv_forecast
+from .forecast_input import ForecastUnavailable, async_read_pv_forecast
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class PVImportCoordinator(DataUpdateCoordinator):
     def _async_refresh_finished(self):
         # HA normally suppresses notifications for consecutive failed refreshes.
         # Our always-readable status must still show a *changed* failure type
-        # or reason, for example unavailable -> invalid -> stale.
+        # or reason, for example unavailable -> invalid.
         health = (self.input_status, str(self.last_exception))
         if (not self.last_update_success and self._previous_health is not None
                 and self._previous_health[0] != "ready" and health != self._previous_health):
@@ -35,9 +35,7 @@ class PVImportCoordinator(DataUpdateCoordinator):
         try:
             rows, details = await async_read_pv_forecast(self.hass, self.config)
         except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
-            if isinstance(err, ForecastStale):
-                self.input_status = "stale"
-            elif isinstance(err, ForecastUnavailable):
+            if isinstance(err, ForecastUnavailable):
                 self.input_status = "unavailable"
             else:
                 self.input_status = "invalid"

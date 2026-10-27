@@ -37,10 +37,10 @@ and select that named input in FBC. The source has state/unit W and attributes `
 must include the current quarter-hour and at least the next 72 hours, at exactly
 15-minute resolution. Normally a rolling helper supplies 289 intervals.
 
-Importer setup tests the full format, horizon and original-source freshness. FBC
+Importer setup tests the full format and horizon; source age is informational. FBC
 checks the selected registration before showing a successful preview. Importer
 validation continues on source updates and at least once a minute; consumers
-recheck time-dependent coverage and age before using its shared snapshot. Provider selectors,
+recheck time-dependent coverage before using its shared snapshot. Provider selectors,
 in-integration template code and generic field mappings have been removed.
 For helper requirements, an Open-Meteo example and existing-entry update steps,
 see [Shared PV generation forecast entity](pv_forecast_helper.md) and the
@@ -49,7 +49,7 @@ see [Shared PV generation forecast entity](pv_forecast_helper.md) and the
 The **algorithm horizon remains the current quarter-hour through local midnight**.
 Only this part of the validated input enters FBC v1.0. The current quarter-hour
 is counted in full even if partly elapsed. UTC timestamps preserve DST intervals.
-Freshness follows the helper's `source_updated_at`, never its regeneration time.
+The informational source age follows the helper's `source_updated_at`, never its regeneration time.
 
 ## Algorithm
 
