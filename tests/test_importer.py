@@ -100,6 +100,21 @@ class SharedInputTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len((await self.coordinator._async_update_data())['forecast']), 289)
         self.assertEqual(self.coordinator.input_status, 'ready')
 
+    async def test_changed_failure_status_is_not_suppressed_by_ha(self):
+        seen = []
+        self.coordinator.async_add_listener(lambda: seen.append(self.coordinator.input_status))
+        attrs = deepcopy(self.hass.state.attributes)
+        self.hass.state.state = 'unavailable'
+        await self.coordinator.async_refresh()
+        self.hass.state.state = '0'
+        self.hass.state.attributes['forecast'] = attrs['forecast'][:288]
+        await self.coordinator.async_refresh()
+        self.hass.state.attributes = {**attrs, 'source_updated_at': '2020-01-01T00:00:00Z'}
+        await self.coordinator.async_refresh()
+        self.hass.state.attributes = attrs
+        await self.coordinator.async_refresh()
+        self.assertEqual(seen, ['unavailable', 'invalid', 'stale', 'ready'])
+
 
 class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
