@@ -14,6 +14,8 @@ HA-BEMS separates shared input preparation from device strategies.
 
 1. Prepare a forecast helper using the [PV input contract](pv_forecast_helper.md).
    An Open-Meteo example is included; any provider can supply that same contract.
+   [Copy-and-paste AI prompts](helper_prompts.md) help build a compatible helper
+   from your provider's actual entities and attributes.
 2. Add HA-BEMS → **BEMS entity importer → PV generation forecast**.
 3. Name the shared input, select the prepared sensor and set its maximum original
    source age. Submit to test, review the 72-hour preview, then submit to register.

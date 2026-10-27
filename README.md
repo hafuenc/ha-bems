@@ -123,6 +123,46 @@ the recommendation unavailable with a reason, unless the seasonal safeguard
 already determines a maximum-power plan. Users supply the automation that
 applies the values to their own installation; HA-BEMS never writes setpoints.
 
+## Build a forecast helper with an AI assistant
+
+Copy this prompt and replace the placeholders with your actual source entity IDs
+and attribute examples from HA Developer tools → States:
+
+```text
+Create a Home Assistant YAML template sensor accepted by the HA-BEMS PV entity
+importer. My provider is [PROVIDER], my source entities are [ENTITY IDS], my
+timezone is [TIMEZONE], and their actual state/attribute examples are [EXAMPLES].
+Ask for missing source details rather than guessing fields, units or timestamps.
+
+Required output: available sensor with numeric finite nonnegative current-quarter
+mean power as state, unit_of_measurement W, integer attribute schema_version: 1,
+source_updated_at (timezone-aware ISO 8601, original source update time), and
+forecast (a native list, not a JSON string). Each record must contain start and
+end (timezone-aware ISO 8601, exactly 900 seconds apart) and power_w (finite,
+nonnegative numeric interval-average W).
+
+Publish normally 289 contiguous aligned quarter-hour intervals from the current
+quarter, covering at least now + 72 hours. Use UTC stepping across DST; no gaps,
+duplicates or overlaps. Convert source units and point-power/interval-energy
+semantics correctly. Include explicit source-backed nighttime zeros; never
+invent missing data or future days. Make the sensor unavailable on missing data.
+Preserve original source freshness: use the oldest contributing source update,
+not now() on helper regeneration. Default importer maximum source age is 180
+minutes, configurable; timestamps >5 minutes in the future are rejected.
+
+Return complete YAML with a unique_id, availability handling, source-change,
+quarter-hour and startup updates, plus an initial refresh method. Explain safe
+merging with existing templates, configuration checking, reload and verification
+of all attributes and the full 72-hour horizon. Do not write device setpoints.
+Then explain registering this sensor under HA-BEMS → BEMS entity importer → PV
+generation forecast and selecting that named input in FBC.
+```
+
+[Detailed prompts for any PV provider, Open-Meteo and troubleshooting](docs/helper_prompts.md)
+include the full requirements and source-information placeholders. Electricity
+price importers are planned; these PV prompts apply only to the implemented PV
+schema. [Exact input contract](docs/pv_forecast_helper.md).
+
 ## Overall strategy and future modules
 
 ### Home battery / electrical storage energy management

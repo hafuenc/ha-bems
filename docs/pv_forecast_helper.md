@@ -6,6 +6,11 @@ template editors or field-mapping options inside HA-BEMS. Register the prepared
 entity once under **BEMS entity importer → PV generation forecast**; consuming
 modules such as FBC select that registration. See the [input matrix](shared_inputs.md).
 
+To have an AI assistant build the helper for your own provider, use the
+[copy-and-paste prompts](helper_prompts.md). They include the required attributes,
+conversion rules, update behaviour and verification steps, with a separate
+Open-Meteo prompt and a prompt for diagnosing a failed importer test.
+
 ## Required format (schema version 1)
 
 | Location | Required value |
