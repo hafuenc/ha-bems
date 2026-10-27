@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- Replace all PV source adapters, template editors and field mappings with one
+  prepared forecast sensor using the documented shared schema.
+- Block setup until the sensor passes format, original-source freshness and
+  complete 72-hour coverage checks at 15-minute resolution. Show a successful
+  test preview and repeat validation during runtime.
+- Document helper design and provide a reusable Open-Meteo concatenation example.
+- Preserve FBC v1.0's remaining-day calculation and seasonal SOC override.
+
+Existing FBC entries: use Configure to select a compatible helper such as
+`sensor.pv_generation_forecast_72h`. Old PV input modes are removed; no automatic
+conversion or fallback is performed. Battery parameters, names and entity IDs
+are retained. HA-BEMS continues to publish plans only.
+
 ## 0.3.0
 
 - Fix the non-flexible load-profile dropdown preventing the setup form from opening.

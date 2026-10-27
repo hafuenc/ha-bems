@@ -1,71 +1,60 @@
-"""Normalise explicit PV forecast intervals for FBC."""
+"""Validate the shared forecast contract and select FBC's daily horizon."""
 
 from datetime import UTC, datetime, timedelta
 from math import isfinite
 
+INTERVAL = timedelta(minutes=15)
+MIN_HORIZON = timedelta(hours=72)
+
 
 def parse_timestamp(value):
     if not isinstance(value, str):
-        raise ValueError("Forecast timestamps must be ISO 8601 strings with timezone")
-    result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        raise ValueError("Timestamps must be ISO 8601 strings with timezone offsets")
+    try:
+        result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as err:
+        raise ValueError("Invalid ISO 8601 timestamp") from err
     if result.tzinfo is None:
-        raise ValueError("Forecast timestamps require a timezone offset")
+        raise ValueError("Timestamps require a timezone offset")
     return result.astimezone(UTC)
 
 
-def prepare_forecast(records, config, now, timezone):
-    """Resample interval-average power/energy to complete 15-minute intervals.
+def validate_forecast(records, now):
+    """Require explicit, ordered, contiguous quarter-hours through now + 72 h.
 
-    No missing interval is assumed to be zero, including nighttime. Existing
-    forecasts must explicitly cover the remaining local day to preserve FBC's
-    day-end energy horizon. Entity freshness is checked by the HA adapter.
+    Never resample, sort, fill gaps, guess field names or infer units.
+    Epoch/UTC arithmetic preserves DST slots.
     """
-    if not isinstance(records, list) or not records:
-        raise ValueError("Forecast attribute must be a nonempty list of interval records")
+    if not isinstance(records, list) or not 0 < len(records) <= 10000:
+        raise ValueError("Attribute 'forecast' must be a nonempty list of at most 10000 intervals")
     intervals = []
-    for record in records:
-        if not isinstance(record, dict):
-            raise ValueError("Each forecast interval must be an object")
-        start = parse_timestamp(record[config.get("timestamp_key", "start")])
-        end_key = config.get("end_key", "end")
-        end = parse_timestamp(record[end_key]) if end_key and end_key in record else (
-            start + timedelta(minutes=config.get("forecast_interval_minutes", 15))
-        )
-        if end <= start:
-            raise ValueError("Forecast intervals must have positive duration")
-        value = float(record[config.get("value_key", "power_dc_w")])
-        if not isfinite(value) or value < 0:
-            raise ValueError("PV forecast must be finite and nonnegative")
-        unit = config.get("forecast_unit", "W")
-        if unit == "kW":
-            value *= 1000
-        elif unit in ("Wh", "kWh"):
-            value *= (1000 if unit == "kWh" else 1) / ((end - start).total_seconds() / 3600)
-        elif unit != "W":
-            raise ValueError("Unsupported forecast unit")
-        intervals.append((start, end, value))
-    intervals.sort()
-    if any(left[1] > right[0] for left, right in zip(intervals, intervals[1:])):
-        raise ValueError("Forecast intervals overlap or have duplicate timestamps")
+    previous_end = None
+    for index, record in enumerate(records):
+        if not isinstance(record, dict) or not {"start", "end", "power_w"} <= record.keys():
+            raise ValueError(f"Interval {index + 1} requires start, end and power_w")
+        start = parse_timestamp(record["start"])
+        end = parse_timestamp(record["end"])
+        if end - start != INTERVAL or start.timestamp() % 900 != 0:
+            raise ValueError(f"Interval {index + 1} must cover exactly one aligned 15-minute interval")
+        value = record["power_w"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or value < 0:
+            raise ValueError(f"Interval {index + 1}: power_w must be a finite, nonnegative number in W")
+        if previous_end is not None and start != previous_end:
+            raise ValueError(f"Gap, overlap, duplicate or unordered interval at {start.isoformat()}")
+        intervals.append({"start": start.isoformat(), "end": end.isoformat(), "power_w": value})
+        previous_end = end
+    now = now.astimezone(UTC)
+    current_quarter = now.replace(second=0, microsecond=0) - timedelta(minutes=now.minute % 15)
+    if parse_timestamp(intervals[0]["start"]) > current_quarter:
+        raise ValueError("Forecast must include the current 15-minute interval")
+    if previous_end < now + MIN_HORIZON:
+        raise ValueError("Forecast must cover at least the next 72 hours from the current time, without gaps")
+    return [row for row in intervals if parse_timestamp(row["start"]) >= current_quarter]
 
-    cursor = now.astimezone(UTC).replace(second=0, microsecond=0)
-    cursor -= timedelta(minutes=cursor.minute % 15)
+
+def daily_forecast(intervals, now, timezone):
+    """FBC v1 still optimises only the remaining local calendar day."""
     local = now.astimezone(timezone)
-    day_end = (local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).astimezone(UTC)
-    result = []
-    while cursor + timedelta(minutes=15) <= day_end:
-        stop = cursor + timedelta(minutes=15)
-        seconds = 0.0
-        power_seconds = 0.0
-        for start, end, value in intervals:
-            overlap = (min(stop, end) - max(cursor, start)).total_seconds()
-            if overlap > 0:
-                seconds += overlap
-                power_seconds += overlap * value
-        if abs(seconds - 900) > 0.001:
-            raise ValueError(f"Forecast gap at {cursor.isoformat()}; explicit coverage through day end is required")
-        result.append({"start": cursor.isoformat(), "end": stop.isoformat(), "power_dc_w": power_seconds / 900})
-        cursor = stop
-    if not result:
-        raise ValueError("No remaining complete FBC intervals")
-    return result
+    midnight = (local.replace(hour=0, minute=0, second=0, microsecond=0)
+                + timedelta(days=1)).astimezone(UTC)
+    return [row for row in intervals if parse_timestamp(row["end"]) <= midnight]

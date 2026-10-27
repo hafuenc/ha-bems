@@ -106,45 +106,19 @@
       },
       "fbc_forecast": {
         "title": "PV generation forecast input",
-        "description": "Choose a supported forecast source or adapt the example in the custom template editor. HA-BEMS reads the selected time series and shows a preview before setup is completed.",
-        "data": {
-          "forecast_source": "Forecast source"
-        }
-      },
-      "fbc_open_meteo": {
-        "title": "PV generation forecast input — Open-Meteo",
-        "description": "Select Energy Production Today from your Open-Meteo Solar Forecast integration. The forecast time series is read automatically. Use a production forecast that retains available PV peaks if your array is larger than your inverter.\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before continuing. [Helper design and example](https://github.com/hafuenc/ha-bems/blob/main/docs/pv_forecast_helper.md).\n\n{reason}",
         "data": {
           "forecast_entity": "PV generation forecast entity",
-          "forecast_max_age_minutes": "Maximum source update age"
-        }
-      },
-      "fbc_template": {
-        "title": "PV generation forecast input — custom template",
-        "description": "Adapt the example to your forecast. The variable source_entity is the sensor selected below. Return a list of interval records with start, end and power_w (average power in W). Timestamps must include a timezone. The remaining day, including nighttime zero values, must be covered. Do not replace unavailable data with zero.\n\n{reason}",
-        "data": {
-          "forecast_entity": "PV generation forecast entity",
-          "forecast_max_age_minutes": "Maximum source update age",
-          "forecast_template": "Forecast template (editable example)"
-        }
-      },
-      "fbc_mapping": {
-        "title": "PV generation forecast input — advanced mapping",
-        "description": "For existing lists of interval records, map their timestamp and value fields. For supported providers, use the prepared source instead.\n\n{reason}",
-        "data": {
-          "forecast_entity": "PV generation forecast entity",
-          "forecast_attribute": "Attribute containing the forecast list",
-          "timestamp_key": "Interval start timestamp key",
-          "end_key": "Interval end timestamp key",
-          "value_key": "PV power or interval-energy key",
-          "forecast_unit": "Source value unit",
-          "forecast_interval_minutes": "Source interval duration if end is absent",
-          "forecast_max_age_minutes": "Maximum source update age"
+          "forecast_max_age_minutes": "Maximum original source update age"
+        },
+        "data_description": {
+          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format.",
+          "forecast_max_age_minutes": "Checked against source_updated_at, not the time the helper was regenerated."
         }
       },
       "fbc_preview": {
-        "title": "PV generation forecast preview",
-        "description": "Source: {adapter}\n\n15-minute intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nRemaining forecast energy: {energy} kWh\nSource update age: {age} minutes\n\nThe timestamps above use UTC. Continue if the preview matches your intended forecast."
+        "title": "PV forecast test passed",
+        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours and source freshness passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age: {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
       }
     },
     "error": {
@@ -152,7 +126,7 @@
       "invalid_entity": "Choose an available numeric percentage entity from 0 to 100 with unit %.",
       "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
       "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
-      "invalid_forecast": "The PV forecast could not be read. Check the detailed message and your source settings.",
+      "invalid_forecast": "Forecast test failed. Correct the selected helper using the detailed message below; setup cannot continue until the test passes.",
       "output_limit_below_maximum": "The output cap must be at least the maximum charging power. Review both values."
     }
   },
@@ -219,45 +193,19 @@
       },
       "fbc_forecast": {
         "title": "PV generation forecast input",
-        "description": "Choose a supported forecast source or adapt the example in the custom template editor. HA-BEMS reads the selected time series and shows a preview before setup is completed.",
-        "data": {
-          "forecast_source": "Forecast source"
-        }
-      },
-      "fbc_open_meteo": {
-        "title": "PV generation forecast input — Open-Meteo",
-        "description": "Select Energy Production Today from your Open-Meteo Solar Forecast integration. The forecast time series is read automatically. Use a production forecast that retains available PV peaks if your array is larger than your inverter.\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format, coverage and source age before continuing. [Helper design and example](https://github.com/hafuenc/ha-bems/blob/main/docs/pv_forecast_helper.md).\n\n{reason}",
         "data": {
           "forecast_entity": "PV generation forecast entity",
-          "forecast_max_age_minutes": "Maximum source update age"
-        }
-      },
-      "fbc_template": {
-        "title": "PV generation forecast input — custom template",
-        "description": "Adapt the example to your forecast. The variable source_entity is the sensor selected below. Return a list of interval records with start, end and power_w (average power in W). Timestamps must include a timezone. The remaining day, including nighttime zero values, must be covered. Do not replace unavailable data with zero.\n\n{reason}",
-        "data": {
-          "forecast_entity": "PV generation forecast entity",
-          "forecast_max_age_minutes": "Maximum source update age",
-          "forecast_template": "Forecast template (editable example)"
-        }
-      },
-      "fbc_mapping": {
-        "title": "PV generation forecast input — advanced mapping",
-        "description": "For existing lists of interval records, map their timestamp and value fields. For supported providers, use the prepared source instead.\n\n{reason}",
-        "data": {
-          "forecast_entity": "PV generation forecast entity",
-          "forecast_attribute": "Attribute containing the forecast list",
-          "timestamp_key": "Interval start timestamp key",
-          "end_key": "Interval end timestamp key",
-          "value_key": "PV power or interval-energy key",
-          "forecast_unit": "Source value unit",
-          "forecast_interval_minutes": "Source interval duration if end is absent",
-          "forecast_max_age_minutes": "Maximum source update age"
+          "forecast_max_age_minutes": "Maximum original source update age"
+        },
+        "data_description": {
+          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format.",
+          "forecast_max_age_minutes": "Checked against source_updated_at, not the time the helper was regenerated."
         }
       },
       "fbc_preview": {
-        "title": "PV generation forecast preview",
-        "description": "Source: {adapter}\n\n15-minute intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nRemaining forecast energy: {energy} kWh\nSource update age: {age} minutes\n\nThe timestamps above use UTC. Continue if the preview matches your intended forecast."
+        "title": "PV forecast test passed",
+        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours and source freshness passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age: {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
       },
       "fbc_battery": {
         "title": "Battery parameters",
@@ -280,7 +228,7 @@
       "invalid_entity": "Choose an available numeric percentage entity from 0 to 100 with unit %.",
       "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
       "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
-      "invalid_forecast": "The PV forecast could not be read. Check the detailed message and your source settings.",
+      "invalid_forecast": "Forecast test failed. Correct the selected helper using the detailed message below; setup cannot continue until the test passes.",
       "output_limit_below_maximum": "The output cap must be at least the maximum charging power. Review both values."
     }
   }

@@ -14,7 +14,6 @@ from .const import (
 from .seasonal_soc import resolve_threshold
 from .seasonal_soc import validate_threshold
 from .forecast_input import async_read_pv_forecast
-from .forecast_sources import CUSTOM_TEMPLATE, GENERIC_RECORDS, OPEN_METEO, TEMPLATE_EXAMPLE
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -56,6 +55,10 @@ class _ModuleSteps:
 
     def _finish(self, module):
         values = {**self._values(), CONF_MODULE: module}
+        if module == MODULE_FBC:
+            for key in ("forecast_source", "forecast_template", "forecast_attribute",
+                        "timestamp_key", "end_key", "value_key", "forecast_unit", "forecast_interval_minutes"):
+                values.pop(key, None)
         if isinstance(self, config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=values)
         name = values.pop("name").strip()
@@ -175,87 +178,30 @@ class _ModuleSteps:
         return self.async_show_form(step_id="fbc", errors=errors, data_schema=vol.Schema(fields))
 
     async def async_step_fbc_forecast(self, user_input=None):
+        errors, placeholders = {}, {"reason": ""}
         if user_input is not None:
             self._remember(user_input)
-            source = user_input["forecast_source"]
-            if source == OPEN_METEO:
-                return await self.async_step_fbc_open_meteo()
-            if source == CUSTOM_TEMPLATE:
-                return await self.async_step_fbc_template()
-            return await self.async_step_fbc_mapping()
+            try:
+                intervals, details = await async_read_pv_forecast(self.hass, self._values())
+            except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
+                errors["base"] = "invalid_forecast"
+                placeholders["reason"] = str(err)
+            else:
+                self._forecast_preview = {
+                    "count": str(len(intervals)),
+                    "start": intervals[0]["start"], "end": intervals[-1]["end"],
+                    "peak": str(round(max(row["power_w"] for row in intervals), 1)),
+                    "energy": str(round(sum(row["power_w"] * 0.25 / 1000 for row in intervals), 3)),
+                    "age": str(details["source_age_minutes"]),
+                }
+                return await self.async_step_fbc_preview()
         values = self._values()
-        default = values.get("forecast_source", GENERIC_RECORDS if "forecast_entity" in values else OPEN_METEO)
-        return self.async_show_form(step_id="fbc_forecast", data_schema=vol.Schema({
-            vol.Required("forecast_source", default=default): _choice([
-                {"value": OPEN_METEO, "label": "Open-Meteo Solar Forecast"},
-                {"value": CUSTOM_TEMPLATE, "label": "Custom forecast template"},
-                {"value": GENERIC_RECORDS, "label": "Advanced: existing interval records"},
-            ]),
-        }))
-
-    def _forecast_source_fields(self, values, provider=False):
         field = vol.Required("forecast_entity", default=values["forecast_entity"]) if "forecast_entity" in values else vol.Required("forecast_entity")
-        filters = {"domain": "sensor"}
-        if provider:
-            filters["integration"] = OPEN_METEO
-        return {
-            field: selector.EntitySelector({"filter": [filters]}),
-            vol.Required("forecast_max_age_minutes", default=values.get("forecast_max_age_minutes", 180)): _number(1, 1440, "min"),
-        }
-
-    async def _preview_forecast(self, user_input):
-        self._remember(user_input)
-        try:
-            intervals, details = await async_read_pv_forecast(self.hass, self._values())
-        except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
-            return None, {"base": "invalid_forecast"}, {"reason": str(err)}
-        self._forecast_preview = {
-            "adapter": details["forecast_adapter"], "count": str(len(intervals)),
-            "start": intervals[0]["start"], "end": intervals[-1]["end"],
-            "peak": str(round(max(row["power_dc_w"] for row in intervals), 1)),
-            "energy": str(round(sum(row["power_dc_w"] * 0.25 / 1000 for row in intervals), 3)),
-            "age": str(details["source_age_minutes"]),
-        }
-        return await self.async_step_fbc_preview(), {}, {}
-
-    async def async_step_fbc_open_meteo(self, user_input=None):
-        errors, placeholders = {}, {"reason": ""}
-        if user_input is not None:
-            result, errors, placeholders = await self._preview_forecast(user_input)
-            if result is not None:
-                return result
-        return self.async_show_form(step_id="fbc_open_meteo", errors=errors,
-            description_placeholders=placeholders,
-            data_schema=vol.Schema(self._forecast_source_fields(self._values(), provider=True)))
-
-    async def async_step_fbc_template(self, user_input=None):
-        errors, placeholders = {}, {"reason": ""}
-        if user_input is not None:
-            result, errors, placeholders = await self._preview_forecast(user_input)
-            if result is not None:
-                return result
-        values = self._values()
-        fields = self._forecast_source_fields(values)
-        fields[vol.Required("forecast_template", default=values.get("forecast_template", TEMPLATE_EXAMPLE))] = selector.TemplateSelector()
-        return self.async_show_form(step_id="fbc_template", errors=errors,
-            description_placeholders=placeholders, data_schema=vol.Schema(fields))
-
-    async def async_step_fbc_mapping(self, user_input=None):
-        errors, placeholders = {}, {"reason": ""}
-        if user_input is not None:
-            result, errors, placeholders = await self._preview_forecast(user_input)
-            if result is not None:
-                return result
-        values = self._values()
-        fields = self._forecast_source_fields(values)
-        for key, default in (("forecast_attribute", "forecast"), ("timestamp_key", "start"),
-                             ("end_key", "end"), ("value_key", "power_dc_w")):
-            fields[vol.Required(key, default=values.get(key, default))] = str
-        fields[vol.Required("forecast_unit", default=values.get("forecast_unit", "W"))] = _choice(["W", "kW", "Wh", "kWh"])
-        fields[vol.Required("forecast_interval_minutes", default=values.get("forecast_interval_minutes", 15))] = _number(1, 240, "min")
-        fields[vol.Required("forecast_max_age_minutes", default=values.get("forecast_max_age_minutes", 180))] = _number(1, 1440, "min")
-        return self.async_show_form(step_id="fbc_mapping", errors=errors,
-            description_placeholders=placeholders, data_schema=vol.Schema(fields))
+        return self.async_show_form(step_id="fbc_forecast", errors=errors,
+            description_placeholders=placeholders, data_schema=vol.Schema({
+                field: selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": "W"}]}),
+                vol.Required("forecast_max_age_minutes", default=values.get("forecast_max_age_minutes", 180)): _number(1, 1440, "min"),
+            }))
 
     async def async_step_fbc_preview(self, user_input=None):
         if user_input is not None:
