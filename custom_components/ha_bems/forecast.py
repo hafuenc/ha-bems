@@ -1,4 +1,4 @@
-"""Normalise explicit DC forecast interval records for the first FBC adapter."""
+"""Normalise explicit PV forecast intervals for FBC."""
 
 from datetime import UTC, datetime, timedelta
 from math import isfinite
@@ -35,7 +35,7 @@ def prepare_forecast(records, config, now, timezone):
             raise ValueError("Forecast intervals must have positive duration")
         value = float(record[config.get("value_key", "power_dc_w")])
         if not isfinite(value) or value < 0:
-            raise ValueError("DC forecast must be finite and nonnegative")
+            raise ValueError("PV forecast must be finite and nonnegative")
         unit = config.get("forecast_unit", "W")
         if unit == "kW":
             value *= 1000

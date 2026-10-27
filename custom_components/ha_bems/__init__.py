@@ -1,4 +1,4 @@
-"""HA-BEMS: reusable entities and observation-only battery recommendations."""
+"""HA-BEMS: reusable entities and operating plans for user automations."""
 
 from typing import TYPE_CHECKING
 

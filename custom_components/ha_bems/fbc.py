@@ -96,6 +96,8 @@ def calculate_fbc(
         raise ValueError("charge_efficiency must be a factor greater than 0 and at most 1")
     _nonnegative_finite("max_charge_power_w", settings.max_charge_power_w)
     _nonnegative_finite("output_limit_w", settings.output_limit_w)
+    if settings.output_limit_w < settings.max_charge_power_w:
+        raise ValueError("Device output cap must not be lower than maximum charging power")
     if len(settings.monthly_min_soc_percent) != 12:
         raise ValueError("monthly_min_soc_percent must contain 12 values, January to December")
     for value in settings.monthly_min_soc_percent:
@@ -129,9 +131,9 @@ def calculate_fbc(
 
     profile = tuple(_round_nonnegative(max(0.0, power - selected_limit), 1) for power in forecast)
     reasons: list[str] = []
-    if current_soc_percent < active_threshold:
+    if current_soc_percent <= active_threshold:
         profile = (settings.max_charge_power_w,) * len(forecast)
-        reasons.append("below_monthly_soc_threshold")
+        reasons.append("at_or_below_seasonal_soc_min_threshold")
 
     # Deliberately compare AFTER the monthly override, as the original does.
     if _round_nonnegative(profile[0]) == _round_nonnegative(forecast[0]):

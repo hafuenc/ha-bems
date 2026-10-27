@@ -11,8 +11,9 @@ Add HA-BEMS in Home Assistant's Devices & services, choose **BEMS entity creator
 Choose one of these sources:
 
 - **Monthly schedule:** twelve percentage fields, January to December. The
-  editable defaults are Florian's values: `90, 75, 40, 30, 20, 20, 20, 20, 30,
-  40, 75, 90`. They are suggestions to review for the user's installation.
+  editable defaults are `90, 75, 40, 30, 20, 20, 20, 20, 30, 40, 75, 90`.
+  They are suggestions for Central European solar irradiation conditions,
+  to be reviewed for the user's installation.
 - **Existing entity:** select a `sensor`, `number` or `input_number` whose
   current state is a number between 0 and 100 and whose unit is `%`. This entity
   supplies the active threshold, not the measured battery SOC. Its seasonal
@@ -32,9 +33,18 @@ The entry's own output cannot be selected as its source.
 
 ## Meaning for modules
 
-For FBC, SOC strictly below this threshold disables the charging limitation,
-allowing the configured maximum charging power. This preserves the MATLAB
-comparison. It does not force charging or establish a discharge prohibition.
+For FBC, SOC **at or below** this threshold produces a complete plan at the
+configured maximum charging power. This is the FBC meaning of leaving battery
+operation to its standard behavior. It deliberately changes the original MATLAB
+strict `<` comparison to `<=`.
+
+Electricity consumption varies unpredictably, and forecasts inevitably contain
+errors. This threshold acts as a safeguard: it reduces the flexibility available
+to HA-BEMS while lowering the risk of undesirable battery operation.
+
+HA-BEMS only publishes the plan. The user's automation applies it to the actual
+battery; HA-BEMS never restores a device mode itself. The maximum-power plan does
+not force charging and can be calculated even if the PV forecast is unavailable.
 
 Future EEG/feed-in control may explicitly use this shared schedule as its export
 reserve. That module and its reserve enforcement are not implemented yet.
@@ -50,8 +60,8 @@ standalone calculation API.
 
 The integration includes setup, options and the shared threshold sensor. FBC can
 select this sensor or any existing valid percentage entity and calculate
-recommendations. Battery writes remain disabled. The setup has not been exercised
-inside the user's Home Assistant installation yet.
+recommendations. Direct device writes are permanently outside HA-BEMS's scope.
+The next manual setup review is performed by the user after the HACS update.
 
 For manual installation, copy `custom_components/ha_bems` to the Home Assistant
 configuration directory's `custom_components` folder, restart Home Assistant,

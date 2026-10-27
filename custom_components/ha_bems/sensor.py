@@ -12,6 +12,7 @@ from .const import (
     MODULE_SOC, SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
 from .coordinator import BEMSCoordinator
+from .forecast_sources import CUSTOM_TEMPLATE
 from .seasonal_soc import resolve_threshold
 
 
@@ -97,7 +98,7 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
         self._attr_icon = "mdi:battery-charging" if module == MODULE_FBC else "mdi:home-lightning-bolt"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)}, name=entry.title,
-            manufacturer="HA-BEMS", model="Electrical storage management" if module == MODULE_FBC else "BEMS entity creator",
+            manufacturer="HA-BEMS", model="Battery control strategy" if module == MODULE_FBC else "BEMS entity creator",
         )
 
     async def async_added_to_hass(self):
@@ -115,6 +116,23 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
             self.async_on_remove(async_track_state_change_event(
                 self.hass, [config["forecast_entity"], config["soc_entity"], config[CONF_ENTITY]], refresh,
             ))
+            if config.get("forecast_source") == CUSTOM_TEMPLATE:
+                # Templates can depend on more than the selected source sensor.
+                # RenderInfo tracks those explicit dependencies without watching
+                # every state change in the installation.
+                from homeassistant.helpers.event import TrackTemplate, async_track_template_result
+                from homeassistant.helpers.template import Template
+
+                @callback
+                def template_refresh(event, _updates):
+                    refresh(event)
+
+                self.async_on_remove(async_track_template_result(
+                    self.hass,
+                    [TrackTemplate(Template(config["forecast_template"], self.hass),
+                                   {"source_entity": config["forecast_entity"]})],
+                    template_refresh,
+                ).async_remove)
 
     @property
     def native_value(self):

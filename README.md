@@ -2,11 +2,11 @@
 
 **Home Assistant Building Energy Management System**
 
-Modular management of flexible devices and energy storage. Version **0.2.0** is
-the first development version for installation through a HACS custom repository.
-It creates reusable BEMS entities and calculates forecast-based battery charging
-recommendations. **It does not write device setpoints.** The existing MATLAB
-automation remains the active controller until a separate switchover.
+Modular planning for flexible devices and energy storage. Version **0.3.0**
+creates reusable BEMS entities and forecast-based battery charging plans.
+**HA-BEMS always provides plans only. Your own Home Assistant automations apply
+them to your equipment.** Direct device control is outside the scope of every
+HA-BEMS module and future version.
 
 ## Install for the first manual check
 
@@ -19,6 +19,17 @@ automation remains the active controller until a separate switchover.
 
 The repository is a HACS custom repository; it is not included in the default
 HACS catalogue. The integration requires Home Assistant 2025.1 or newer.
+
+## Updates
+
+HACS supplies the HA-BEMS update entity and Home Assistant's update suggestion.
+Each published version has a matching GitHub release, tag and manifest version.
+Keep the HACS update entity enabled. For a just-published release, open HA-BEMS
+in HACS and choose **Update information** from its menu if necessary. Custom
+repositories may otherwise take up to the next scheduled refresh (normally
+48 hours) to display a new release. A change on GitHub's main branch alone is
+not treated as a new release. Install the offered version and restart Home
+Assistant when ready; HA-BEMS never installs updates automatically itself.
 
 ## Setup structure in this version
 
@@ -53,7 +64,8 @@ Entries created by version 0.1 remain seasonal-threshold entries.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 90 | 75 | 40 | 30 | 20 | 20 | 20 | 20 | 30 | 40 | 75 | 90 |
 
-These are Florian's suggestions and should be reviewed for the user's battery.
+These editable defaults are suggestions for Central European solar irradiation
+conditions and should be reviewed for the user's battery.
 An existing sensor, number or input_number can instead supply the active
 percentage. Missing or invalid source states make the result unavailable; there
 is no silent fallback. [Threshold setup and semantics](docs/seasonal_soc.md).
@@ -72,21 +84,30 @@ prices come from existing integrations. Additional helpers can be added later.
 
 ### Electrical storage management: first FBC strategy
 
-The first selectable strategy is Florian's existing DC-forecast FBC algorithm,
-ported from the MATLAB fragment. Configure the battery SOC source, seasonal
-threshold source, battery parameters and a DC PV forecast entity.
+The selectable strategy **FBC v1.0 - only PV generation considered** is based on
+the existing MATLAB algorithm. Configure measured SOC in %, the seasonal
+threshold source, battery parameters and a PV generation forecast. The virtual
+device's suggested name is **FBC Battery 1**, with type **Battery control strategy**.
 
-The first forecast adapter accepts a sensor attribute containing a list of
-interval records. Setup maps timestamp/value keys and W/kW/Wh/kWh units. It
-requires explicit, timezone-aware coverage of the remaining local day, including
-zero-power nighttime records. Provider-specific adapters and additional forecast
-formats are future work. [Input contract and FBC details](docs/fbc.md).
+Choose **Open-Meteo Solar Forecast** for automatic reading of its Energy
+Production Today sensor, or **Custom forecast template** with an editable
+example. The old interval field mapping remains an advanced option. Setup shows
+a preview of period, peak power and remaining energy. One constant **PV
+forecast-to-battery storage efficiency** converts forecast energy into stored
+battery energy. [Input contract and FBC details](docs/fbc.md).
+
+When **SOC is at or below the seasonal minimum**, the complete planned charging
+profile equals the configured maximum charging power. This inclusive comparison
+is a deliberate change from the original MATLAB `<` rule. The device output cap
+must be at least this maximum; inconsistent settings are rejected. The seasonal
+safeguard can produce the maximum-power plan even while a PV forecast is unavailable.
 
 The **FBC recommended charging limit** sensor reports the current recommendation
 in W and the remaining charging profile in its `forecast` attribute. It updates
 on input changes and each quarter-hour. An unavailable or invalid input makes
-the recommendation unavailable with a reason. No automation applying this value
-to the battery is included in this version.
+the recommendation unavailable with a reason, unless the seasonal safeguard
+already determines a maximum-power plan. Users supply the automation that
+applies the values to their own installation; HA-BEMS never writes setpoints.
 
 ## Overall strategy and future modules
 
@@ -152,9 +173,9 @@ snapshot and upstream plans it used. A failed or stale upstream plan must not
 silently be interpreted as zero demand. Sequential optimisation is the intended
 hierarchy; it is not a claim of a globally joint optimum.
 
-Keep calculations independent from the HA UI, source adapters and final device
-control. Use one authority for a device's setpoints and coordinated battery
-energy budgets. Future solver selection and runtime limits will be based on
+Keep calculations independent from the HA UI and source adapters. Coordinate
+plans and battery energy budgets inside HA-BEMS; a user-defined automation is
+the final authority applying them to each device. Future solver selection and runtime limits will be based on
 actual local-hardware measurements; no solver package is needed for this FBC
 release. HiGHS is a candidate for the later open-source MILP implementation.
 
