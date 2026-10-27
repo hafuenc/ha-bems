@@ -26,8 +26,8 @@ class BatteryPowerTests(unittest.TestCase):
 
 
 class BatteryMigrationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_existing_limits_merge_without_increasing_power(self):
-        for maximum,cap,expected in [(5000,5000,5000),(5000,7500,5000),(7500,5000,5000)]:
+    async def test_existing_maximum_becomes_output_limit_regardless_of_old_cap(self):
+        for maximum,cap,expected in [(5000,5000,5000),(5000,7500,5000),(7500,5000,7500)]:
             with self.subTest(maximum=maximum,cap=cap):
                 entry=SimpleNamespace(version=1,minor_version=1,
                     data={'module':'battery_fbc','max_charge_power_w':1000,'soc_entity':'sensor.battery'},

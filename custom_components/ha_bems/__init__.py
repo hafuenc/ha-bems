@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 async def async_migrate_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool:
-    """Merge the two legacy charging limits without increasing allowed power."""
+    """Use configured maximum charging power as the single output limit."""
     from .const import CONF_MODULE, MODULE_FBC
 
     if entry.version != 1:
@@ -16,8 +16,7 @@ async def async_migrate_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bo
     if entry.minor_version < 2:
         values = {**entry.data, **entry.options}
         if values.get(CONF_MODULE) == MODULE_FBC:
-            if "output_limit_w" in values:
-                values["max_charge_power_w"] = min(values["max_charge_power_w"], values.pop("output_limit_w"))
+            values.pop("output_limit_w", None)
             hass.config_entries.async_update_entry(entry, data=values, options={}, minor_version=2)
         else:
             hass.config_entries.async_update_entry(entry, minor_version=2)
