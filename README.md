@@ -112,8 +112,9 @@ battery energy. [FBC details](docs/fbc.md).
 
 When **SOC is at or below the seasonal minimum**, the complete planned charging
 profile equals the configured maximum charging power. This inclusive comparison
-is a deliberate change from the original MATLAB `<` rule. The device output cap
-must be at least this maximum; inconsistent settings are rejected. The seasonal
+is a deliberate change from the original MATLAB `<` rule. Maximum charging
+power in W is also the current output limit; no separate output-cap input is
+needed. Target SOC in % should match the battery system's configured SOC limit. The seasonal
 safeguard can produce the maximum-power plan even while a PV forecast is unavailable.
 
 The **FBC recommended charging limit** sensor reports the current recommendation

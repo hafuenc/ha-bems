@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Label target SOC explicitly in % and explain the day-end target and alignment
+  with the battery system's own maximum SOC. Label usable capacity in kWh.
+- Merge charging power and output cap into one Maximum charging power in W
+  parameter. Migrate existing entries to the lower of their former two limits.
+
 - Clarify usable (net) battery capacity as the energy corresponding to the
   selected SOC sensor's full 0–100% range, in setup and options.
 

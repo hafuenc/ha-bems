@@ -264,15 +264,12 @@ class _ModuleSteps:
     async def async_step_fbc_battery(self, user_input=None):
         errors = {}
         if user_input is not None:
-            if user_input["output_limit_w"] < user_input["max_charge_power_w"]:
-                errors["output_limit_w"] = "output_limit_below_maximum"
-            else:
-                self._remember(user_input)
-                try:
-                    read_pv_import(self.hass, self._values(), dt_util.now())
-                except (ValueError, TypeError, KeyError, IndexError, OverflowError):
-                    return await self.async_step_fbc_forecast({CONF_PV_IMPORT: self._values().get(CONF_PV_IMPORT)})
-                return self._finish(MODULE_FBC)
+            self._remember(user_input)
+            try:
+                read_pv_import(self.hass, self._values(), dt_util.now())
+            except (ValueError, TypeError, KeyError, IndexError, OverflowError):
+                return await self.async_step_fbc_forecast({CONF_PV_IMPORT: self._values().get(CONF_PV_IMPORT)})
+            return self._finish(MODULE_FBC)
         values = {**self._values(), **(user_input or {})}
         capacity = vol.Required("capacity_kwh", default=values["capacity_kwh"]) if "capacity_kwh" in values else vol.Required("capacity_kwh")
         fields = {capacity: _number(0.01, 10000, "kWh", "any")}
@@ -280,7 +277,6 @@ class _ModuleSteps:
             ("target_soc_percent", 100, 0, 100, "%", 1),
             ("charge_efficiency", 0.95, 0.01, 1, None, "any"),
             ("max_charge_power_w", 5000, 0, 1000000, "W", "any"),
-            ("output_limit_w", 5000, 0, 1000000, "W", "any"),
         ):
             fields[vol.Required(key, default=values.get(key, default))] = _number(minimum, maximum, unit, step)
         return self.async_show_form(step_id="fbc_battery", errors=errors, data_schema=vol.Schema(fields))
@@ -290,6 +286,7 @@ class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
     """Each helper or device module gets an independent configuration entry."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(self, user_input=None):
         return self.async_show_menu(step_id="user", menu_options=["entity_creator", "entity_importer", "electrical_storage", "thermal_storage"])

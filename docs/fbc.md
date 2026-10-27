@@ -19,15 +19,20 @@ will directly control batteries, heat pumps, EVs or other plant.
 - A shared PV forecast registered under **BEMS entity importer**, using the
   documented 72-hour contract.
 - Usable (net) battery capacity in kWh corresponding to the selected SOC
-  sensor's full 0–100% range, target SOC, maximum charging power and physical
-  device output cap.
+  sensor's full 0–100% range, target SOC in %, and maximum charging power in W.
 - **PV forecast-to-battery storage efficiency**: one constant factor, e.g. 0.95.
   It represents the fraction of forecast PV energy becoming stored battery energy.
   Include conversion/charging losses once; no extra DC/AC setup choice is required.
 
-The output cap must be at least the configured maximum charging power. Normally
-these are equal. Review both parameters rather than silently clipping a
-maximum-power override to a smaller value.
+Target SOC is the charge level FBC aims to reach by the end of the day. Keep it
+aligned with the maximum SOC configured in the battery system; FBC does not
+change that device setting.
+
+Maximum charging power is the single setting for both the charging-power
+overrides and the current output limit. The separate device output cap has been
+removed. Existing entries are migrated to the lower of their previous two
+limits, so merging the settings cannot increase previously allowed power.
+Battery settings and entity IDs are preserved; review the merged value using Configure.
 
 ## PV generation forecast input
 
@@ -66,7 +71,7 @@ The informational source age follows the helper's `source_updated_at`, never its
    or threshold still makes the plan unavailable.
 5. Preserve the MATLAB first-value override: compare first charging power and
    first PV power rounded to whole W; if equal, allow maximum power throughout.
-6. Clamp the current first value to the device output cap. As in the MATLAB
+6. Clamp the current first value to the configured maximum charging power. As in the MATLAB
    fragment, the non-override future profile is not individually capped.
 
 No future battery SOC trajectory, household demand, dynamic prices or physical
