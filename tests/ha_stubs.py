@@ -43,6 +43,7 @@ class Coordinator:
         return lambda: self.listeners.remove(callback)
 
     async def async_refresh(self):
+        previous_success = self.last_update_success
         try:
             self.data = await self._async_update_data()
             self.last_update_success = True
@@ -50,6 +51,13 @@ class Coordinator:
         except UpdateFailed as err:
             self.last_update_success = False
             self.last_exception = err
+        if hasattr(self, '_async_refresh_finished'):
+            self._async_refresh_finished()
+        if not self.last_update_success and not previous_success:
+            return
+        self.async_update_listeners()
+
+    def async_update_listeners(self):
         for listener in list(self.listeners):
             listener()
 
