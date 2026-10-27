@@ -9,11 +9,13 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENTITY, CONF_MODULE, CONF_MONTHLY, CONF_SOURCE, DEFAULT_MONTHLY_MIN_SOC,
-    DOMAIN, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MONTHS, SOURCE_ENTITY, SOURCE_MONTHLY,
+    DOMAIN, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT,
+    MONTHS, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
 from .seasonal_soc import resolve_threshold
 from .seasonal_soc import validate_threshold
 from .forecast_input import async_read_pv_forecast
+from .import_registry import pv_imports, read_pv_import
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -57,7 +59,8 @@ class _ModuleSteps:
         values = {**self._values(), CONF_MODULE: module}
         if module == MODULE_FBC:
             for key in ("forecast_source", "forecast_template", "forecast_attribute",
-                        "timestamp_key", "end_key", "value_key", "forecast_unit", "forecast_interval_minutes"):
+                        "timestamp_key", "end_key", "value_key", "forecast_unit", "forecast_interval_minutes",
+                        "forecast_entity", "forecast_max_age_minutes"):
                 values.pop(key, None)
         if isinstance(self, config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=values)
@@ -177,7 +180,7 @@ class _ModuleSteps:
             fields[field] = _percentage_entity()
         return self.async_show_form(step_id="fbc", errors=errors, data_schema=vol.Schema(fields))
 
-    async def async_step_fbc_forecast(self, user_input=None):
+    async def async_step_import_pv(self, user_input=None):
         errors, placeholders = {}, {
             "reason": "",
             "helper_docs_url": "https://github.com/hafuenc/ha-bems/blob/main/docs/pv_forecast_helper.md",
@@ -197,13 +200,58 @@ class _ModuleSteps:
                     "energy": str(round(sum(row["power_w"] * 0.25 / 1000 for row in intervals), 3)),
                     "age": str(details["source_age_minutes"]),
                 }
-                return await self.async_step_fbc_preview()
+                return await self.async_step_import_preview()
         values = self._values()
         field = vol.Required("forecast_entity", default=values["forecast_entity"]) if "forecast_entity" in values else vol.Required("forecast_entity")
-        return self.async_show_form(step_id="fbc_forecast", errors=errors,
-            description_placeholders=placeholders, data_schema=vol.Schema({
+        fields = self._name_fields("PV generation forecast")
+        fields.update({
                 field: selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": "W"}]}),
                 vol.Required("forecast_max_age_minutes", default=values.get("forecast_max_age_minutes", 180)): _number(1, 1440, "min"),
+            })
+        return self.async_show_form(step_id="import_pv", errors=errors,
+            description_placeholders=placeholders, data_schema=vol.Schema(fields))
+
+    async def async_step_import_preview(self, user_input=None):
+        if user_input is not None:
+            # Test again before saving: the source may have changed while
+            # the preview was open. A failure returns to the import form.
+            try:
+                await async_read_pv_forecast(self.hass, self._values())
+            except (ValueError, TypeError, KeyError, IndexError, OverflowError):
+                return await self.async_step_import_pv(self._values())
+            return self._finish(MODULE_PV_IMPORT)
+        return self.async_show_form(step_id="import_preview", data_schema=vol.Schema({}),
+                                    description_placeholders=self._forecast_preview)
+
+    async def async_step_fbc_forecast(self, user_input=None):
+        errors, placeholders = {}, {"reason": ""}
+        entries = pv_imports(self.hass)
+        if not entries:
+            errors["base"] = "no_pv_import"
+            return self.async_show_form(step_id="fbc_forecast", errors=errors,
+                description_placeholders=placeholders, data_schema=vol.Schema({}))
+        if user_input is not None:
+            self._remember(user_input)
+            try:
+                intervals, details = read_pv_import(self.hass, self._values(), dt_util.now())
+            except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
+                errors["base"] = "invalid_forecast"
+                placeholders["reason"] = str(err)
+            else:
+                self._forecast_preview = {
+                    "count": str(len(intervals)),
+                    "start": intervals[0]["start"], "end": intervals[-1]["end"],
+                    "peak": str(round(max(row["power_w"] for row in intervals), 1)),
+                    "energy": str(round(sum(row["power_w"] * 0.25 / 1000 for row in intervals), 3)),
+                    "age": str(details["source_age_minutes"]),
+                }
+                return await self.async_step_fbc_preview()
+        values = self._values()
+        valid_ids = {entry.entry_id for entry in entries}
+        field = vol.Required(CONF_PV_IMPORT, default=values[CONF_PV_IMPORT]) if values.get(CONF_PV_IMPORT) in valid_ids else vol.Required(CONF_PV_IMPORT)
+        return self.async_show_form(step_id="fbc_forecast", errors=errors,
+            description_placeholders=placeholders, data_schema=vol.Schema({
+                field: _choice([{"value": entry.entry_id, "label": entry.title} for entry in entries]),
             }))
 
     async def async_step_fbc_preview(self, user_input=None):
@@ -219,6 +267,10 @@ class _ModuleSteps:
                 errors["output_limit_w"] = "output_limit_below_maximum"
             else:
                 self._remember(user_input)
+                try:
+                    read_pv_import(self.hass, self._values(), dt_util.now())
+                except (ValueError, TypeError, KeyError, IndexError, OverflowError):
+                    return await self.async_step_fbc_forecast({CONF_PV_IMPORT: self._values().get(CONF_PV_IMPORT)})
                 return self._finish(MODULE_FBC)
         values = {**self._values(), **(user_input or {})}
         capacity = vol.Required("capacity_kwh", default=values["capacity_kwh"]) if "capacity_kwh" in values else vol.Required("capacity_kwh")
@@ -239,10 +291,18 @@ class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        return self.async_show_menu(step_id="user", menu_options=["entity_creator", "electrical_storage", "thermal_storage"])
+        return self.async_show_menu(step_id="user", menu_options=["entity_creator", "entity_importer", "electrical_storage", "thermal_storage"])
 
     async def async_step_entity_creator(self, user_input=None):
         return self.async_show_menu(step_id="entity_creator", menu_options=["soc", "load_profile"])
+
+    async def async_step_entity_importer(self, user_input=None):
+        return self.async_show_menu(step_id="entity_importer", menu_options=["import_pv", "future_imports"])
+
+    async def async_step_future_imports(self, user_input=None):
+        if user_input is not None:
+            return await self.async_step_entity_importer()
+        return self.async_show_form(step_id="future_imports", data_schema=vol.Schema({}))
 
     async def async_step_electrical_storage(self, user_input=None):
         return self.async_show_menu(step_id="electrical_storage", menu_options=["fbc"])
@@ -265,4 +325,6 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
             return await self.async_step_load_profile()
         if module == MODULE_FBC:
             return await self.async_step_fbc()
+        if module == MODULE_PV_IMPORT:
+            return await self.async_step_import_pv()
         return await self.async_step_soc()

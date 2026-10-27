@@ -3,15 +3,18 @@
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ENTITY, CONF_MODULE, CONF_SOURCE, DOMAIN, MODULE_FBC, MODULE_LOAD,
-    MODULE_SOC, SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
+    MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT, SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
 from .coordinator import BEMSCoordinator
+from .import_registry import coordinators, import_signal
 from .seasonal_soc import resolve_threshold
 
 
@@ -19,6 +22,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     module = entry.options.get(CONF_MODULE, entry.data.get(CONF_MODULE, MODULE_SOC))
     if module == MODULE_SOC:
         async_add_entities([SeasonalSOCSensor(entry)])
+        return
+    if module == MODULE_PV_IMPORT:
+        async_add_entities([ImportedPVStatusSensor(coordinators(hass)[entry.entry_id], entry)])
         return
     coordinator = BEMSCoordinator(hass, entry, module)
     # Keep the entry configurable and its sensor visible even if a source is
@@ -113,8 +119,15 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
         if self._module == MODULE_FBC:
             config = self.coordinator.config
             self.async_on_remove(async_track_state_change_event(
-                self.hass, [config["forecast_entity"], config["soc_entity"], config[CONF_ENTITY]], refresh,
+                self.hass, [config["soc_entity"], config[CONF_ENTITY]], refresh,
             ))
+            if entry_id := config.get(CONF_PV_IMPORT):
+                self.async_on_remove(async_dispatcher_connect(
+                    self.hass, import_signal(entry_id), lambda: refresh(None),
+                ))
+                # Also pick up an importer that finished loading while this
+                # entity was being added during HA startup.
+                refresh(None)
 
     @property
     def native_value(self):
@@ -133,5 +146,44 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
             # Do not present a previous recommendation as a valid current plan.
             attributes.pop("forecast", None)
             attributes["status"] = "unavailable"
+            attributes["reason"] = str(self.coordinator.last_exception)
+        return attributes
+
+
+class ImportedPVStatusSensor(CoordinatorEntity, SensorEntity):
+    """Expose input health without duplicating the source's forecast attribute."""
+
+    _attr_name = "Input status"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:import"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_input_status"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)}, name=entry.title,
+            manufacturer="HA-BEMS", model="BEMS entity importer",
+        )
+
+    @property
+    def available(self):
+        # The status itself must remain readable when the input has failed.
+        return True
+
+    @property
+    def native_value(self):
+        return self.coordinator.input_status
+
+    @property
+    def extra_state_attributes(self):
+        attributes = {
+            "input_type": "pv_generation_forecast",
+            "source_entity": self.coordinator.config["forecast_entity"],
+            "maximum_source_age_minutes": self.coordinator.config.get("forecast_max_age_minutes", 180),
+        }
+        if self.coordinator.last_update_success and self.coordinator.data:
+            attributes.update({key: value for key, value in self.coordinator.data.items() if key != "forecast"})
+        else:
             attributes["reason"] = str(self.coordinator.last_exception)
         return attributes
