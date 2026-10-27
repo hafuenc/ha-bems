@@ -12,7 +12,6 @@ from .const import (
     MODULE_SOC, SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
 from .coordinator import BEMSCoordinator
-from .forecast_sources import CUSTOM_TEMPLATE
 from .seasonal_soc import resolve_threshold
 
 
@@ -23,7 +22,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         return
     coordinator = BEMSCoordinator(hass, entry, module)
     # Keep the entry configurable and its sensor visible even if a source is
-    # initially missing or its forecast needs a different mapping.
+    # initially missing or the forecast helper needs correction.
     await coordinator.async_refresh()
     async_add_entities([BEMSForecastSensor(coordinator, entry, module)])
 
@@ -116,23 +115,6 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
             self.async_on_remove(async_track_state_change_event(
                 self.hass, [config["forecast_entity"], config["soc_entity"], config[CONF_ENTITY]], refresh,
             ))
-            if config.get("forecast_source") == CUSTOM_TEMPLATE:
-                # Templates can depend on more than the selected source sensor.
-                # RenderInfo tracks those explicit dependencies without watching
-                # every state change in the installation.
-                from homeassistant.helpers.event import TrackTemplate, async_track_template_result
-                from homeassistant.helpers.template import Template
-
-                @callback
-                def template_refresh(event, _updates):
-                    refresh(event)
-
-                self.async_on_remove(async_track_template_result(
-                    self.hass,
-                    [TrackTemplate(Template(config["forecast_template"], self.hass),
-                                   {"source_entity": config["forecast_entity"]})],
-                    template_refresh,
-                ).async_remove)
 
     @property
     def native_value(self):

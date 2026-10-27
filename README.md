@@ -2,7 +2,7 @@
 
 **Home Assistant Building Energy Management System**
 
-Modular planning for flexible devices and energy storage. Version **0.3.0**
+Modular planning for flexible devices and energy storage. Version **0.4.0**
 creates reusable BEMS entities and forecast-based battery charging plans.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
 them to your equipment.** Direct device control is outside the scope of every
@@ -89,12 +89,18 @@ the existing MATLAB algorithm. Configure measured SOC in %, the seasonal
 threshold source, battery parameters and a PV generation forecast. The virtual
 device's suggested name is **FBC Battery 1**, with type **Battery control strategy**.
 
-Choose **Open-Meteo Solar Forecast** for automatic reading of its Energy
-Production Today sensor, or **Custom forecast template** with an editable
-example. The old interval field mapping remains an advanced option. Setup shows
-a preview of period, peak power and remaining energy. One constant **PV
+Select one prepared **PV generation forecast entity**. Its `forecast` attribute
+must contain gap-free 15-minute records (`start`, `end`, `power_w`) covering the
+current interval and at least the next 72 hours. Setup tests the format, coverage
+and original source age, then shows a successful preview. The former provider,
+custom-template and field-mapping options are removed.
+[Helper format and Open-Meteo example](docs/pv_forecast_helper.md).
+Existing FBC entries must be configured to select a compatible helper after
+upgrading; battery settings and entity IDs are retained.
+
+FBC v1.0 still plans only through local midnight. One constant **PV
 forecast-to-battery storage efficiency** converts forecast energy into stored
-battery energy. [Input contract and FBC details](docs/fbc.md).
+battery energy. [FBC details](docs/fbc.md).
 
 When **SOC is at or below the seasonal minimum**, the complete planned charging
 profile equals the configured maximum charging power. This inclusive comparison

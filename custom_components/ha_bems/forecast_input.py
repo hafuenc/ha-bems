@@ -1,54 +1,42 @@
-"""Read HA forecast entities or render the user's sandboxed Jinja template."""
+"""Read one provider-independent PV forecast entity; no source adapters."""
 
-import json
-from zoneinfo import ZoneInfo
+from math import isfinite
 
-from homeassistant.exceptions import TemplateError
-from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
-from .forecast import prepare_forecast
-from .forecast_sources import (
-    CUSTOM_TEMPLATE, GENERIC_RECORDS, OPEN_METEO, canonical_mapping, open_meteo_records,
-)
+from .forecast import parse_timestamp, validate_forecast
 
 
 async def async_read_pv_forecast(hass, config):
     now = dt_util.now()
     state = hass.states.get(config["forecast_entity"])
     if state is None or state.state in ("unknown", "unavailable"):
-        raise ValueError("PV forecast source is unavailable")
-    age = max(0.0, (now - state.last_updated).total_seconds() / 60)
+        raise ValueError("PV forecast entity is unavailable")
+    if state.attributes.get("unit_of_measurement") != "W":
+        raise ValueError("PV forecast entity must use unit W")
+    try:
+        power = float(state.state)
+    except (ValueError, TypeError) as err:
+        raise ValueError("PV forecast entity state must be numeric power in W") from err
+    if not isfinite(power) or power < 0:
+        raise ValueError("PV forecast entity state must be finite and nonnegative")
+    version = state.attributes.get("schema_version")
+    if type(version) is not int or version != 1:
+        raise ValueError("PV forecast entity requires the numeric attribute schema_version: 1")
+    updated = parse_timestamp(state.attributes.get("source_updated_at"))
+    seconds = (now - updated).total_seconds()
+    if seconds < -300:
+        raise ValueError("source_updated_at is in the future; check timestamps and clock settings")
+    age = max(0.0, seconds / 60)
     if age > config.get("forecast_max_age_minutes", 180):
-        raise ValueError("PV forecast source is stale; check its update time")
-    source = config.get("forecast_source", GENERIC_RECORDS)
-    if source == OPEN_METEO:
-        records, description = await hass.async_add_executor_job(open_meteo_records, state.attributes)
-        mapping = canonical_mapping()
-    elif source == CUSTOM_TEMPLATE:
-        try:
-            template = Template(config["forecast_template"], hass)
-            template.ensure_valid()
-            records = template.async_render({"source_entity": state.entity_id}, parse_result=True)
-            if isinstance(records, str):
-                records = json.loads(records)
-        except (TemplateError, ValueError, TypeError) as err:
-            raise ValueError(f"Forecast template could not be rendered: {err}") from err
-        mapping = canonical_mapping()
-        description = "Custom forecast template (interval-average W)"
-    elif source == GENERIC_RECORDS:
-        records = state.attributes.get(config.get("forecast_attribute", "forecast"))
-        mapping = config
-        description = "Existing interval records"
-    else:
-        raise ValueError("Unknown PV forecast source adapter")
-    if not isinstance(records, list) or not 0 < len(records) <= 10000:
-        raise ValueError("The forecast must return a nonempty list of at most 10000 intervals")
+        raise ValueError("PV forecast source_updated_at is stale; check the upstream forecast update")
     intervals = await hass.async_add_executor_job(
-        prepare_forecast, records, mapping, now, ZoneInfo(hass.config.time_zone),
+        validate_forecast, state.attributes.get("forecast"), now,
     )
     return intervals, {
-        "forecast_source": source, "forecast_adapter": description,
         "source_entity": state.entity_id, "source_age_minutes": round(age, 1),
-        "source_last_updated": state.last_updated.isoformat(),
+        "source_updated_at": updated.isoformat(), "forecast_schema_version": 1,
+        "input_forecast_start": intervals[0]["start"],
+        "input_forecast_end": intervals[-1]["end"],
+        "input_forecast_intervals": len(intervals),
     }

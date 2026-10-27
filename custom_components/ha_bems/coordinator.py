@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from datetime import UTC, timedelta
 import logging
+from zoneinfo import ZoneInfo
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -10,6 +11,7 @@ from homeassistant.util import dt as dt_util
 from .const import CONF_ENTITY, MODULE_FBC
 from .fbc import FBCSettings, calculate_fbc
 from .forecast_input import async_read_pv_forecast
+from .forecast import daily_forecast
 from .load_profile import load_forecast
 from .seasonal_soc import validate_threshold
 
@@ -48,12 +50,13 @@ class BEMSCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(str(err)) from err
 
     def _calculate_fbc(self, intervals, values, now):
+        intervals = daily_forecast(intervals, now, ZoneInfo(self.hass.config.time_zone))
         settings = FBCSettings(**{key: self.config[key] for key in (
             "capacity_kwh", "target_soc_percent", "charge_efficiency",
             "max_charge_power_w", "output_limit_w",
         )})
         result = calculate_fbc(
-            [record["power_dc_w"] for record in intervals], step_hours=0.25,
+            [record["power_w"] for record in intervals], step_hours=0.25,
             current_soc_percent=values[0], current_month=now.month, settings=settings,
             seasonal_soc_min_threshold_percent=values[1],
         )

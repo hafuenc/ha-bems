@@ -1,0 +1,66 @@
+# Include this single block as an item under template: (see docs/pv_forecast_helper.md).
+triggers:
+- trigger: homeassistant
+  event: start
+- trigger: time_pattern
+  minutes: /15
+- trigger: state
+  entity_id:
+  - sensor.energy_production_today
+  - sensor.energy_production_tomorrow
+  - sensor.energy_production_d2
+  - sensor.energy_production_d3
+  - sensor.energy_production_d4
+- trigger: event
+  event_type: ha_bems_pv_forecast_refresh
+actions:
+- variables:
+    pv_bundle: |
+      {% set sources = ['sensor.energy_production_today', 'sensor.energy_production_tomorrow', 'sensor.energy_production_d2', 'sensor.energy_production_d3', 'sensor.energy_production_d4'] %}
+      {% set ns = namespace(points={}, rows=[], valid=true, used=[], updates=[]) %}
+      {% for entity in sources if has_value(entity) %}
+        {% set watts = state_attr(entity, 'watts') %}
+        {% if watts is mapping %}
+          {% for stamp, power in watts.items() %}
+            {% set ts = as_timestamp(stamp, none) %}
+            {% if ts is not none and is_number(power) and power | float >= 0 %}
+              {% set ns.points = dict(ns.points, **{(ts | int | string): {'power': power | float, 'source': entity, 'updated': states[entity].last_updated.isoformat()}}) %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+      {% set first = (as_timestamp(now()) // 900) | int * 900 %}
+      {% for i in range(289) %}
+        {% set a = first + i * 900 %}
+        {% set b = a + 900 %}
+        {% set p = ns.points.get(a | string) %}
+        {% set q = ns.points.get(b | string) %}
+        {% if p is not none and q is not none %}
+          {% set ns.rows = ns.rows + [{'start': as_datetime(a).isoformat(), 'end': as_datetime(b).isoformat(), 'power_w': ((p.power + q.power) / 2) | round(2)}] %}
+          {% for point in [p, q] if point.source not in ns.used %}
+            {% set ns.used = ns.used + [point.source] %}
+            {% set ns.updates = ns.updates + [point.updated] %}
+          {% endfor %}
+        {% else %}
+          {% set ns.valid = false %}
+        {% endif %}
+      {% endfor %}
+      {{ {'valid': ns.valid and ns.rows | count == 289, 'forecast': ns.rows if ns.valid else [], 'source_entities': ns.used, 'source_updated_at': ns.updates | min if ns.updates else none, 'generated_at': now().isoformat()} }}
+sensor:
+- name: PV generation forecast 72h
+  unique_id: ha_bems_pv_generation_forecast_72h
+  unit_of_measurement: W
+  device_class: power
+  icon: mdi:solar-power
+  availability: '{{ pv_bundle.valid }}'
+  state: '{{ pv_bundle.forecast[0].power_w | round(0) if pv_bundle.valid else none
+    }}'
+  attributes:
+    schema_version: 1
+    interval_minutes: 15
+    forecast: '{{ pv_bundle.forecast }}'
+    source_updated_at: '{{ pv_bundle.source_updated_at }}'
+    generated_at: '{{ pv_bundle.generated_at }}'
+    source_entities: '{{ pv_bundle.source_entities }}'
+    power_basis: Interval mean from linear interpolation of Open-Meteo power samples
+    coverage_complete: '{{ pv_bundle.valid }}'
