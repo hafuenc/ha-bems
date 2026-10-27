@@ -18,8 +18,9 @@ will directly control batteries, heat pumps, EVs or other plant.
   the helper created under **BEMS entity creator**. No duplicate helper is required.
 - A shared PV forecast registered under **BEMS entity importer**, using the
   documented 72-hour contract.
-- Battery capacity in kWh on the same basis as the SOC sensor, target SOC,
-  maximum charging power and physical device output cap.
+- Usable (net) battery capacity in kWh corresponding to the selected SOC
+  sensor's full 0–100% range, target SOC, maximum charging power and physical
+  device output cap.
 - **PV forecast-to-battery storage efficiency**: one constant factor, e.g. 0.95.
   It represents the fraction of forecast PV energy becoming stored battery energy.
   Include conversion/charging losses once; no extra DC/AC setup choice is required.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Clarify usable (net) battery capacity as the energy corresponding to the
+  selected SOC sensor's full 0–100% range, in setup and options.
+
 - Remove the maximum original source update age parameter and all age-based
   rejection in PV import setup and FBC runtime. Previously saved limits are ignored.
 - Keep source timestamps/age as information; retain timestamp format/clock checks
