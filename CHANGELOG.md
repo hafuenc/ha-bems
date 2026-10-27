@@ -2,16 +2,24 @@
 
 ## 0.4.0
 
+- Add BEMS entity importer as a separate setup category, initially for shared PV
+  generation forecasts. Electricity prices and other forecasts are marked coming soon.
+- Let FBC select a registered input; reuse one validated snapshot across modules.
+- Expose input health without duplicating forecast attributes. Propagate updates,
+  failure, disable/delete and reload to consumers; recheck current age/coverage.
+- Add the generator/importer strategy and implemented/future module input matrices.
+
 - Replace all PV source adapters, template editors and field mappings with one
-  prepared forecast sensor using the documented shared schema.
+  prepared forecast sensor registered with the shared importer.
 - Block setup until the sensor passes format, original-source freshness and
   complete 72-hour coverage checks at 15-minute resolution. Show a successful
   test preview and repeat validation during runtime.
 - Document helper design and provide a reusable Open-Meteo concatenation example.
 - Preserve FBC v1.0's remaining-day calculation and seasonal SOC override.
 
-Existing FBC entries: use Configure to select a compatible helper such as
-`sensor.pv_generation_forecast_72h`. Old PV input modes are removed; no automatic
+Existing FBC entries: register a compatible helper such as
+`sensor.pv_generation_forecast_72h` in BEMS entity importer, then use FBC Configure
+to select that named import. Old PV input modes are removed; no automatic
 conversion or fallback is performed. Battery parameters, names and entity IDs
 are retained. HA-BEMS continues to publish plans only.
 

@@ -10,8 +10,8 @@ from homeassistant.util import dt as dt_util
 
 from .const import CONF_ENTITY, MODULE_FBC
 from .fbc import FBCSettings, calculate_fbc
-from .forecast_input import async_read_pv_forecast
 from .forecast import daily_forecast
+from .import_registry import read_pv_import
 from .load_profile import load_forecast
 from .seasonal_soc import validate_threshold
 
@@ -43,7 +43,7 @@ class BEMSCoordinator(DataUpdateCoordinator):
             # The seasonal safeguard does not need a working PV forecast.
             if values[0] <= values[1]:
                 return self._maximum_charging_plan(values[1], now)
-            intervals, source_info = await async_read_pv_forecast(self.hass, self.config)
+            intervals, source_info = read_pv_import(self.hass, self.config, now)
             result = await self.hass.async_add_executor_job(self._calculate_fbc, intervals, values, now)
             return {**result, **source_info}
         except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:

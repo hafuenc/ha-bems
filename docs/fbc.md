@@ -16,7 +16,8 @@ will directly control batteries, heat pumps, EVs or other plant.
   filters for percentage entities and setup validates the current value.
 - Battery seasonal SOC min threshold entity: an existing percentage source or
   the helper created under **BEMS entity creator**. No duplicate helper is required.
-- A prepared PV generation forecast sensor using the shared 72-hour contract.
+- A shared PV forecast registered under **BEMS entity importer**, using the
+  documented 72-hour contract.
 - Battery capacity in kWh on the same basis as the SOC sensor, target SOC,
   maximum charging power and physical device output cap.
 - **PV forecast-to-battery storage efficiency**: one constant factor, e.g. 0.95.
@@ -29,17 +30,21 @@ maximum-power override to a smaller value.
 
 ## PV generation forecast input
 
-Select one prepared sensor with state/unit W and attributes `schema_version: 1`,
+Register a prepared sensor under **BEMS entity importer → PV generation forecast**
+and select that named input in FBC. The source has state/unit W and attributes `schema_version: 1`,
 `source_updated_at` and `forecast`. Each forecast record has timezone-aware
 `start`, `end` and interval-average `power_w`. The ordered, contiguous series
 must include the current quarter-hour and at least the next 72 hours, at exactly
 15-minute resolution. Normally a rolling helper supplies 289 intervals.
 
-Setup tests the full format, horizon and original-source freshness before showing
-a successful preview. The same validation runs at runtime. Provider selectors,
+Importer setup tests the full format, horizon and original-source freshness. FBC
+checks the selected registration before showing a successful preview. Importer
+validation continues on source updates and at least once a minute; consumers
+recheck time-dependent coverage and age before using its shared snapshot. Provider selectors,
 in-integration template code and generic field mappings have been removed.
 For helper requirements, an Open-Meteo example and existing-entry update steps,
-see [Shared PV generation forecast entity](pv_forecast_helper.md).
+see [Shared PV generation forecast entity](pv_forecast_helper.md) and the
+[module input matrix](shared_inputs.md).
 
 The **algorithm horizon remains the current quarter-hour through local midnight**.
 Only this part of the validated input enters FBC v1.0. The current quarter-hour

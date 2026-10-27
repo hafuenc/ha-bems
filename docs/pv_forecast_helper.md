@@ -2,7 +2,9 @@
 
 HA-BEMS accepts one prepared Home Assistant **sensor**. Its provider-specific
 conversion belongs in a helper outside HA-BEMS. There are no provider selectors,
-template editors or field-mapping options inside FBC setup.
+template editors or field-mapping options inside HA-BEMS. Register the prepared
+entity once under **BEMS entity importer → PV generation forecast**; consuming
+modules such as FBC select that registration. See the [input matrix](shared_inputs.md).
 
 ## Required format (schema version 1)
 
@@ -47,7 +49,7 @@ daylight-saving changes; do not assume each local day contains 96 quarters.
 each helper regeneration. When combining sources, use the oldest update time
 of the sources actually used. Use a provider's forecast issue timestamp when
 available; otherwise its HA source-state update time is a documented proxy.
-The default maximum age is 180 minutes and can be configured in FBC setup.
+The default maximum age is 180 minutes and can be configured on the shared importer.
 Timestamps more than five minutes in the future are rejected as clock errors.
 
 ## Example: Open-Meteo Solar Forecast
@@ -92,7 +94,7 @@ reconstruct peaks already lost through inverter clipping.
 
 ## Setup test and runtime checks
 
-In **Electrical storage management → FBC → PV generation forecast input**,
+In **BEMS entity importer → PV generation forecast**, name the input,
 select the prepared sensor and submit. Setup checks availability, W units,
 schema version, source age, timestamp format, numeric power, quarter-hour
 alignment, ordering, continuity, the current interval and the complete 72-hour
@@ -100,8 +102,9 @@ future horizon. A failure stays on the selection form and explains the reason.
 A successful test shows interval count, first/last timestamps, peak power,
 energy over the displayed period and original source update age.
 
-The same checks run when FBC recalculates, so later gaps or stale source data
-also invalidate its recommendation. The existing seasonal SOC safeguard can
+The importer checks again before registration, on source changes and at least
+once a minute. FBC validates the selected shared snapshot and its current age
+and coverage before calculating; later gaps or stale data invalidate its recommendation. The existing seasonal SOC safeguard can
 still recommend maximum charging without a PV forecast. Initial setup always
 requires the forecast test to pass, even when that safeguard is active.
 
@@ -110,8 +113,8 @@ Requiring a reusable 72-hour input does not change its MATLAB-derived horizon.
 
 ## Existing HA-BEMS entries
 
-After upgrading from 0.3, open **Configure** on each existing FBC entry and
-select the prepared helper. Names, entity IDs and battery parameters remain.
+After upgrading from 0.3, register the helper using **BEMS entity importer**.
+Then open **Configure** on each existing FBC entry and select that registered input. Names, entity IDs and battery parameters remain.
 The previous provider/template/mapping paths are removed and are not evaluated
 as fallbacks. A raw provider sensor without this contract fails validation;
 update any applying automation to handle an unavailable recommendation as usual.

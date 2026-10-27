@@ -43,6 +43,9 @@ HA-BEMS
 │       ├── H0
 │       ├── H25
 │       └── Constant throughout the year
+├── BEMS entity importer
+│   ├── PV generation forecast
+│   └── Electricity prices and additional forecasts — coming soon
 ├── Electrical storage management
 │   └── Forecast-based battery charging (FBC)
 └── Thermal storage management
@@ -79,8 +82,9 @@ standard-profile estimates rather than measured or learned building demand.
 [Load-profile calculation and sources](docs/load_profile.md).
 
 Users can supply existing entities directly to modules. The entity creator will
-initially supply only these two helpers; other actual values, forecasts and
-prices come from existing integrations. Additional helpers can be added later.
+initially supply only these two helpers. The importer registers prepared external
+PV forecasts for shared use; electricity import/export prices and further forecast
+input types will follow as their consuming modules are implemented.
 
 ### Electrical storage management: first FBC strategy
 
@@ -89,14 +93,18 @@ the existing MATLAB algorithm. Configure measured SOC in %, the seasonal
 threshold source, battery parameters and a PV generation forecast. The virtual
 device's suggested name is **FBC Battery 1**, with type **Battery control strategy**.
 
-Select one prepared **PV generation forecast entity**. Its `forecast` attribute
+First register one prepared **PV generation forecast entity** under **BEMS
+entity importer → PV generation forecast**. Its `forecast` attribute
 must contain gap-free 15-minute records (`start`, `end`, `power_w`) covering the
 current interval and at least the next 72 hours. Setup tests the format, coverage
 and original source age, then shows a successful preview. The former provider,
 custom-template and field-mapping options are removed.
 [Helper format and Open-Meteo example](docs/pv_forecast_helper.md).
-Existing FBC entries must be configured to select a compatible helper after
+Then select the named imported input in FBC. Several modules can share it. The
+importer exposes an input-status sensor without duplicating the forecast.
+Existing FBC entries must be configured to select a registered PV input after
 upgrading; battery settings and entity IDs are retained.
+[Shared input strategy and module dependency matrix](docs/shared_inputs.md).
 
 FBC v1.0 still plans only through local midnight. One constant **PV
 forecast-to-battery storage efficiency** converts forecast energy into stored
