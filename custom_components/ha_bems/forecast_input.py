@@ -1,4 +1,4 @@
-"""Read one provider-independent PV forecast entity; no source adapters."""
+"""Read provider-independent power forecasts; no source adapters."""
 
 from math import isfinite
 
@@ -22,21 +22,25 @@ def source_age(updated, now):
 
 
 async def async_read_pv_forecast(hass, config):
+    return await async_read_power_forecast(hass, config, "PV")
+
+
+async def async_read_power_forecast(hass, config, label="PV"):
     now = dt_util.now()
     state = hass.states.get(config["forecast_entity"])
     if state is None or state.state in ("unknown", "unavailable"):
-        raise ForecastUnavailable("PV forecast entity is unavailable")
+        raise ForecastUnavailable(f"{label} forecast entity is unavailable")
     if state.attributes.get("unit_of_measurement") != "W":
-        raise ValueError("PV forecast entity must use unit W")
+        raise ValueError(f"{label} forecast entity must use unit W")
     try:
         power = float(state.state)
     except (ValueError, TypeError) as err:
-        raise ValueError("PV forecast entity state must be numeric power in W") from err
+        raise ValueError(f"{label} forecast entity state must be numeric power in W") from err
     if not isfinite(power) or power < 0:
-        raise ValueError("PV forecast entity state must be finite and nonnegative")
+        raise ValueError(f"{label} forecast entity state must be finite and nonnegative")
     version = state.attributes.get("schema_version")
     if type(version) is not int or version != 1:
-        raise ValueError("PV forecast entity requires the numeric attribute schema_version: 1")
+        raise ValueError(f"{label} forecast entity requires the numeric attribute schema_version: 1")
     age, updated = source_age(state.attributes.get("source_updated_at"), now)
     intervals = await hass.async_add_executor_job(
         validate_forecast, state.attributes.get("forecast"), now,

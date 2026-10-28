@@ -1,5 +1,7 @@
 """Modular setup: reusable entities, electrical storage and thermal storage."""
 
+from zoneinfo import ZoneInfo
+
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -8,14 +10,15 @@ from homeassistant.helpers import entity_registry as er, selector
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_ENTITY, CONF_MODULE, CONF_MONTHLY, CONF_SOURCE, DEFAULT_MONTHLY_MIN_SOC,
-    DOMAIN, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT,
-    MONTHS, SOURCE_ENTITY, SOURCE_MONTHLY,
+    CONF_ENTITY, CONF_LOAD_INPUT, CONF_MODULE, CONF_MONTHLY, CONF_SOURCE, DEFAULT_MONTHLY_MIN_SOC,
+    DOMAIN, MODULE_FBC, MODULE_LOAD, MODULE_LOAD_IMPORT, MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT,
+    HOLIDAY_REGIONS, MONTHS, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
 from .seasonal_soc import resolve_threshold
 from .seasonal_soc import validate_threshold
-from .forecast_input import async_read_pv_forecast
-from .import_registry import pv_imports, read_pv_import
+from .forecast_input import async_read_power_forecast
+from .forecast import daily_forecast, surplus_forecast
+from .import_registry import load_inputs, pv_imports, read_load_input, read_pv_import
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -60,6 +63,7 @@ class _ModuleSteps:
         # Retired setting is ignored at runtime and dropped on options save.
         values.pop("forecast_max_age_minutes", None)
         if module == MODULE_FBC:
+            values.pop("battery_strategy", None)
             for key in ("forecast_source", "forecast_template", "forecast_attribute",
                         "timestamp_key", "end_key", "value_key", "forecast_unit", "forecast_interval_minutes",
                         "forecast_entity"):
@@ -70,16 +74,16 @@ class _ModuleSteps:
         return self.async_create_entry(title=name or "HA-BEMS", data=values)
 
     async def async_step_soc(self, user_input=None):
-        if user_input is not None:
-            self._remember(user_input)
-            if user_input[CONF_SOURCE] == SOURCE_ENTITY:
+        if isinstance(self, config_entries.OptionsFlow):
+            # Existing wrappers remain editable, but are no longer offered
+            # when creating a new seasonal SOC helper.
+            if self._values().get(CONF_SOURCE) == SOURCE_ENTITY:
                 return await self.async_step_existing_entity()
             return await self.async_step_monthly()
+        if user_input is not None:
+            self._remember({**user_input, CONF_SOURCE: SOURCE_MONTHLY})
+            return await self.async_step_monthly()
         fields = self._name_fields("Battery settings")
-        fields[vol.Required(CONF_SOURCE, default=self._values().get(CONF_SOURCE, SOURCE_MONTHLY))] = _choice([
-            {"value": SOURCE_MONTHLY, "label": "Monthly schedule"},
-            {"value": SOURCE_ENTITY, "label": "Existing entity"},
-        ])
         return self.async_show_form(step_id="soc", data_schema=vol.Schema(fields))
 
     async def async_step_monthly(self, user_input=None):
@@ -130,18 +134,17 @@ class _ModuleSteps:
     async def async_step_load_profile(self, user_input=None):
         errors = {}
         if user_input is not None:
-            try:
-                import holidays
-                if user_input.get("holiday_country"):
-                    await self.hass.async_add_executor_job(
-                        lambda: holidays.country_holidays(user_input["holiday_country"],
-                            subdiv=user_input.get("holiday_subdivision") or None, years=dt_util.now().year)
-                    )
-            except (ValueError, KeyError, NotImplementedError):
+            country = user_input.get("holiday_country", "")
+            if country not in ("", *HOLIDAY_REGIONS):
                 errors["base"] = "invalid_load_profile"
             else:
+                if country != self._values().get("holiday_country", "AT") or not country:
+                    # Never carry an Austrian region into the German calendar or vice versa.
+                    self._remember({"holiday_subdivision": ""})
                 self._remember(user_input)
-                return self._finish(MODULE_LOAD)
+                if not country:
+                    return self._finish(MODULE_LOAD)
+                return await self.async_step_load_region()
         values = {**self._values(), **(user_input or {})}
         fields = self._name_fields("Non-flexible building load")
         annual = vol.Required("annual_consumption_kwh", default=values["annual_consumption_kwh"]) if "annual_consumption_kwh" in values else vol.Required("annual_consumption_kwh")
@@ -155,8 +158,44 @@ class _ModuleSteps:
             {"value": "AT", "label": "Austria"}, {"value": "DE", "label": "Germany"},
             {"value": "", "label": "Weekends only (no public holidays)"},
         ])
-        fields[vol.Optional("holiday_subdivision", default=values.get("holiday_subdivision", ""))] = str
         return self.async_show_form(step_id="load_profile", errors=errors, data_schema=vol.Schema(fields))
+
+    async def async_step_load_region(self, user_input=None):
+        """Offer only the selected country's Bundesländer, in setup and options."""
+        import holidays
+
+        country = self._values()["holiday_country"]
+        regions = dict(HOLIDAY_REGIONS[country])
+        calendar = await self.hass.async_add_executor_job(
+            lambda: holidays.country_holidays(country)
+        )
+        saved = self._values().get("holiday_subdivision") or ""
+        saved = calendar.subdivisions_aliases.get(saved, saved)
+        # Retain a supported legacy city calendar (e.g. Augsburg), if already selected.
+        if saved in calendar.subdivisions and saved not in regions:
+            regions[saved] = saved
+        errors = {}
+        if user_input is not None:
+            region = user_input.get("holiday_subdivision", "")
+            try:
+                if region and region not in regions:
+                    raise ValueError("Region does not belong to the selected country")
+                await self.hass.async_add_executor_job(
+                    lambda: holidays.country_holidays(country, subdiv=region or None,
+                                                     years=dt_util.now().year)
+                )
+            except (ValueError, KeyError, NotImplementedError):
+                errors["holiday_subdivision"] = "invalid_load_profile"
+            else:
+                self._remember({"holiday_subdivision": region})
+                return self._finish(MODULE_LOAD)
+        default = saved if saved in regions else ""
+        return self.async_show_form(step_id="load_region", errors=errors, data_schema=vol.Schema({
+            vol.Required("holiday_subdivision", default=default): _choice([
+                {"value": "", "label": "National holidays only"},
+                *({"value": code, "label": name} for code, name in regions.items()),
+            ]),
+        }))
 
     async def async_step_fbc(self, user_input=None):
         errors = {}
@@ -174,23 +213,34 @@ class _ModuleSteps:
                 return await self.async_step_fbc_forecast()
         values = {**self._values(), **(user_input or {})}
         fields = self._name_fields("FBC Battery 1")
-        fields[vol.Required("battery_strategy", default="fbc_legacy_dc")] = _choice([
-            {"value": "fbc_legacy_dc", "label": "FBC v1.0 - only PV generation considered"},
-        ])
         for key in ("soc_entity", CONF_ENTITY):
             field = vol.Required(key, default=values[key]) if key in values else vol.Required(key)
             fields[field] = _percentage_entity()
         return self.async_show_form(step_id="fbc", errors=errors, data_schema=vol.Schema(fields))
 
     async def async_step_import_pv(self, user_input=None):
+        self._import_type = MODULE_PV_IMPORT
+        return await self._async_step_import(user_input)
+
+    async def async_step_import_load(self, user_input=None):
+        self._import_type = MODULE_LOAD_IMPORT
+        return await self._async_step_import(user_input)
+
+    async def _async_read_import(self):
+        label = "Building load" if self._import_type == MODULE_LOAD_IMPORT else "PV"
+        return await async_read_power_forecast(self.hass, self._values(), label)
+
+    async def _async_step_import(self, user_input=None):
+        is_load = self._import_type == MODULE_LOAD_IMPORT
         errors, placeholders = {}, {
             "reason": "",
-            "helper_docs_url": "https://github.com/hafuenc/ha-bems/blob/main/docs/pv_forecast_helper.md",
+            "helper_docs_url": "https://github.com/hafuenc/ha-bems/blob/main/docs/"
+                               + ("load_forecast_helper.md" if is_load else "pv_forecast_helper.md"),
         }
         if user_input is not None:
             self._remember(user_input)
             try:
-                intervals, details = await async_read_pv_forecast(self.hass, self._values())
+                intervals, details = await self._async_read_import()
             except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
                 errors["base"] = "invalid_forecast"
                 placeholders["reason"] = str(err)
@@ -205,11 +255,11 @@ class _ModuleSteps:
                 return await self.async_step_import_preview()
         values = self._values()
         field = vol.Required("forecast_entity", default=values["forecast_entity"]) if "forecast_entity" in values else vol.Required("forecast_entity")
-        fields = self._name_fields("PV generation forecast")
+        fields = self._name_fields("Building load forecast" if is_load else "PV generation forecast")
         fields.update({
                 field: selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": "W"}]}),
             })
-        return self.async_show_form(step_id="import_pv", errors=errors,
+        return self.async_show_form(step_id="import_load" if is_load else "import_pv", errors=errors,
             description_placeholders=placeholders, data_schema=vol.Schema(fields))
 
     async def async_step_import_preview(self, user_input=None):
@@ -217,10 +267,10 @@ class _ModuleSteps:
             # Test again before saving: the source may have changed while
             # the preview was open. A failure returns to the import form.
             try:
-                await async_read_pv_forecast(self.hass, self._values())
+                await self._async_read_import()
             except (ValueError, TypeError, KeyError, IndexError, OverflowError):
-                return await self.async_step_import_pv(self._values())
-            return self._finish(MODULE_PV_IMPORT)
+                return await self._async_step_import(self._values())
+            return self._finish(self._import_type)
         return self.async_show_form(step_id="import_preview", data_schema=vol.Schema({}),
                                     description_placeholders=self._forecast_preview)
 
@@ -234,7 +284,7 @@ class _ModuleSteps:
         if user_input is not None:
             self._remember(user_input)
             try:
-                intervals, details = read_pv_import(self.hass, self._values(), dt_util.now())
+                intervals, details, load_info = await self._async_validate_fbc_inputs()
             except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
                 errors["base"] = "invalid_forecast"
                 placeholders["reason"] = str(err)
@@ -245,15 +295,33 @@ class _ModuleSteps:
                     "peak": str(round(max(row["power_w"] for row in intervals), 1)),
                     "energy": str(round(sum(row["power_w"] * 0.25 / 1000 for row in intervals), 3)),
                     "age": str(details["source_age_minutes"]),
+                    "load": load_info.get("load_input_name") or "None — PV generation only",
                 }
                 return await self.async_step_fbc_preview()
         values = self._values()
         valid_ids = {entry.entry_id for entry in entries}
         field = vol.Required(CONF_PV_IMPORT, default=values[CONF_PV_IMPORT]) if values.get(CONF_PV_IMPORT) in valid_ids else vol.Required(CONF_PV_IMPORT)
+        loads = load_inputs(self.hass)
+        selected_load = values.get(CONF_LOAD_INPUT) or ""
+        if selected_load and selected_load not in {reference for reference, _name in loads}:
+            loads.append((selected_load, "Missing load input — select another input or PV only"))
         return self.async_show_form(step_id="fbc_forecast", errors=errors,
             description_placeholders=placeholders, data_schema=vol.Schema({
                 field: _choice([{"value": entry.entry_id, "label": entry.title} for entry in entries]),
+                vol.Optional(CONF_LOAD_INPUT, default=selected_load): _choice([
+                    {"value": "", "label": "None — use PV generation only"},
+                    *({"value": reference, "label": name} for reference, name in loads),
+                ]),
             }))
+
+    async def _async_validate_fbc_inputs(self):
+        now = dt_util.now()
+        rows, details = read_pv_import(self.hass, self._values(), now)
+        load_rows, load_info = read_load_input(self.hass, self._values(), now)
+        if load_rows is not None:
+            day = daily_forecast(rows, now, ZoneInfo(self.hass.config.time_zone))
+            await self.hass.async_add_executor_job(surplus_forecast, day, load_rows)
+        return rows, details, load_info
 
     async def async_step_fbc_preview(self, user_input=None):
         if user_input is not None:
@@ -266,7 +334,7 @@ class _ModuleSteps:
         if user_input is not None:
             self._remember(user_input)
             try:
-                read_pv_import(self.hass, self._values(), dt_util.now())
+                await self._async_validate_fbc_inputs()
             except (ValueError, TypeError, KeyError, IndexError, OverflowError):
                 return await self.async_step_fbc_forecast({CONF_PV_IMPORT: self._values().get(CONF_PV_IMPORT)})
             return self._finish(MODULE_FBC)
@@ -295,7 +363,7 @@ class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_menu(step_id="entity_creator", menu_options=["soc", "load_profile"])
 
     async def async_step_entity_importer(self, user_input=None):
-        return self.async_show_menu(step_id="entity_importer", menu_options=["import_pv", "future_imports"])
+        return self.async_show_menu(step_id="entity_importer", menu_options=["import_pv", "import_load", "future_imports"])
 
     async def async_step_future_imports(self, user_input=None):
         if user_input is not None:
@@ -325,4 +393,6 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
             return await self.async_step_fbc()
         if module == MODULE_PV_IMPORT:
             return await self.async_step_import_pv()
+        if module == MODULE_LOAD_IMPORT:
+            return await self.async_step_import_load()
         return await self.async_step_soc()

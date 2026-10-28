@@ -2,15 +2,30 @@
 
 from datetime import UTC, timedelta
 
-from .const import CONF_MODULE, CONF_PV_IMPORT, DOMAIN, MODULE_PV_IMPORT
+from .const import (
+    CONF_LOAD_INPUT, CONF_MODULE, CONF_PV_IMPORT, DOMAIN, MODULE_LOAD,
+    MODULE_LOAD_IMPORT, MODULE_PV_IMPORT,
+)
 from .forecast import MIN_HORIZON, parse_timestamp
 from .forecast_input import ForecastUnavailable, source_age
 
 
 def pv_imports(hass):
     """List configured PV inputs, including temporarily invalid inputs."""
+    return input_entries(hass, MODULE_PV_IMPORT)
+
+
+def input_entries(hass, module):
     return [entry for entry in hass.config_entries.async_entries(DOMAIN)
-            if entry.options.get(CONF_MODULE, entry.data.get(CONF_MODULE)) == MODULE_PV_IMPORT]
+            if entry.options.get(CONF_MODULE, entry.data.get(CONF_MODULE)) == module]
+
+
+def load_inputs(hass):
+    """Use stable entry references, independent of generated sensor entity IDs."""
+    return [(f"generated:{entry.entry_id}", f"{entry.title} (HA-BEMS load profile)")
+            for entry in input_entries(hass, MODULE_LOAD)] + [
+        (f"imported:{entry.entry_id}", f"{entry.title} (imported load forecast)")
+        for entry in input_entries(hass, MODULE_LOAD_IMPORT)]
 
 
 def import_signal(entry_id):
@@ -19,6 +34,10 @@ def import_signal(entry_id):
 
 def coordinators(hass):
     return hass.data.setdefault(DOMAIN, {}).setdefault("imports", {})
+
+
+def planners(hass):
+    return hass.data.setdefault(DOMAIN, {}).setdefault("planners", {})
 
 
 def read_pv_import(hass, config, now):
@@ -36,18 +55,49 @@ def read_pv_import(hass, config, now):
         raise ForecastUnavailable("The selected PV input importer is not loaded or has been disabled")
     if not coordinator.last_update_success or not coordinator.data:
         raise ForecastUnavailable(f"PV input is {coordinator.input_status}: {coordinator.last_exception}")
-    snapshot = coordinator.data
+    rows, details = _read_snapshot(coordinator.data, now, "PV")
+    details.update({"pv_import_entry_id": entry_id, "pv_import_name": entry.title})
+    return rows, details
+
+
+def read_load_input(hass, config, now):
+    """Read an explicitly selected load; never fall back to PV-only on failure."""
+    reference = config.get(CONF_LOAD_INPUT)
+    if not reference:
+        return None, {"load_consideration_active": False, "load_input_name": None}
+    kind, separator, entry_id = reference.partition(":")
+    module = {"generated": MODULE_LOAD, "imported": MODULE_LOAD_IMPORT}.get(kind)
+    if not separator or module is None:
+        raise ForecastUnavailable("Select a configured HA-BEMS load profile or imported building load forecast")
+    entry = next((entry for entry in input_entries(hass, module) if entry.entry_id == entry_id), None)
+    if entry is None:
+        raise ForecastUnavailable("The selected building load input no longer exists; select another or explicitly choose PV only")
+    registry = planners(hass) if kind == "generated" else coordinators(hass)
+    coordinator = registry.get(entry_id)
+    if coordinator is None:
+        raise ForecastUnavailable("The selected building load input is not loaded or has been disabled")
+    if not coordinator.last_update_success or not coordinator.data:
+        raise ForecastUnavailable(f"Building load input is unavailable: {coordinator.last_exception}")
+    rows, details = _read_snapshot(coordinator.data, now, "Building load")
+    return rows, {
+        "load_consideration_active": True, "load_input_name": entry.title,
+        "load_forecast_input": reference,
+        **{f"load_{key}": value for key, value in details.items()},
+    }
+
+
+def _read_snapshot(snapshot, now, label):
+    """Provider snapshots are structurally validated; recheck rolling coverage."""
     age, updated = source_age(snapshot["source_updated_at"], now)
     current = now.astimezone(UTC).replace(second=0, microsecond=0)
     current -= timedelta(minutes=current.minute % 15)
     rows = [row for row in snapshot["forecast"] if parse_timestamp(row["start"]) >= current]
     if not rows or parse_timestamp(rows[0]["start"]) != current:
-        raise ValueError("PV input does not include the current 15-minute interval")
+        raise ValueError(f"{label} input does not include the current 15-minute interval")
     if parse_timestamp(rows[-1]["end"]) < now.astimezone(UTC) + MIN_HORIZON:
-        raise ValueError("PV input no longer covers the next 72 hours; update the source helper")
-    details = {key: value for key, value in snapshot.items() if key != "forecast"}
-    details.update({"pv_import_entry_id": entry_id, "pv_import_name": entry.title,
-                    "source_age_minutes": round(age, 1), "source_updated_at": updated,
+        raise ValueError(f"{label} input no longer covers the next 72 hours; update the source helper")
+    details = {key: value for key, value in snapshot.items() if key not in ("forecast", "value", "status")}
+    details.update({"source_age_minutes": round(age, 1), "source_updated_at": updated,
                     "input_forecast_start": rows[0]["start"],
                     "input_forecast_end": rows[-1]["end"], "input_forecast_intervals": len(rows)})
     return rows, details

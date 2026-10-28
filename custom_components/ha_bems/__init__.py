@@ -29,38 +29,65 @@ async def async_setup_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool
     from homeassistant.helpers.dispatcher import async_dispatcher_send
     from homeassistant.helpers.event import async_track_state_change_event
 
-    from .const import CONF_MODULE, MODULE_PV_IMPORT
-    from .import_registry import coordinators, import_signal
+    from .const import CONF_MODULE, MODULE_FBC, MODULE_LOAD, MODULE_LOAD_IMPORT, MODULE_PV_IMPORT, MODULE_SOC
+    from .import_registry import coordinators, import_signal, planners
 
     config = {**entry.data, **entry.options}
-    if config.get(CONF_MODULE) == MODULE_PV_IMPORT:
-        from .input_coordinator import PVImportCoordinator
+    module = config.get(CONF_MODULE, MODULE_SOC)
+    registry = None
+    if module in (MODULE_PV_IMPORT, MODULE_LOAD_IMPORT):
+        from .input_coordinator import ForecastImportCoordinator
 
-        coordinator = PVImportCoordinator(hass, entry)
-        coordinators(hass)[entry.entry_id] = coordinator
+        coordinator = ForecastImportCoordinator(hass, entry)
+        registry = coordinators(hass)
+    elif module in (MODULE_LOAD, MODULE_FBC):
+        from .coordinator import BEMSCoordinator
+
+        coordinator = BEMSCoordinator(hass, entry, module)
+        registry = planners(hass)
+    if registry is not None:
+        registry[entry.entry_id] = coordinator
+        previous_input = None
 
         @callback
         def notify():
-            async_dispatcher_send(hass, import_signal(entry.entry_id))
+            nonlocal previous_input
+            # The status sensor still receives every validation update. Device
+            # planners only need a new forecast or changed input health, not
+            # a new validation timestamp or informational source age.
+            if coordinator.last_update_success and coordinator.data:
+                current_input = ("ready", coordinator.data["forecast"])
+            else:
+                current_input = (getattr(coordinator, "input_status", "unavailable"), str(coordinator.last_exception))
+            if current_input != previous_input:
+                previous_input = current_input
+                async_dispatcher_send(hass, import_signal(entry.entry_id))
 
         @callback
         def cleanup():
-            if coordinators(hass).get(entry.entry_id) is coordinator:
-                coordinators(hass).pop(entry.entry_id)
-                notify()
+            if registry.get(entry.entry_id) is coordinator:
+                registry.pop(entry.entry_id)
+                # Removal must always invalidate consumers, even when the
+                # last successfully validated forecast has not changed.
+                async_dispatcher_send(hass, import_signal(entry.entry_id))
 
         @callback
         def refresh(_event):
             hass.async_create_task(coordinator.async_request_refresh())
 
         entry.async_on_unload(cleanup)
-        entry.async_on_unload(coordinator.async_add_listener(notify))
-        entry.async_on_unload(async_track_state_change_event(
-            hass, [config["forecast_entity"]], refresh,
-        ))
-        # Invalid sources still get a visible status and editable options.
-        await coordinator.async_refresh()
+        if module != MODULE_FBC:
+            entry.async_on_unload(coordinator.async_add_listener(notify))
+        if module in (MODULE_PV_IMPORT, MODULE_LOAD_IMPORT):
+            entry.async_on_unload(async_track_state_change_event(
+                hass, [config["forecast_entity"]], refresh,
+            ))
+            # Invalid sources still get a visible status and editable options.
+            await coordinator.async_refresh()
 
+    if module == MODULE_FBC:
+        # Restore the user's bypass choice before publishing the first plan.
+        await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
@@ -74,11 +101,18 @@ async def async_unload_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> boo
     from homeassistant.const import Platform
     from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-    from .import_registry import coordinators, import_signal
+    from .const import CONF_MODULE, MODULE_FBC
+    from .import_registry import coordinators, import_signal, planners
 
-    unloaded = await hass.config_entries.async_unload_platforms(entry, [Platform.SENSOR])
-    if unloaded and coordinators(hass).pop(entry.entry_id, None) is not None:
+    platforms = [Platform.SENSOR]
+    if entry.options.get(CONF_MODULE, entry.data.get(CONF_MODULE)) == MODULE_FBC:
+        platforms.append(Platform.SWITCH)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
+    if unloaded:
+        removed = coordinators(hass).pop(entry.entry_id, None)
+        removed_plan = planners(hass).pop(entry.entry_id, None)
         # Consumers resolve the registration again, so disable/delete/reload
         # cannot leave them attached to an old coordinator or stale snapshot.
-        async_dispatcher_send(hass, import_signal(entry.entry_id))
+        if removed is not None or removed_plan is not None:
+            async_dispatcher_send(hass, import_signal(entry.entry_id))
     return unloaded

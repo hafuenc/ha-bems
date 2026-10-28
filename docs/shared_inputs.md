@@ -5,8 +5,8 @@ HA-BEMS separates shared input preparation from device strategies.
 - **BEMS entity creator** generates a missing input: seasonal SOC minimum or
   non-flexible building load. Existing seasonal percentage entities remain usable.
 - **BEMS entity importer** registers an existing, prepared forecast entity,
-  validates it and shares its snapshot with consuming modules. The first input
-  type is PV generation. Import/export electricity prices are future input types.
+  validates it and shares its snapshot with consuming modules. Supported types
+  are PV generation and building load. Import/export electricity prices are future input types.
 - **Device modules** select the registered inputs they need. FBC no longer has
   provider options, a template editor, field mappings or its own source-age setting.
 
@@ -28,8 +28,11 @@ and a failure reason when relevant. The original helper retains the forecast;
 the status entity does not duplicate its large forecast attribute.
 
 Source changes trigger validation, and a one-minute periodic check detects format failures
-and horizon expiry even if the source stops updating. Consumers receive input
-change notifications and also check current coverage before calculating.
+and horizon expiry even if the source stops updating. The input-status entity
+continues to show each validation time. Consumers receive notifications only
+when forecast values/coverage or input health change; validation timestamps and
+informational source age alone do not trigger a new device plan. Consumers also
+check current coverage before calculating.
 Source age is reported for information only, without a rejection threshold.
 They never use a retained successful snapshot after the importer reports failure.
 Changing the importer's source updates all its consumers without
@@ -37,19 +40,29 @@ reconfiguring them. Disable/delete/unload makes the selected input unavailable;
 reloading it reconnects consumers through the stable registration ID. No fallback
 to another import or an old direct entity selection is made.
 
-FBC still has its seasonal safeguard: at/below the minimum SOC it can publish a
-maximum-power plan without PV data. Otherwise an invalid input invalidates the
-plan. Setup always requires a working imported forecast, including when the
-seasonal safeguard is active.
+FBC has two maximum-power overrides: the user enable switch is off, or SOC is
+at/below the seasonal minimum. Neither needs PV or load forecasts. Manual bypass
+also needs no SOC/threshold values. Otherwise an invalid selected input invalidates
+the plan. Setup always tests PV and any selected load, including while an override
+would apply at runtime.
+
+The importer also registers **Building load forecast** sensors using the same
+15-minute/72-hour nonnegative-power contract, with consumption rather than PV as
+the value meaning. See [load helper format and AI prompt](load_forecast_helper.md).
+FBC's optional load selector offers both these registrations and existing HA-BEMS
+non-flexible load profiles. No load keeps the v1 engine input unchanged; selecting
+load uses max(0, PV minus load), without simulating battery discharge. Selections
+use stable configuration entry IDs. Generated providers and imported providers
+notify FBC when their forecast or health changes, and on removal/reload.
 
 ## Input matrix: implemented modules
 
-| Input | How it is supplied | FBC v1.0 |
+| Input | How it is supplied | FBC |
 | --- | --- | --- |
 | Actual battery SOC in % | Existing HA entity, selected directly in FBC | Required |
 | Seasonal minimum SOC in % | BEMS entity creator or existing HA entity | Required |
-| PV generation forecast | Prepared HA entity registered in BEMS entity importer | Required at setup; seasonal runtime exception above |
-| Non-flexible building load | BEMS entity creator; external import not yet implemented | Not used |
+| PV generation forecast | Prepared HA entity registered in BEMS entity importer | Required at setup; maximum-power runtime exceptions above |
+| Building load forecast | Existing BEMS load profile or registered external building load forecast | Optional; subtracts demand from PV when selected |
 | Electricity import price forecast | Future importer type | Not used |
 | Electricity export price forecast | Future importer type | Not used |
 | Outdoor temperature forecast | Future importer type | Not used |

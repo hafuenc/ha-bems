@@ -6,7 +6,9 @@ attributes from Home Assistant Developer tools → States. Include source units
 and timestamp meaning if known. The assistant should request missing details
 rather than guess your provider's format.
 
-These prompts describe the **implemented PV importer, schema version 1**.
+These prompts describe the **PV importer, schema version 1**. For consumption
+forecasts, use the dedicated [building load helper prompt](load_forecast_helper.md#copy-and-paste-ai-prompt),
+which shares the power format but defines demand before PV/battery balancing.
 Electricity import/export price importers are not implemented yet; their accepted
 formats will be documented when they become available. The PV schema must not
 be used to represent prices.

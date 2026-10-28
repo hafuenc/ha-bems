@@ -7,16 +7,18 @@ from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .forecast_input import ForecastUnavailable, async_read_pv_forecast
+from .const import CONF_MODULE, MODULE_LOAD_IMPORT
+from .forecast_input import ForecastUnavailable, async_read_power_forecast
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class PVImportCoordinator(DataUpdateCoordinator):
+class ForecastImportCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry):
         super().__init__(hass, _LOGGER, name=entry.title, config_entry=entry,
                          update_interval=timedelta(minutes=1))
         self.config = {**entry.data, **entry.options}
+        self.label = "Building load" if self.config.get(CONF_MODULE) == MODULE_LOAD_IMPORT else "PV"
         self.input_status = "unavailable"
         self._previous_health = None
 
@@ -33,7 +35,7 @@ class PVImportCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         try:
-            rows, details = await async_read_pv_forecast(self.hass, self.config)
+            rows, details = await async_read_power_forecast(self.hass, self.config, self.label)
         except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
             if isinstance(err, ForecastUnavailable):
                 self.input_status = "unavailable"
