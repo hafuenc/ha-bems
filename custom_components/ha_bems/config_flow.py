@@ -158,7 +158,12 @@ class _ModuleSteps:
             {"value": "AT", "label": "Austria"}, {"value": "DE", "label": "Germany"},
             {"value": "", "label": "Weekends only (no public holidays)"},
         ])
-        return self.async_show_form(step_id="load_profile", errors=errors, data_schema=vol.Schema(fields))
+        return self.async_show_form(step_id="load_profile", errors=errors, data_schema=vol.Schema(fields),
+            description_placeholders={
+                "h0_source_url": "https://www.bdew.de/media/documents/Profile.zip",
+                "h25_source_url": "https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx",
+                "profile_docs_url": "https://www.bdew.de/energie/standardlastprofile-strom/",
+            })
 
     async def async_step_load_region(self, user_input=None):
         """Offer only the selected country's Bundesländer, in setup and options."""
