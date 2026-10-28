@@ -58,3 +58,15 @@ def daily_forecast(intervals, now, timezone):
     midnight = (local.replace(hour=0, minute=0, second=0, microsecond=0)
                 + timedelta(days=1)).astimezone(UTC)
     return [row for row in intervals if parse_timestamp(row["end"]) <= midnight]
+
+
+def surplus_forecast(pv_intervals, load_intervals):
+    """Subtract load on matching instants, without modelling battery discharge."""
+    loads = {parse_timestamp(row["start"]): row for row in load_intervals}
+    result = []
+    for pv in pv_intervals:
+        load = loads.get(parse_timestamp(pv["start"]))
+        if load is None or parse_timestamp(load["end"]) != parse_timestamp(pv["end"]):
+            raise ValueError("Building load forecast must match the PV forecast's 15-minute intervals")
+        result.append({**pv, "power_w": max(0.0, pv["power_w"] - load["power_w"])})
+    return result

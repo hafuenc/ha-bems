@@ -110,11 +110,11 @@ energy over the displayed period and original source update age.
 
 The importer checks again before registration, on source changes and at least
 once a minute. FBC validates the selected shared snapshot and its current
-coverage before calculating; later gaps or unavailable data invalidate its recommendation. The existing seasonal SOC safeguard can
+coverage before calculating; later gaps or unavailable data invalidate its recommendation. The seasonal SOC safeguard and user enable switch bypass can
 still recommend maximum charging without a PV forecast. Initial setup always
 requires the forecast test to pass, even when that safeguard is active.
 
-**FBC v1.0 still calculates only the remaining local day's charging plan.**
+**FBC still calculates only the remaining local day's charging plan.**
 Requiring a reusable 72-hour input does not change its MATLAB-derived horizon.
 
 ## Existing HA-BEMS entries

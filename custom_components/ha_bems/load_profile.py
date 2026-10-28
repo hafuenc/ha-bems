@@ -72,7 +72,8 @@ def load_forecast(config: dict, now: datetime, timezone: str, hours=72) -> list[
     cursor = now.astimezone(UTC).replace(second=0, microsecond=0)
     cursor -= timedelta(minutes=cursor.minute % 15)
     records = []
-    for _ in range(hours * 4):
+    # Include the partly elapsed current quarter plus a full 72 hours ahead.
+    for _ in range(hours * 4 + 1):
         year = cursor.astimezone(tz).year
         first, weights = year_shape(year, timezone, config["load_profile"],
                                     config.get("holiday_country", "AT"),

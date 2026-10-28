@@ -1,9 +1,9 @@
 # FBC (Forecast based charging)
 
-Select **Electrical storage management → FBC**. The strategy is named
-**FBC v1.0 - only PV generation considered**. It uses PV generation, current
-battery SOC and battery settings; household demand and electricity prices do
-not enter this algorithm. Its virtual device defaults to **FBC Battery 1**, of
+Select **Electrical storage management → FBC**. There is no algorithm/version
+selector. With no building load selected, the original v1 calculation remains
+unchanged. Selecting a load forecast supplies PV surplus to the same engine.
+Electricity prices do not enter either calculation. Its virtual device defaults to **FBC Battery 1**, of
 type **Battery control strategy**. Existing entry names/IDs are retained.
 
 HA-BEMS always publishes operating plans only. A user-defined HA automation
@@ -18,6 +18,9 @@ will directly control batteries, heat pumps, EVs or other plant.
   the helper created under **BEMS entity creator**. No duplicate helper is required.
 - A shared PV forecast registered under **BEMS entity importer**, using the
   documented 72-hour contract.
+- An optional building load forecast: choose an already configured HA-BEMS
+  non-flexible load profile or a **Building load forecast** registration from the
+  importer. Choose **None — use PV generation only** to keep original behaviour.
 - Usable (net) battery capacity in kWh corresponding to the selected SOC
   sensor's full 0–100% range, target SOC in %, and maximum charging power in W.
 - **PV forecast-to-battery storage efficiency**: one constant factor, e.g. 0.95.
@@ -54,28 +57,67 @@ see [Shared PV generation forecast entity](pv_forecast_helper.md) and the
 [module input matrix](shared_inputs.md).
 
 The **algorithm horizon remains the current quarter-hour through local midnight**.
-Only this part of the validated input enters FBC v1.0. The current quarter-hour
+Only this part of the validated input enters FBC. The current quarter-hour
 is counted in full even if partly elapsed. UTC timestamps preserve DST intervals.
 The informational source age follows the helper's `source_updated_at`, never its regeneration time.
+
+## Optional building load
+
+Both inputs must cover the current quarter through at least now + 72 hours with
+aligned 15-minute intervals. Generated profiles are reused through their stable
+configuration entry; renaming their sensor does not break selection. External
+load sensors first pass [building load import](load_forecast_helper.md). Failure,
+disable, removal or expired coverage invalidates FBC without silently switching
+to PV-only mode; the maximum-power overrides below remain available.
+
+For each interval, prepare `max(0, PV power - building load power)` and use that
+series in the unchanged threshold calculation. Demand must be before PV/battery
+balancing and must exclude battery charging. A generated non-flexible profile
+excludes separately controlled heat pumps and EVs; an external forecast may
+include them if their expected consumption is known. Do not count loads twice.
+
+This variant assumes an AC PV forecast without unaccounted inverter clipping,
+with demand and charging efficiency on a consistent power basis. It does not
+recover clipped DC production or simulate battery discharge in deficit periods.
+Negative balance becomes zero charging surplus. Actual SOC updates correct past
+discharge in subsequent calculations, without guaranteeing the end-of-day target.
+
+## User enable switch
+
+Each FBC virtual device includes **FBC charging limitation enabled**, a normal HA
+switch usable from the UI or automations. On means normal calculation; off means
+the current output and every remaining interval equal **Maximum charging power**.
+The output stays available, with `override_reasons: [disabled_by_switch]`.
+No physical device is controlled. Allowing maximum charging does not request grid
+charging or allocate PV between EV and battery.
+
+New switches default on. Their last on/off state is restored on reload/restart,
+before the first charging plan is published. Turn the switch off to bypass FBC;
+disabling the switch entity in the entity registry is different and leaves the
+planner waiting for switch initialisation. Manual bypass requires no SOC,
+seasonal threshold, PV or load input. Switching back on validates inputs again.
 
 ## Algorithm
 
 1. Required input energy is
    `max(0, target_soc - current_soc) / 100 * capacity_kwh / efficiency`.
-2. Search synthetic thresholds from 0 to maximum forecast power in 10 W steps.
+2. Use the PV-only curve, or the prepared nonnegative PV-surplus curve if load is
+   selected. Search synthetic thresholds from 0 to maximum curve power in 10 W steps.
    Select the first threshold minimising absolute mismatch between required
    energy and forecast energy above that threshold.
-3. Charging power per interval is `max(0, PV power - threshold)`, rounded to 0.1 W.
+3. Charging power per interval is `max(0, curve power - threshold)`, rounded to 0.1 W.
 4. At **SOC <= seasonal minimum**, replace the full profile with maximum
    charging power. This intentionally changes the MATLAB strict `<` comparison.
    The HA adapter can issue this plan without a valid PV forecast. An invalid SOC
    or threshold still makes the plan unavailable.
 5. Preserve the MATLAB first-value override: compare first charging power and
-   first PV power rounded to whole W; if equal, allow maximum power throughout.
+   first input-curve power rounded to whole W; if equal, allow maximum power throughout.
+   With load selected, this refers to surplus rather than gross PV. The inherited
+   rule also applies when the first curve value is zero, even if later PV exists.
 6. Clamp the current first value to the configured maximum charging power. As in the MATLAB
    fragment, the non-override future profile is not individually capped.
 
-No future battery SOC trajectory, household demand, dynamic prices or physical
+No future battery SOC trajectory, dynamic prices or physical
 charging-power clipping is included in the threshold energy matching. Target SOC
 is an aim, not a guarantee. User automations must interpret the charging-limit
 output on the correct equipment power basis.
@@ -87,6 +129,18 @@ The sensor state is the current maximum recommended charging power in W. The
 Recalculation occurs on input changes and every quarter-hour; numerical work
 runs outside the HA event loop. `status` is `plan_ready`, and `application` is
 `user_automation`. This describes a plan, never confirmation of physical application.
+
+The PV importer's one-minute health checks do not themselves trigger FBC when
+only validation time or source-age metadata changes. Forecast values/coverage,
+input failures/recovery, actual SOC and seasonal threshold changes still trigger
+recalculation. The 15-minute forecast resolution does not impose a strict
+15-minute controller update cycle.
+
+Load-provider changes and switch operations also trigger recalculation.
+`charging_limitation_enabled` describes the switch, `load_consideration_active`
+reports whether the plan used load, and `calculation_input` is `pv_generation`,
+`pv_surplus` or `maximum_charging_override`. A selected load's name, source age
+and coverage use `load_` attributes, separate from PV source metadata.
 
 `limitation_disabled`, `override_reasons` and the active seasonal threshold explain
 overrides. The seasonal-only plan has `forecast_status` equal to

@@ -12,7 +12,7 @@ from tests.test_forecast_input import NOW
 
 with patch.dict('sys.modules', modules()):
     from custom_components.ha_bems.config_flow import HABEMSConfigFlow, HABEMSOptionsFlow
-    from custom_components.ha_bems.input_coordinator import PVImportCoordinator
+    from custom_components.ha_bems.input_coordinator import ForecastImportCoordinator
     from custom_components.ha_bems.import_registry import coordinators, read_pv_import
 
 
@@ -35,7 +35,7 @@ class Hass:
         return func(*args)
 
     async def register_snapshot(self):
-        coordinator = PVImportCoordinator(self, self.entries[0])
+        coordinator = ForecastImportCoordinator(self, self.entries[0])
         coordinator.data = await coordinator._async_update_data()
         coordinator.last_update_success = True
         coordinator.last_exception = None

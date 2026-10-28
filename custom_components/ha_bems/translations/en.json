@@ -33,10 +33,9 @@
       },
       "soc": {
         "title": "Battery seasonal SOC min threshold",
-        "description": "Create a reusable seasonal SOC threshold. Choose editable monthly values or an existing percentage entity. This threshold can be selected by battery modules.",
+        "description": "Create a monthly seasonal SOC threshold with twelve editable percentages. If you already have a threshold entity, select it directly in FBC setup instead.",
         "data": {
-          "name": "Entity group name",
-          "seasonal_soc_source": "Threshold source"
+          "name": "Entity group name"
         }
       },
       "monthly": {
@@ -66,21 +65,19 @@
       },
       "load_profile": {
         "title": "Non-flexible load profile",
-        "description": "Estimate the non-flexible behind-the-meter building demand at 15-minute resolution. Enter annual consumption excluding separately modelled flexible heat pumps, EVs and battery losses. Choose H0, H25 or a constant profile. H25 contains some average PV self-consumption influence. Country and region select the holiday calendar; leave region empty for national holidays. All fields can be changed later.",
+        "description": "Estimate the non-flexible behind-the-meter building demand at 15-minute resolution. Enter annual consumption excluding separately controlled flexible loads like heat pumps, EVs, etc. Modelling is based on standard load profiles: choose H0, H25 or a constant profile throughout the year. H25 contains some average PV self-consumption influence. Select the public holiday calendar here, then choose a Bundesland or National holidays only in the next step. All fields can be changed later.\n\nSources: [H0 — VDEW 1999/2000 profile tables (ZIP)](https://www.bdew.de/media/documents/Profile.zip); [H25 — BDEW 2025 profile tables (XLSX)](https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx). [BDEW background and application notes](https://www.bdew.de/energie/standardlastprofile-strom/).",
         "data": {
           "name": "Entity group name",
           "annual_consumption_kwh": "Non-flexible annual consumption",
           "load_profile": "Standard load profile",
-          "holiday_country": "Public holiday calendar",
-          "holiday_subdivision": "Holiday region (optional; e.g. AT: 1 for Burgenland, DE: BY for Bavaria)"
+          "holiday_country": "Public holiday calendar"
         }
       },
       "fbc": {
         "title": "Electrical storage management — FBC",
-        "description": "FBC (Forecast based charging) provides operating plans and recommendations. Use your own Home Assistant automations to apply these results to your battery system.",
+        "description": "FBC (Forecast based charging) provides operating plans and recommendations. Optionally consider predicted building demand by selecting a generated or imported load forecast in the next step. Each virtual device includes an FBC charging limitation enabled switch: off publishes maximum charging power for the complete plan. Use your own Home Assistant automations to apply the results to your battery system.",
         "data": {
           "name": "Virtual device",
-          "battery_strategy": "Battery strategy",
           "soc_entity": "Select actual battery SOC in % used by the FBC algorithm",
           "seasonal_soc_entity": "Battery seasonal SOC min threshold entity"
         },
@@ -107,22 +104,27 @@
         }
       },
       "fbc_forecast": {
-        "title": "Select shared PV generation forecast",
-        "description": "Select a PV input registered under BEMS entity importer. Register your prepared forecast helper there first, then return to FBC setup. Format, full next-72-hour coverage are checked before continuing. Source selection belongs to the importer and can be changed there for all consuming modules.\n\n{reason}",
+        "title": "Select FBC forecast inputs",
+        "description": "Select a PV forecast registered under BEMS entity importer. Optionally select an existing HA-BEMS non-flexible load profile or a building load forecast registered in the importer. Without load, FBC uses PV generation only. With load, FBC uses max(0, PV generation minus building demand), assuming AC PV generation without unaccounted inverter clipping. Inputs must cover at least the next 72 hours at 15-minute resolution. A selected load input must be valid; FBC will not silently revert to PV only.\n\n{reason}",
         "data": {
-          "pv_import_entry_id": "Imported PV generation forecast"
+          "pv_import_entry_id": "Imported PV generation forecast",
+          "load_forecast_input": "Building load forecast (optional)"
+        },
+        "data_description": {
+          "load_forecast_input": "Choose None for unchanged PV-only behaviour. For load-aware FBC, use building demand before PV/battery balancing; exclude battery charging. Demand above PV becomes zero available surplus; predicted battery discharge is not simulated."
         }
       },
       "fbc_preview": {
-        "title": "PV forecast test passed",
-        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age (information only): {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
+        "title": "FBC forecast input tests passed",
+        "description": "PV format, timezone-aware timestamps, 15-minute intervals and full next-72-hour coverage passed. Any selected load input also passed its coverage and interval checks.\n\nPV intervals: {count}\nStart: {start}\nEnd: {end}\nPeak PV power: {peak} W\nPV energy over the displayed period: {energy} kWh\nPV source age (information only): {age} minutes\nBuilding load: {load}\n\nTimestamps use UTC. FBC plans through local midnight. No load selection keeps the original PV-only calculation; selecting load feeds predicted PV surplus into the same calculation engine."
       },
       "entity_importer": {
         "title": "BEMS entity importer",
         "description": "Register existing forecast entities as shared inputs. HA-BEMS tests their format and coverage, and exposes an input status. Modules reuse the same validated input.",
         "menu_options": {
           "import_pv": "PV generation forecast",
-          "future_imports": "Electricity prices and additional forecasts — coming soon"
+          "future_imports": "Electricity prices and additional forecasts — coming soon",
+          "import_load": "Building load forecast"
         }
       },
       "future_imports": {
@@ -141,8 +143,26 @@
         }
       },
       "import_preview": {
-        "title": "PV input test passed",
+        "title": "Forecast input test passed",
         "description": "The forecast format, 15-minute continuity, complete next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak power: {peak} W\nEnergy over this period: {energy} kWh\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register this shared input. The source is checked again before saving and whenever it changes, and at least once a minute. Multiple modules can use this input."
+      },
+      "load_region": {
+        "title": "Non-flexible load profile — holiday region",
+        "description": "Choose the Bundesland for the selected country, or National holidays only. Regional public holidays use the Sunday load profile. This setting can be changed later.",
+        "data": {
+          "holiday_subdivision": "Holiday region (Bundesland)"
+        }
+      },
+      "import_load": {
+        "title": "Import building load forecast",
+        "description": "Select a prepared building demand forecast sensor, before PV/battery balancing and excluding battery charging. Its state must be finite nonnegative interval-average power in W. Required attributes: integer schema_version: 1, source_updated_at (original source update timestamp with timezone), and forecast (a native list of start, end and power_w records). Include the current quarter-hour and at least the next 72 hours in ordered, contiguous 15-minute intervals. Never replace missing consumption data with zero. A rolling helper normally needs 289 intervals. Setup tests the format and coverage; source age is information only. The importer exposes input health and keeps the forecast on your source entity. Existing HA-BEMS load profiles can be selected directly in FBC without importing them. [Helper format and AI prompt]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Building load forecast entity"
+        },
+        "data_description": {
+          "forecast_entity": "Select a forecast of building consumption, not net grid import, measured consumption history or an energy total in kWh."
+        }
       }
     },
     "error": {
@@ -158,10 +178,9 @@
     "step": {
       "soc": {
         "title": "Battery seasonal SOC min threshold",
-        "description": "Create a reusable seasonal SOC threshold. Choose editable monthly values or an existing percentage entity. This threshold can be selected by battery modules.",
+        "description": "Create a monthly seasonal SOC threshold with twelve editable percentages. If you already have a threshold entity, select it directly in FBC setup instead.",
         "data": {
-          "name": "Entity group name",
-          "seasonal_soc_source": "Threshold source"
+          "name": "Entity group name"
         }
       },
       "monthly": {
@@ -191,21 +210,19 @@
       },
       "load_profile": {
         "title": "Non-flexible load profile",
-        "description": "Estimate the non-flexible behind-the-meter building demand at 15-minute resolution. Enter annual consumption excluding separately modelled flexible heat pumps, EVs and battery losses. Choose H0, H25 or a constant profile. H25 contains some average PV self-consumption influence. Country and region select the holiday calendar; leave region empty for national holidays. All fields can be changed later.",
+        "description": "Estimate the non-flexible behind-the-meter building demand at 15-minute resolution. Enter annual consumption excluding separately controlled flexible loads like heat pumps, EVs, etc. Modelling is based on standard load profiles: choose H0, H25 or a constant profile throughout the year. H25 contains some average PV self-consumption influence. Select the public holiday calendar here, then choose a Bundesland or National holidays only in the next step. All fields can be changed later.\n\nSources: [H0 — VDEW 1999/2000 profile tables (ZIP)](https://www.bdew.de/media/documents/Profile.zip); [H25 — BDEW 2025 profile tables (XLSX)](https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx). [BDEW background and application notes](https://www.bdew.de/energie/standardlastprofile-strom/).",
         "data": {
           "name": "Entity group name",
           "annual_consumption_kwh": "Non-flexible annual consumption",
           "load_profile": "Standard load profile",
-          "holiday_country": "Public holiday calendar",
-          "holiday_subdivision": "Holiday region (optional; e.g. AT: 1 for Burgenland, DE: BY for Bavaria)"
+          "holiday_country": "Public holiday calendar"
         }
       },
       "fbc": {
         "title": "Electrical storage management — FBC",
-        "description": "FBC (Forecast based charging) provides operating plans and recommendations. Use your own Home Assistant automations to apply these results to your battery system.",
+        "description": "FBC (Forecast based charging) provides operating plans and recommendations. Optionally consider predicted building demand by selecting a generated or imported load forecast in the next step. Each virtual device includes an FBC charging limitation enabled switch: off publishes maximum charging power for the complete plan. Use your own Home Assistant automations to apply the results to your battery system.",
         "data": {
           "name": "Virtual device",
-          "battery_strategy": "Battery strategy",
           "soc_entity": "Select actual battery SOC in % used by the FBC algorithm",
           "seasonal_soc_entity": "Battery seasonal SOC min threshold entity"
         },
@@ -216,15 +233,19 @@
         }
       },
       "fbc_forecast": {
-        "title": "Select shared PV generation forecast",
-        "description": "Select a PV input registered under BEMS entity importer. Register your prepared forecast helper there first, then return to FBC setup. Format, full next-72-hour coverage are checked before continuing. Source selection belongs to the importer and can be changed there for all consuming modules.\n\n{reason}",
+        "title": "Select FBC forecast inputs",
+        "description": "Select a PV forecast registered under BEMS entity importer. Optionally select an existing HA-BEMS non-flexible load profile or a building load forecast registered in the importer. Without load, FBC uses PV generation only. With load, FBC uses max(0, PV generation minus building demand), assuming AC PV generation without unaccounted inverter clipping. Inputs must cover at least the next 72 hours at 15-minute resolution. A selected load input must be valid; FBC will not silently revert to PV only.\n\n{reason}",
         "data": {
-          "pv_import_entry_id": "Imported PV generation forecast"
+          "pv_import_entry_id": "Imported PV generation forecast",
+          "load_forecast_input": "Building load forecast (optional)"
+        },
+        "data_description": {
+          "load_forecast_input": "Choose None for unchanged PV-only behaviour. For load-aware FBC, use building demand before PV/battery balancing; exclude battery charging. Demand above PV becomes zero available surplus; predicted battery discharge is not simulated."
         }
       },
       "fbc_preview": {
-        "title": "PV forecast test passed",
-        "description": "Format, timezone-aware timestamps, 15-minute intervals, gap-free coverage of at least the next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak forecast power: {peak} W\nEnergy over the displayed period: {energy} kWh\nOriginal source update age (information only): {age} minutes\n\nTimestamps use UTC. FBC v1.0 uses only the remaining local day for its charging plan; the input is validated for the full 72-hour horizon."
+        "title": "FBC forecast input tests passed",
+        "description": "PV format, timezone-aware timestamps, 15-minute intervals and full next-72-hour coverage passed. Any selected load input also passed its coverage and interval checks.\n\nPV intervals: {count}\nStart: {start}\nEnd: {end}\nPeak PV power: {peak} W\nPV energy over the displayed period: {energy} kWh\nPV source age (information only): {age} minutes\nBuilding load: {load}\n\nTimestamps use UTC. FBC plans through local midnight. No load selection keeps the original PV-only calculation; selecting load feeds predicted PV surplus into the same calculation engine."
       },
       "fbc_battery": {
         "title": "Battery parameters",
@@ -254,8 +275,26 @@
         }
       },
       "import_preview": {
-        "title": "PV input test passed",
+        "title": "Forecast input test passed",
         "description": "The forecast format, 15-minute continuity, complete next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak power: {peak} W\nEnergy over this period: {energy} kWh\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register this shared input. The source is checked again before saving and whenever it changes, and at least once a minute. Multiple modules can use this input."
+      },
+      "load_region": {
+        "title": "Non-flexible load profile — holiday region",
+        "description": "Choose the Bundesland for the selected country, or National holidays only. Regional public holidays use the Sunday load profile. This setting can be changed later.",
+        "data": {
+          "holiday_subdivision": "Holiday region (Bundesland)"
+        }
+      },
+      "import_load": {
+        "title": "Import building load forecast",
+        "description": "Select a prepared building demand forecast sensor, before PV/battery balancing and excluding battery charging. Its state must be finite nonnegative interval-average power in W. Required attributes: integer schema_version: 1, source_updated_at (original source update timestamp with timezone), and forecast (a native list of start, end and power_w records). Include the current quarter-hour and at least the next 72 hours in ordered, contiguous 15-minute intervals. Never replace missing consumption data with zero. A rolling helper normally needs 289 intervals. Setup tests the format and coverage; source age is information only. The importer exposes input health and keeps the forecast on your source entity. Existing HA-BEMS load profiles can be selected directly in FBC without importing them. [Helper format and AI prompt]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Building load forecast entity"
+        },
+        "data_description": {
+          "forecast_entity": "Select a forecast of building consumption, not net grid import, measured consumption history or an energy total in kWh."
+        }
       }
     },
     "error": {

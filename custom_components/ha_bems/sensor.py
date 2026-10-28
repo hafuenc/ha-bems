@@ -10,11 +10,11 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_ENTITY, CONF_MODULE, CONF_SOURCE, DOMAIN, MODULE_FBC, MODULE_LOAD,
-    MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT, SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
+    CONF_ENTITY, CONF_LOAD_INPUT, CONF_MODULE, CONF_SOURCE, DOMAIN, MODULE_FBC, MODULE_LOAD,
+    MODULE_LOAD_IMPORT, MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT,
+    SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
-from .coordinator import BEMSCoordinator
-from .import_registry import coordinators, import_signal
+from .import_registry import coordinators, import_signal, planners
 from .seasonal_soc import resolve_threshold
 
 
@@ -23,10 +23,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
     if module == MODULE_SOC:
         async_add_entities([SeasonalSOCSensor(entry)])
         return
-    if module == MODULE_PV_IMPORT:
-        async_add_entities([ImportedPVStatusSensor(coordinators(hass)[entry.entry_id], entry)])
+    if module in (MODULE_PV_IMPORT, MODULE_LOAD_IMPORT):
+        async_add_entities([ImportedForecastStatusSensor(coordinators(hass)[entry.entry_id], entry)])
         return
-    coordinator = BEMSCoordinator(hass, entry, module)
+    coordinator = planners(hass)[entry.entry_id]
     # Keep the entry configurable and its sensor visible even if a source is
     # initially missing or the forecast helper needs correction.
     await coordinator.async_refresh()
@@ -101,6 +101,8 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{module}"
         self._attr_name = "FBC recommended charging limit" if module == MODULE_FBC else "Non-flexible load profile"
         self._attr_icon = "mdi:battery-charging" if module == MODULE_FBC else "mdi:home-lightning-bolt"
+        if module == MODULE_LOAD:
+            self._attr_suggested_display_precision = 0
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)}, name=entry.title,
             manufacturer="HA-BEMS", model="Battery control strategy" if module == MODULE_FBC else "BEMS entity creator",
@@ -128,6 +130,11 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
                 # Also pick up an importer that finished loading while this
                 # entity was being added during HA startup.
                 refresh(None)
+            if load_input := config.get(CONF_LOAD_INPUT):
+                self.async_on_remove(async_dispatcher_connect(
+                    self.hass, import_signal(load_input.partition(":")[2]), refresh,
+                ))
+                refresh(None)
 
     @property
     def native_value(self):
@@ -150,7 +157,7 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
         return attributes
 
 
-class ImportedPVStatusSensor(CoordinatorEntity, SensorEntity):
+class ImportedForecastStatusSensor(CoordinatorEntity, SensorEntity):
     """Expose input health without duplicating the source's forecast attribute."""
 
     _attr_name = "Input status"
@@ -178,7 +185,8 @@ class ImportedPVStatusSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         attributes = {
-            "input_type": "pv_generation_forecast",
+            "input_type": ("building_load_forecast" if self.coordinator.config.get(CONF_MODULE) == MODULE_LOAD_IMPORT
+                           else "pv_generation_forecast"),
             "source_entity": self.coordinator.config["forecast_entity"],
         }
         if self.coordinator.last_update_success and self.coordinator.data:

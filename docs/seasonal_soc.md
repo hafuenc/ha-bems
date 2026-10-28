@@ -8,28 +8,27 @@ threshold**.
 
 Add HA-BEMS in Home Assistant's Devices & services, choose **BEMS entity creator
 → Battery seasonal SOC min threshold**, and enter a name.
-Choose one of these sources:
+Then enter twelve percentages, January to December. The editable defaults are
+`90, 75, 40, 30, 20, 20, 20, 20, 30, 40, 75, 90`. They are suggestions for Central
+European solar irradiation conditions, to be reviewed for the user's installation.
+Configure the entry later to edit the monthly values.
 
-- **Monthly schedule:** twelve percentage fields, January to December. The
-  editable defaults are `90, 75, 40, 30, 20, 20, 20, 20, 30, 40, 75, 90`.
-  They are suggestions for Central European solar irradiation conditions,
-  to be reviewed for the user's installation.
-- **Existing entity:** select a `sensor`, `number` or `input_number` whose
-  current state is a number between 0 and 100 and whose unit is `%`. This entity
-  supplies the active threshold, not the measured battery SOC. Its seasonal
-  scheduling is managed by the user outside HA-BEMS. No monthly helpers are
-  required by HA-BEMS.
+HA-BEMS exposes the active value as a sensor attached to the named virtual device.
+It follows Home Assistant's local calendar month and refreshes at local midnight.
 
-Both modes are implemented from the first setup version. Configure the entry
-later to edit the schedule or switch sources. A saved schedule is retained when
-switching to an existing entity, so it can be selected again later.
+If you already have a threshold entity, select it directly in FBC setup. It must
+be a `sensor`, `number` or `input_number` with a numeric value from 0 to 100 and
+unit `%`. No duplicate entity needs to be created. This is a current percentage
+input, not a forecast; it does not belong in the entity importer.
 
-HA-BEMS exposes the resolved value as a sensor attached to the named battery.
-Monthly mode follows Home Assistant's local calendar month and refreshes at
-local midnight. Entity mode follows changes of the selected source. Missing,
-unavailable, nonnumeric, nonfinite, out-of-range or non-percent source values
-make the sensor unavailable. There is no silent fallback to the schedule or zero.
-The entry's own output cannot be selected as its source.
+### Existing wrapper entries
+
+Previously created helpers that forward an external percentage entity remain
+supported. Their Configure dialog opens the existing-source selection directly;
+new helper setup no longer offers this mode. Their entity IDs and saved sources
+are retained. Missing, unavailable, nonnumeric, nonfinite, out-of-range or
+non-percent values make such a wrapper unavailable, without a fallback to the
+monthly schedule or zero. The wrapper cannot select its own output as its source.
 
 ## Meaning for modules
 

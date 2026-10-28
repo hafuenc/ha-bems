@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.5.0
+
+- Link the original H0 (VDEW 1999/2000) and H25 (BDEW 2025) profile tables and
+  BDEW application notes directly in load-profile setup and Configure.
+
+- Add an FBC charging limitation enabled switch per battery virtual device.
+  Restore its state across reloads/restarts; off publishes the configured maximum
+  for the current output and full remaining plan without needing source inputs.
+- Make building load optional in FBC: select a configured HA-BEMS load profile
+  or a shared imported building load forecast. Feed max(0, PV minus load) into
+  the unchanged v1 engine; leaving load empty retains PV-only behaviour.
+- Add a building load forecast importer with the same strict 15-minute/72-hour
+  power forecast contract, setup preview, runtime health and consumer lifecycle.
+  Never silently fall back when a selected load fails, except that seasonal and
+  user-switch maximum-power overrides do not require forecast inputs.
+- Remove the FBC algorithm/version selector. Report input mode and override
+  reasons in output attributes; retain existing FBC sensor IDs and battery settings.
+- Extend generated load forecasts to 289 intervals for full rolling 72-hour
+  coverage, expose schema/source metadata and display load power in whole W.
+
+- Replace the load profile's free-text holiday region with country-specific
+  Bundesland dropdowns for Austria and Germany, including National holidays only.
+  Preserve existing region selections in Configure and skip the region step for
+  weekends-only calendars.
+
+- Keep minute-by-minute PV health validation while notifying FBC only of changed
+  forecast values/coverage or input health. Validation-only timestamps and source
+  age no longer cause redundant planning; SOC and quarter-hour triggers remain.
+
+- Simplify the seasonal SOC creator to a name and editable monthly schedule.
+  Select existing percentage entities directly in FBC; they are not forecast
+  imports. Existing wrapper entries remain supported and editable.
+
+Update through HACS and restart Home Assistant. Existing FBC entries keep their
+PV-only behaviour until a building load is explicitly selected in Configure.
+The new FBC charging limitation enabled switch defaults on and remembers its state.
+HA-BEMS continues to publish plans only; no physical device commands are sent.
+
 ## 0.4.1
 
 - Fix imported PV notifications running outside HA's event loop, which prevented

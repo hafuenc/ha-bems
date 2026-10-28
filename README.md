@@ -7,8 +7,9 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.4.1**
-creates reusable BEMS entities and forecast-based battery charging plans.
+Modular planning for flexible devices and energy storage. Version **0.5.0**
+creates reusable entities and forecast-based battery charging plans, with optional
+building load forecasts and an FBC enable switch.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
 them to your equipment.** Direct device control is outside the scope of every
 HA-BEMS module and future version.
@@ -36,20 +37,26 @@ repositories may otherwise take up to the next scheduled refresh (normally
 not treated as a new release. Install the offered version and restart Home
 Assistant when ready; HA-BEMS never installs updates automatically itself.
 
+For 0.5.0, existing FBC entries stay PV-only unless a building load is explicitly
+selected in **Configure**. Each battery gets an **FBC charging limitation enabled**
+switch, initially on. Turning it off publishes maximum charging power; no device
+commands are sent. The switch remembers its state across restarts. You do not
+need to delete and recreate existing entries.
+
 ## Setup structure in this version
 
 ```text
 HA-BEMS
 ├── BEMS entity creator
 │   ├── Battery seasonal SOC min threshold
-│   │   ├── Editable monthly schedule
-│   │   └── Existing percentage entity
+│   │   └── Editable monthly schedule
 │   └── Non-flexible load profile
 │       ├── H0
 │       ├── H25
 │       └── Constant throughout the year
 ├── BEMS entity importer
 │   ├── PV generation forecast
+│   ├── Building load forecast
 │   └── Electricity prices and additional forecasts — coming soon
 ├── Electrical storage management
 │   └── Forecast-based battery charging (FBC)
@@ -58,8 +65,8 @@ HA-BEMS
 ```
 
 Create a seasonal threshold first, or select an existing percentage entity in
-FBC setup. The load-profile helper is independently optional; the original FBC
-algorithm does not use household-demand forecasts. Each helper/module has its
+FBC setup. The load-profile helper is independently optional; select it in FBC
+to consider expected building consumption, or leave load empty for PV-only behaviour. Each helper/module has its
 own named entry and can be edited later using **Configure**. Multiple instances
 are supported, for example two batteries with separate sources and settings.
 Entries created by version 0.1 remain seasonal-threshold entries.
@@ -74,28 +81,32 @@ Entries created by version 0.1 remain seasonal-threshold entries.
 
 These editable defaults are suggestions for Central European solar irradiation
 conditions and should be reviewed for the user's battery.
-An existing sensor, number or input_number can instead supply the active
-percentage. Missing or invalid source states make the result unavailable; there
-is no silent fallback. [Threshold setup and semantics](docs/seasonal_soc.md).
+If a threshold sensor, number or input_number already exists, select it directly
+in FBC setup. The creator only creates monthly schedules. Existing wrapper entries
+remain supported; missing or invalid source states make them unavailable without
+a silent fallback. [Threshold setup and semantics](docs/seasonal_soc.md).
 
 **Non-flexible load profile** scales annual non-flexible consumption in kWh to
 15-minute intervals using bundled BDEW/VDEW H0, H25 or a constant curve. It exposes
 current estimated power in W and a rolling 72-hour `forecast` attribute.
 The full local calendar year's energy matches the annual input, including leap
-years and DST. Public-holiday country/region can be configured. These are
+years and DST. Holiday setup offers Austria/Germany and a country-specific
+Bundesland dropdown, including National holidays only. These are
 standard-profile estimates rather than measured or learned building demand.
 [Load-profile calculation and sources](docs/load_profile.md).
 
 Users can supply existing entities directly to modules. The entity creator will
 initially supply only these two helpers. The importer registers prepared external
-PV forecasts for shared use; electricity import/export prices and further forecast
+PV and building load forecasts for shared use; electricity import/export prices and further forecast
 input types will follow as their consuming modules are implemented.
 
-### Electrical storage management: first FBC strategy
+### Electrical storage management: FBC
 
-The selectable strategy **FBC v1.0 - only PV generation considered** is based on
-the existing MATLAB algorithm. Configure measured SOC in %, the seasonal
-threshold source, battery parameters and a PV generation forecast. The virtual
+FBC uses the existing MATLAB calculation engine with no version selector.
+Configure measured SOC in %, the seasonal threshold source, battery parameters
+and a PV generation forecast. Optionally select a configured HA-BEMS load profile
+or imported building load forecast; FBC then uses `max(0, PV generation - load)`
+as its calculation input. Leaving load empty preserves PV-only behaviour. The virtual
 device's suggested name is **FBC Battery 1**, with type **Battery control strategy**.
 
 First register one prepared **PV generation forecast entity** under **BEMS
@@ -111,7 +122,7 @@ Existing FBC entries must be configured to select a registered PV input after
 upgrading; battery settings and entity IDs are retained.
 [Shared input strategy and module dependency matrix](docs/shared_inputs.md).
 
-FBC v1.0 still plans only through local midnight. One constant **PV
+FBC still plans only through local midnight. One constant **PV
 forecast-to-battery storage efficiency** converts forecast energy into stored
 battery energy. [FBC details](docs/fbc.md).
 
@@ -120,13 +131,25 @@ profile equals the configured maximum charging power. This inclusive comparison
 is a deliberate change from the original MATLAB `<` rule. Maximum charging
 power in W is also the current output limit; no separate output-cap input is
 needed. Target SOC in % should match the battery system's configured SOC limit. The seasonal
-safeguard can produce the maximum-power plan even while a PV forecast is unavailable.
+safeguard can produce the maximum-power plan even while forecasts are unavailable.
+
+Each virtual device has an **FBC charging limitation enabled** switch, initially
+on and restored across restarts. Turning it off publishes the maximum charging
+power for the complete remaining plan, independently of input availability.
+Users can operate it manually or with their own automations; it never sends
+commands to the physical battery.
+
+With load selected, use an AC PV forecast without unaccounted inverter clipping.
+The calculation does not simulate discharge during load deficits. Both inputs
+need aligned 15-minute records with full rolling 72-hour coverage.
+[Building load helper format and copy-and-paste AI prompt](docs/load_forecast_helper.md).
 
 The **FBC recommended charging limit** sensor reports the current recommendation
 in W and the remaining charging profile in its `forecast` attribute. It updates
 on input changes and each quarter-hour. An unavailable or invalid input makes
 the recommendation unavailable with a reason, unless the seasonal safeguard
-already determines a maximum-power plan. Users supply the automation that
+or disabled enable switch already determines a maximum-power plan. A failed
+selected load never silently falls back to PV-only behaviour. Users supply the automation that
 applies the values to their own installation; HA-BEMS never writes setpoints.
 
 ## Build a forecast helper with an AI assistant
@@ -168,6 +191,8 @@ generation forecast and selecting that named input in FBC.
 include the full requirements and source-information placeholders. Electricity
 price importers are planned; these PV prompts apply only to the implemented PV
 schema. [Exact input contract](docs/pv_forecast_helper.md).
+For consumption forecasts, use the separate
+[building load helper prompt](docs/load_forecast_helper.md#copy-and-paste-ai-prompt).
 
 ## Overall strategy and future modules
 

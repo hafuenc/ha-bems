@@ -58,7 +58,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             tasks.append(asyncio.create_task(coroutine))
         class Plan:
             config={'soc_entity':'sensor.soc','seasonal_soc_entity':'sensor.minimum',
-                    'pv_import_entry_id':'shared-pv'}
+                    'pv_import_entry_id':'shared-pv', 'load_forecast_input':'generated:shared-load'}
             snapshot_ready=False
             state='unavailable'
             async def async_request_refresh(self):
@@ -83,3 +83,10 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.gather(*tasks)
             self.assertEqual(coordinator.state,'ready')
             self.assertTrue(getattr(handler,'_hass_callback',False))
+            self.assertEqual(len(handlers),2)
+            tasks.clear()
+            coordinator.snapshot_ready=False
+            handlers[1]()
+            await asyncio.gather(*tasks)
+            self.assertEqual(coordinator.state,'unavailable')
+            self.assertTrue(getattr(handlers[1],'_hass_callback',False))
