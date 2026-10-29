@@ -44,7 +44,7 @@ class GroupFlowTests(unittest.IsolatedAsyncioTestCase):
             result = await getattr(flow, 'async_step_' + group)()
             self.assertEqual(result['reason'], 'already_configured')
             supported = flow.async_get_supported_subentry_types(grouped)
-            self.assertEqual(set(supported), {group})
+            self.assertEqual(set(supported), set() if group == 'thermal_storage' else {group})
             self.assertFalse(flow.async_supports_options_flow(grouped))
 
     async def test_add_multiple_helpers_then_rename_and_disable_one(self):
@@ -57,7 +57,7 @@ class GroupFlowTests(unittest.IsolatedAsyncioTestCase):
             flow.hass = hass
             flow.parent = grouped
             menu = await flow.async_step_user()
-            self.assertEqual(menu['menu_options'], ['soc', 'load_profile'])
+            self.assertEqual(menu['menu_options'], ['soc', 'load_profile', 'thermal_cost'])
             await flow.async_step_soc({'name': name})
             from custom_components.ha_bems.const import MONTHS
             result = await flow.async_step_monthly({month: 40 for month in MONTHS})
@@ -130,6 +130,7 @@ class MigrationHarness:
         manager = self.hass.config_entries
         manager.async_update_entry = self.update_entry
         manager.async_add_subentry = self.add_subentry
+        manager.async_remove_subentry = self.remove_subentry
         manager.async_remove = self.remove_entry
         self.injected = modules()
         devices = ModuleType('homeassistant.helpers.device_registry')
@@ -157,7 +158,18 @@ class MigrationHarness:
             setattr(target, key, value)
 
     def add_subentry(self, target, subentry):
+        assert subentry.unique_id is None or not any(
+            existing.unique_id == subentry.unique_id for existing in target.subentries.values())
         target.subentries[subentry.subentry_id] = subentry
+
+    def remove_subentry(self, target, identifier):
+        # HA clears the old subentry's registrations during removal. The move
+        # must already have changed ownership or the entities would be deleted.
+        assert not any(entity.config_entry_id == target.entry_id and entity.config_subentry_id == identifier
+                       for entity in self.entities.values())
+        assert not any(device.config_entry_id == target.entry_id and device.config_subentry_id == identifier
+                       for device in self.devices.values())
+        target.subentries.pop(identifier)
 
     def async_update_entity(self, identifier, **values):
         self.moves.append(('entity', identifier))

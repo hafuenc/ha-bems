@@ -48,7 +48,7 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         context.start()
         self.addCleanup(context.stop)
         self.hass = thermal_hass()
-        self.group = parent('thermal_storage')
+        self.group = parent('entity_creator')
         self.hass.entries.append(self.group)
 
     def flow(self):
@@ -60,7 +60,7 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         for name, cop in [('DHW', 2), ('UFH', 4)]:
             flow = self.flow()
             menu = await flow.async_step_user()
-            self.assertEqual(menu['menu_options'], ['thermal_cost'])
+            self.assertEqual(menu['menu_options'], ['soc', 'load_profile', 'thermal_cost'])
             result = await flow.async_step_thermal_cost({'name': name, **CONFIG, 'constant_cop': cop})
             self.assertEqual(result['step_id'], 'thermal_cop_constant')
             result = await flow.async_step_thermal_cop_constant({'constant_cop': cop})
@@ -69,7 +69,7 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result['step_id'], 'thermal_cost_preview')
             result = await flow.async_step_thermal_cost_preview({})
             self.assertEqual(result['title'], name)
-            item = ConfigSubentry(data=result['data'], title=name, subentry_type='thermal_storage', unique_id=result['unique_id'])
+            item = ConfigSubentry(data=result['data'], title=name, subentry_type='entity_creator', unique_id=result['unique_id'])
             self.group.subentries[item.subentry_id] = item
         from custom_components.ha_bems.entries import module_entries
         items = module_entries(self.group)
@@ -179,7 +179,7 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         from custom_components.ha_bems.import_registry import planners, import_signal
         from tests.test_grouped_entries import child
         for name in ('DHW', 'UFH'):
-            item = child('thermal_storage', MODULE_THERMAL_COST, name, **CONFIG, **INPUTS)
+            item = child('entity_creator', MODULE_THERMAL_COST, name, **CONFIG, **INPUTS)
             self.group.subentries[item.subentry_id] = item
         injected = modules()
         sensor = ModuleType('homeassistant.components.sensor')

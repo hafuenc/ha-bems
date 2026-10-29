@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Move the generic thermal runtime-cost generator to BEMS entity creator. Use
+  the same procedure for every named instance, with independently configured COP
+  and other system settings; no DHW/UFH setup modes are introduced.
+- Migrate v0.6.0 cost setups from Thermal storage management while preserving
+  their names, settings, entity IDs and references. Retain per-item disabled
+  state and support resuming interrupted ownership moves.
+- Reserve Thermal storage management for a future generic operation planner.
+  Its detailed configuration and implementation remain open.
+
 ## 0.6.0
 
 - Add independently named thermal runtime-cost setups under Thermal storage
