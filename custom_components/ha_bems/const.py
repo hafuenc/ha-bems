@@ -19,8 +19,39 @@ MODULE_LOAD = "non_flexible_load"
 MODULE_FBC = "battery_fbc"
 MODULE_PV_IMPORT = "pv_forecast_import"
 MODULE_LOAD_IMPORT = "load_forecast_import"
+MODULE_IMPORT_PRICE = "electricity_import_price_forecast"
+MODULE_EXPORT_PRICE = "electricity_export_price_forecast"
+MODULE_OUTDOOR_TEMP = "outdoor_temperature_forecast"
+MODULE_THERMAL_COST = "thermal_runtime_cost"
+CONF_IMPORT_PRICE = "import_price_entry_id"
+CONF_EXPORT_PRICE = "export_price_entry_id"
+CONF_TEMPERATURE = "temperature_entry_id"
+FORECAST_IMPORT_MODULES = (
+    MODULE_PV_IMPORT, MODULE_LOAD_IMPORT, MODULE_IMPORT_PRICE,
+    MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
+)
+CONF_PV_POWER_TYPE = "pv_power_type"
 CONF_PV_IMPORT = "pv_import_entry_id"
 CONF_LOAD_INPUT = "load_forecast_input"
+CONF_GROUP = "group"
+CONF_ITEM_ID = "item_id"
+CONF_ENABLED = "enabled"
+GROUP_CREATOR = "entity_creator"
+GROUP_IMPORTER = "entity_importer"
+GROUP_ELECTRICAL = "electrical_storage"
+GROUP_THERMAL = "thermal_storage"
+GROUP_TITLES = {
+    GROUP_CREATOR: "BEMS entity creator",
+    GROUP_IMPORTER: "BEMS forecast importer",
+    GROUP_ELECTRICAL: "Electrical storage management",
+    GROUP_THERMAL: "Thermal storage management",
+}
+GROUP_MODULES = {
+    GROUP_CREATOR: (MODULE_SOC, MODULE_LOAD),
+    GROUP_IMPORTER: FORECAST_IMPORT_MODULES,
+    GROUP_ELECTRICAL: (MODULE_FBC,),
+    GROUP_THERMAL: (MODULE_THERMAL_COST,),
+}
 
 # Values are the subdivision codes used by the holidays library and saved entries.
 HOLIDAY_REGIONS = {

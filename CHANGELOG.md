@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.6.0
+
+- Add independently named thermal runtime-cost setups under Thermal storage
+  management, for example DHW and UFH. Publish current EUR/timestep and 289
+  quarter-hour forecast records covering the rolling next 72 hours. Keep demand,
+  storage duration and the future MILP engine separate from cost preparation.
+- Support constant COP or 2–10 freely defined temperature/COP anchors with linear
+  interpolation/extrapolation and a visible configured COP fallback. Include
+  nominal thermal output and optional concurrent auxiliary electrical power.
+- Match the MATLAB grid/PV/export-limit cost split using registered PV AC,
+  import/export prices and optional non-flexible load. Support otherwise curtailed
+  PV pricing and negative costs. Cost setups independently evaluate PV; they do
+  not reserve shared PV or allocate it jointly between devices.
+- Validate and preview inputs before saving, recalculate on source changes and
+  each minute, and remove published forecasts on essential-input failure.
+
+- Group the integration page into BEMS forecast importer, BEMS entity creator,
+  Electrical storage management and Thermal storage management category cards.
+  Add/configure/remove individual named items through native subentries.
+- Migrate existing standalone entries at startup, preserving entity IDs, device
+  names/areas, FBC PV/load selections and per-item disabled state. Retire old
+  entry shells after startup; interrupted registry moves can be resumed.
+- Keep FBC enable-switch restoration and settings independent for multiple
+  batteries in one electrical-storage category.
+- Require Home Assistant 2026.10+ for the grouped implementation and migration.
+
+- Rename BEMS entity importer to BEMS forecast importer in setup and documentation.
+- Add explicit PV AC and PV DC registrations. FBC lists both with their type and
+  uses the user's chosen source without conversion; existing generic PV entries
+  retain their IDs, source and operation until explicitly classified in Configure.
+- Add electricity import price, export price and outdoor air temperature imports,
+  including typed units/fields, negative values, setup previews, status sensors,
+  source subscriptions and shared snapshots for future planning modules.
+- Retain the existing non-flexible load importer and generated load profiles.
+  All forecast imports require current-quarter and rolling next-72-hour coverage
+  with contiguous 15-minute intervals. Missing future prices are never invented.
+
+
 ## 0.5.0
 
 - Link the original H0 (VDEW 1999/2000) and H25 (BDEW 2025) profile tables and

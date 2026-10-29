@@ -3,13 +3,26 @@
 HA-BEMS accepts one prepared Home Assistant **sensor**. Its provider-specific
 conversion belongs in a helper outside HA-BEMS. There are no provider selectors,
 template editors or field-mapping options inside HA-BEMS. Register the prepared
-entity once under **BEMS entity importer → PV generation forecast**; consuming
+entity once under **BEMS forecast importer → PV AC generation forecast or PV DC generation forecast**; consuming
 modules such as FBC select that registration. See the [input matrix](shared_inputs.md).
 
 To have an AI assistant build the helper for your own provider, use the
 [copy-and-paste prompts](helper_prompts.md). They include the required attributes,
 conversion rules, update behaviour and verification steps, with a separate
 Open-Meteo prompt and a prompt for diagnosing a failed importer test.
+
+## AC and DC registrations
+
+Register AC PV (inverter output) and DC PV (before conversion) separately. Both
+use the same W/`power_w` contract. The importer stores the selected `pv_power_type`
+(`ac` or `dc`); it does not calculate one from the other. FBC's source dropdown
+labels each registration AC or DC and lets the user choose either. Use the
+appropriate forecast-to-battery efficiency for the selected source. A constant
+factor cannot recover peaks lost through inverter clipping.
+
+Existing generic PV registrations and their consumer references keep working.
+They appear as “AC/DC not specified” until the user opens Configure and selects
+the actual type. No automatic classification or source substitution is performed.
 
 ## Required format (schema version 1)
 
@@ -100,7 +113,7 @@ reconstruct peaks already lost through inverter clipping.
 
 ## Setup test and runtime checks
 
-In **BEMS entity importer → PV generation forecast**, name the input,
+In **BEMS forecast importer → PV AC generation forecast or PV DC generation forecast**, name the input,
 select the prepared sensor and submit. Setup checks availability, W units,
 schema version, timestamp format, numeric power, quarter-hour
 alignment, ordering, continuity, the current interval and the complete 72-hour
@@ -119,7 +132,7 @@ Requiring a reusable 72-hour input does not change its MATLAB-derived horizon.
 
 ## Existing HA-BEMS entries
 
-After upgrading from 0.3, register the helper using **BEMS entity importer**.
+After upgrading from 0.3, register the helper using **BEMS forecast importer**.
 Then open **Configure** on each existing FBC entry and select that registered input. Names, entity IDs and battery parameters remain.
 The previous provider/template/mapping paths are removed and are not evaluated
 as fallbacks. A raw provider sensor without this contract fails validation;

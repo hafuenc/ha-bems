@@ -4,12 +4,15 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, MODULE_FBC
+from .entries import add_item_entities, enabled_module_entries, module_type
 from .import_registry import planners
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    async_add_entities([FBCEnabledSwitch(planners(hass)[entry.entry_id], entry)])
+    for item in enabled_module_entries(entry):
+        if module_type(item) == MODULE_FBC:
+            add_item_entities(async_add_entities, [FBCEnabledSwitch(planners(hass)[item.entry_id], item)], item)
 
 
 class FBCEnabledSwitch(SwitchEntity, RestoreEntity):

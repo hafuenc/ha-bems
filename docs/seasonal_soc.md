@@ -19,7 +19,7 @@ It follows Home Assistant's local calendar month and refreshes at local midnight
 If you already have a threshold entity, select it directly in FBC setup. It must
 be a `sensor`, `number` or `input_number` with a numeric value from 0 to 100 and
 unit `%`. No duplicate entity needs to be created. This is a current percentage
-input, not a forecast; it does not belong in the entity importer.
+input, not a forecast; it does not belong in the forecast importer.
 
 ### Existing wrapper entries
 

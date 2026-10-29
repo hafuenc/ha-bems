@@ -4,11 +4,15 @@ HA-BEMS separates shared input preparation from device strategies.
 
 - **BEMS entity creator** generates a missing input: seasonal SOC minimum or
   non-flexible building load. Existing seasonal percentage entities remain usable.
-- **BEMS entity importer** registers an existing, prepared forecast entity,
+- **BEMS forecast importer** registers an existing, prepared forecast entity,
   validates it and shares its snapshot with consuming modules. Supported types
-  are PV generation and building load. Import/export electricity prices are future input types.
+  are PV AC, PV DC, non-flexible building load, import/export electricity prices
+  and outdoor air temperature.
 - **Device modules** select the registered inputs they need. FBC no longer has
   provider options, a template editor, field mappings or its own source-age setting.
+
+[Category cards and migration](grouped_setup.md) keep each input and module
+individually configurable inside its group.
 
 ## Configure a PV input and FBC
 
@@ -16,12 +20,13 @@ HA-BEMS separates shared input preparation from device strategies.
    An Open-Meteo example is included; any provider can supply that same contract.
    [Copy-and-paste AI prompts](helper_prompts.md) help build a compatible helper
    from your provider's actual entities and attributes.
-2. Add HA-BEMS → **BEMS entity importer → PV generation forecast**.
+2. Create the **BEMS forecast importer** category if it does not exist. Inside its
+   card, choose **Add forecast → PV AC generation forecast or PV DC generation forecast**.
 3. Name the shared input and select the prepared sensor. Submit to test, review the 72-hour preview, then submit to register.
-4. Add or configure **Electrical storage management → FBC** and select that named
+4. Inside the **Electrical storage management** card, add or configure **FBC** and select that named
    imported PV input. Several batteries can select the same registration.
 
-The importer exposes an **Input status** sensor on a virtual **BEMS entity
+The importer exposes an **Input status** sensor on a virtual **BEMS forecast
 importer** device. Its states are `ready`, `unavailable` and `invalid`.
 Attributes identify the source, accepted horizon, source age, validation time
 and a failure reason when relevant. The original helper retains the forecast;
@@ -52,7 +57,7 @@ the value meaning. See [load helper format and AI prompt](load_forecast_helper.m
 FBC's optional load selector offers both these registrations and existing HA-BEMS
 non-flexible load profiles. No load keeps the v1 engine input unchanged; selecting
 load uses max(0, PV minus load), without simulating battery discharge. Selections
-use stable configuration entry IDs. Generated providers and imported providers
+use stable item IDs (retained from previous configuration entry IDs). Generated providers and imported providers
 notify FBC when their forecast or health changes, and on removal/reload.
 
 ## Input matrix: implemented modules
@@ -61,16 +66,22 @@ notify FBC when their forecast or health changes, and on removal/reload.
 | --- | --- | --- |
 | Actual battery SOC in % | Existing HA entity, selected directly in FBC | Required |
 | Seasonal minimum SOC in % | BEMS entity creator or existing HA entity | Required |
-| PV generation forecast | Prepared HA entity registered in BEMS entity importer | Required at setup; maximum-power runtime exceptions above |
+| PV AC or DC generation forecast (user choice) | Prepared HA entity registered in BEMS forecast importer | Required at setup; maximum-power runtime exceptions above |
 | Building load forecast | Existing BEMS load profile or registered external building load forecast | Optional; subtracts demand from PV when selected |
-| Electricity import price forecast | Future importer type | Not used |
-| Electricity export price forecast | Future importer type | Not used |
-| Outdoor temperature forecast | Future importer type | Not used |
+| Electricity import price forecast | Registered forecast sensor | Not used |
+| Electricity export price forecast | Registered forecast sensor | Not used |
+| Outdoor temperature forecast | Registered forecast sensor | Not used |
 | Upstream thermal operating plans | Future module outputs | Not used |
 
 Battery capacity, efficiency, target SOC and power limits are module parameters,
 not shared forecast entities. The generated load and seasonal SOC helpers are
 input providers, not consumers of the imported PV forecast.
+
+Both PV types use `power_w` in W. Price imports use `price_eur_per_kwh` in
+`EUR/kWh`, and temperature uses `temperature_c` in `°C`. Price and temperature
+values may be negative. All currently use explicit contiguous 15-minute records
+covering the current quarter and at least now + 72 hours. The importer does not
+invent missing future tariffs. See [price and temperature contracts](price_temperature_forecasts.md).
 
 ## Planning matrix: future modules
 
@@ -89,10 +100,8 @@ inputs in setup. Night feed-in dependencies remain to be specified separately.
 | Heating operating plan | Runs later | Produces it | Planned predicted electrical load |
 | Battery SOC and seasonal minimum | Not a direct input | Not a direct input | Planned |
 
-Forecast types can share timezones, interval boundaries, source timestamps,
-availability and horizon rules. Their value semantics remain type-specific:
-PV uses interval-average W; future prices need an explicit currency, price per
-kWh, import/export meaning and treatment of taxes/fees. Negative electricity
-prices must remain representable; PV's nonnegative-power rule must not be reused
-for prices. Price horizon/resolution requirements will be defined when those
-modules are implemented, rather than assuming 72-hour tariffs exist everywhere.
+Forecast types share timezone, interval, source timestamp, availability and
+horizon validation while keeping type-specific value fields, units and sign
+rules. The importer prepares shared snapshots; thermal optimization and its
+input selection remain future work. Import tariffs must include the applicable
+marginal fees/taxes; export values represent actual remuneration.

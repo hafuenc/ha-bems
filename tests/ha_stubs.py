@@ -1,6 +1,8 @@
 """Small HA boundaries for exercising integration logic without an HA server."""
 
 from types import ModuleType, SimpleNamespace
+from dataclasses import dataclass, field
+from uuid import uuid4
 from tests.test_forecast_input import NOW
 
 
@@ -17,9 +19,39 @@ class Flow:
     def async_create_entry(self, **kwargs):
         return {'type': 'create_entry', **kwargs}
 
+    def async_abort(self, **kwargs):
+        return {'type': 'abort', **kwargs}
+
+    async def async_set_unique_id(self, value):
+        self.unique_id = value
+
+    def _abort_if_unique_id_configured(self):
+        pass
+
 
 class OptionsFlow(Flow):
     pass
+
+
+class ConfigSubentryFlow(Flow):
+    def _get_entry(self):
+        return self.parent
+
+    def _get_reconfigure_subentry(self):
+        return self.subentry
+
+    def async_update_and_abort(self, parent, subentry, **kwargs):
+        self.hass.config_entries.async_update_subentry(parent, subentry, **kwargs)
+        return self.async_abort(reason='reconfigure_successful')
+
+
+@dataclass
+class ConfigSubentry:
+    data: object
+    title: str
+    subentry_type: str
+    unique_id: str | None
+    subentry_id: str = field(default_factory=lambda: uuid4().hex)
 
 
 class Selector:
@@ -74,6 +106,8 @@ def modules():
     entries = ModuleType('homeassistant.config_entries')
     entries.ConfigFlow = Flow
     entries.OptionsFlow = OptionsFlow
+    entries.ConfigSubentryFlow = ConfigSubentryFlow
+    entries.ConfigSubentry = ConfigSubentry
     ha.config_entries = entries
     core = ModuleType('homeassistant.core')
     core.callback = lambda function: function

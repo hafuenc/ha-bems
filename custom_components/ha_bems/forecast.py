@@ -19,7 +19,7 @@ def parse_timestamp(value):
     return result.astimezone(UTC)
 
 
-def validate_forecast(records, now):
+def validate_forecast(records, now, value_key="power_w", nonnegative=True):
     """Require explicit, ordered, contiguous quarter-hours through now + 72 h.
 
     Never resample, sort, fill gaps, guess field names or infer units.
@@ -30,18 +30,20 @@ def validate_forecast(records, now):
     intervals = []
     previous_end = None
     for index, record in enumerate(records):
-        if not isinstance(record, dict) or not {"start", "end", "power_w"} <= record.keys():
-            raise ValueError(f"Interval {index + 1} requires start, end and power_w")
+        if not isinstance(record, dict) or not {"start", "end", value_key} <= record.keys():
+            raise ValueError(f"Interval {index + 1} requires start, end and {value_key}")
         start = parse_timestamp(record["start"])
         end = parse_timestamp(record["end"])
         if end - start != INTERVAL or start.timestamp() % 900 != 0:
             raise ValueError(f"Interval {index + 1} must cover exactly one aligned 15-minute interval")
-        value = record["power_w"]
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or value < 0:
-            raise ValueError(f"Interval {index + 1}: power_w must be a finite, nonnegative number in W")
+        value = record[value_key]
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not isfinite(value) or (nonnegative and value < 0)):
+            qualifier = "finite, nonnegative" if nonnegative else "finite"
+            raise ValueError(f"Interval {index + 1}: {value_key} must be a {qualifier} number")
         if previous_end is not None and start != previous_end:
             raise ValueError(f"Gap, overlap, duplicate or unordered interval at {start.isoformat()}")
-        intervals.append({"start": start.isoformat(), "end": end.isoformat(), "power_w": value})
+        intervals.append({"start": start.isoformat(), "end": end.isoformat(), value_key: value})
         previous_end = end
     now = now.astimezone(UTC)
     current_quarter = now.replace(second=0, microsecond=0) - timedelta(minutes=now.minute % 15)

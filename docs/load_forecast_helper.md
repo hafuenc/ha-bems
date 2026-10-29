@@ -1,6 +1,6 @@
 # Shared building load forecast
 
-Register a prepared sensor under **BEMS entity importer → Building load forecast**.
+Register a prepared sensor under **BEMS forecast importer → Building load forecast**.
 Select that registration as the optional building load input in FBC. An existing
 HA-BEMS non-flexible load profile is selected directly, without an importer entry.
 
