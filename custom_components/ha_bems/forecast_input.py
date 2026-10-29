@@ -1,10 +1,11 @@
-"""Read provider-independent power forecasts; no source adapters."""
+"""Read provider-independent, explicitly typed forecasts; no source adapters."""
 
 from math import isfinite
 
 from homeassistant.util import dt as dt_util
 
 from .forecast import parse_timestamp, validate_forecast
+from .forecast_types import forecast_type
 
 
 class ForecastUnavailable(ValueError):
@@ -26,24 +27,32 @@ async def async_read_pv_forecast(hass, config):
 
 
 async def async_read_power_forecast(hass, config, label="PV"):
+    return await _async_read_forecast(hass, config, label, "W", "power_w", True)
+
+
+async def async_read_forecast(hass, config):
+    return await _async_read_forecast(hass, config, *forecast_type(config))
+
+
+async def _async_read_forecast(hass, config, label, unit, value_key, nonnegative):
     now = dt_util.now()
     state = hass.states.get(config["forecast_entity"])
     if state is None or state.state in ("unknown", "unavailable"):
         raise ForecastUnavailable(f"{label} forecast entity is unavailable")
-    if state.attributes.get("unit_of_measurement") != "W":
-        raise ValueError(f"{label} forecast entity must use unit W")
+    if state.attributes.get("unit_of_measurement") != unit:
+        raise ValueError(f"{label} forecast entity must use unit {unit}")
     try:
-        power = float(state.state)
+        value = float(state.state)
     except (ValueError, TypeError) as err:
-        raise ValueError(f"{label} forecast entity state must be numeric power in W") from err
-    if not isfinite(power) or power < 0:
-        raise ValueError(f"{label} forecast entity state must be finite and nonnegative")
+        raise ValueError(f"{label} forecast entity state must be numeric in {unit}") from err
+    if not isfinite(value) or (nonnegative and value < 0):
+        raise ValueError(f"{label} forecast entity state must be finite" + (" and nonnegative" if nonnegative else ""))
     version = state.attributes.get("schema_version")
     if type(version) is not int or version != 1:
         raise ValueError(f"{label} forecast entity requires the numeric attribute schema_version: 1")
     age, updated = source_age(state.attributes.get("source_updated_at"), now)
     intervals = await hass.async_add_executor_job(
-        validate_forecast, state.attributes.get("forecast"), now,
+        validate_forecast, state.attributes.get("forecast"), now, value_key, nonnegative,
     )
     return intervals, {
         "source_entity": state.entity_id, "source_age_minutes": round(age, 1),
@@ -51,4 +60,5 @@ async def async_read_power_forecast(hass, config, label="PV"):
         "input_forecast_start": intervals[0]["start"],
         "input_forecast_end": intervals[-1]["end"],
         "input_forecast_intervals": len(intervals),
+        "forecast_unit": unit, "forecast_value_key": value_key,
     }

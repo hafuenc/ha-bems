@@ -1,6 +1,7 @@
 """Modular setup: reusable entities, electrical storage and thermal storage."""
 
 from zoneinfo import ZoneInfo
+from uuid import uuid4
 
 import voluptuous as vol
 
@@ -13,12 +14,18 @@ from .const import (
     CONF_ENTITY, CONF_LOAD_INPUT, CONF_MODULE, CONF_MONTHLY, CONF_SOURCE, DEFAULT_MONTHLY_MIN_SOC,
     DOMAIN, MODULE_FBC, MODULE_LOAD, MODULE_LOAD_IMPORT, MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT,
     HOLIDAY_REGIONS, MONTHS, SOURCE_ENTITY, SOURCE_MONTHLY,
+    CONF_PV_POWER_TYPE, MODULE_IMPORT_PRICE, MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
+    CONF_GROUP, CONF_ITEM_ID, CONF_ENABLED, GROUP_TITLES, GROUP_MODULES,
+    MODULE_THERMAL_COST, CONF_IMPORT_PRICE, CONF_EXPORT_PRICE, CONF_TEMPERATURE,
 )
+from .entries import group_for_module
 from .seasonal_soc import resolve_threshold
 from .seasonal_soc import validate_threshold
-from .forecast_input import async_read_power_forecast
+from .forecast_input import async_read_forecast
+from .forecast_types import forecast_type, pv_input_label
 from .forecast import daily_forecast, surplus_forecast
-from .import_registry import load_inputs, pv_imports, read_load_input, read_pv_import
+from .import_registry import input_entries, load_inputs, pv_imports, read_load_input, read_pv_import
+from .thermal_cost import cop_points, validate_settings
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -46,6 +53,8 @@ class _ModuleSteps:
     """Share configuration steps between initial setup and later options."""
 
     def _values(self):
+        if subentry := getattr(self, "_subentry", None):
+            return {**subentry.data, "name": subentry.title, **getattr(self, "_draft", {})}
         if isinstance(self, config_entries.OptionsFlow):
             return {**self.config_entry.data, **self.config_entry.options, **getattr(self, "_draft", {})}
         return getattr(self, "_draft", {})
@@ -68,13 +77,33 @@ class _ModuleSteps:
                         "timestamp_key", "end_key", "value_key", "forecast_unit", "forecast_interval_minutes",
                         "forecast_entity"):
                 values.pop(key, None)
+        if module == MODULE_THERMAL_COST:
+            for index in range(1, 11):
+                values.pop(f"temperature_{index}", None)
+                values.pop(f"cop_{index}", None)
+            retired = (CONF_TEMPERATURE, "cop_points", "cop_point_count", "fallback_cop") if values["cop_model"] == "constant" else ("constant_cop",)
+            for key in retired:
+                values.pop(key, None)
+        if isinstance(self, config_entries.ConfigSubentryFlow):
+            parent = self._get_entry()
+            if group_for_module(module) != parent.data[CONF_GROUP]:
+                return self.async_abort(reason="wrong_group")
+            name = values.pop("name", "HA-BEMS").strip() or "HA-BEMS"
+            if subentry := getattr(self, "_subentry", None):
+                if module != subentry.data[CONF_MODULE]:
+                    return self.async_abort(reason="wrong_group")
+                # The parent's update listener reloads on add/edit/remove.
+                return self.async_update_and_abort(parent, subentry, title=name, data=values)
+            values.setdefault(CONF_ITEM_ID, uuid4().hex)
+            values.setdefault(CONF_ENABLED, True)
+            return self.async_create_entry(title=name, data=values, unique_id=values[CONF_ITEM_ID])
         if isinstance(self, config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=values)
         name = values.pop("name").strip()
         return self.async_create_entry(title=name or "HA-BEMS", data=values)
 
     async def async_step_soc(self, user_input=None):
-        if isinstance(self, config_entries.OptionsFlow):
+        if isinstance(self, config_entries.OptionsFlow) or getattr(self, "_subentry", None):
             # Existing wrappers remain editable, but are no longer offered
             # when creating a new seasonal SOC helper.
             if self._values().get(CONF_SOURCE) == SOURCE_ENTITY:
@@ -110,7 +139,9 @@ class _ModuleSteps:
             state = self.hass.states.get(entity_id)
             registered = er.async_get(self.hass).async_get(entity_id)
             own_entry = self.config_entry if isinstance(self, config_entries.OptionsFlow) else None
-            if own_entry and registered and registered.config_entry_id == own_entry.entry_id:
+            own_subentry = getattr(self, "_subentry", None)
+            if registered and ((own_entry and registered.config_entry_id == own_entry.entry_id)
+                               or (own_subentry and registered.config_subentry_id == own_subentry.subentry_id)):
                 errors[CONF_ENTITY] = "self_reference"
             else:
                 try:
@@ -231,40 +262,82 @@ class _ModuleSteps:
         self._import_type = MODULE_LOAD_IMPORT
         return await self._async_step_import(user_input)
 
+    async def async_step_import_pv_ac(self, user_input=None):
+        self._remember({CONF_PV_POWER_TYPE: "ac"})
+        return await self.async_step_import_pv(user_input)
+
+    async def async_step_import_pv_dc(self, user_input=None):
+        self._remember({CONF_PV_POWER_TYPE: "dc"})
+        return await self.async_step_import_pv(user_input)
+
+    async def async_step_import_price(self, user_input=None):
+        self._import_type = MODULE_IMPORT_PRICE
+        return await self._async_step_import(user_input)
+
+    async def async_step_export_price(self, user_input=None):
+        self._import_type = MODULE_EXPORT_PRICE
+        return await self._async_step_import(user_input)
+
+    async def async_step_import_temperature(self, user_input=None):
+        self._import_type = MODULE_OUTDOOR_TEMP
+        return await self._async_step_import(user_input)
+
+    def _import_step(self):
+        return {
+            MODULE_PV_IMPORT: "import_pv", MODULE_LOAD_IMPORT: "import_load",
+            MODULE_IMPORT_PRICE: "import_price", MODULE_EXPORT_PRICE: "export_price",
+            MODULE_OUTDOOR_TEMP: "import_temperature",
+        }[self._import_type]
+
     async def _async_read_import(self):
-        label = "Building load" if self._import_type == MODULE_LOAD_IMPORT else "PV"
-        return await async_read_power_forecast(self.hass, self._values(), label)
+        return await async_read_forecast(self.hass, {**self._values(), CONF_MODULE: self._import_type})
 
     async def _async_step_import(self, user_input=None):
         is_load = self._import_type == MODULE_LOAD_IMPORT
+        is_pv = self._import_type == MODULE_PV_IMPORT
+        label, unit, value_key, _nonnegative = forecast_type({**self._values(), CONF_MODULE: self._import_type})
         errors, placeholders = {}, {
             "reason": "",
             "helper_docs_url": "https://github.com/hafuenc/ha-bems/blob/main/docs/"
-                               + ("load_forecast_helper.md" if is_load else "pv_forecast_helper.md"),
+                               + ("load_forecast_helper.md" if is_load else "pv_forecast_helper.md" if is_pv else "price_temperature_forecasts.md"),
         }
         if user_input is not None:
             self._remember(user_input)
             try:
+                if is_pv and self._values().get(CONF_PV_POWER_TYPE) not in ("ac", "dc"):
+                    raise ValueError("Choose AC or DC PV power")
                 intervals, details = await self._async_read_import()
             except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
                 errors["base"] = "invalid_forecast"
                 placeholders["reason"] = str(err)
             else:
+                self._import_preview_step = "import_preview" if value_key == "power_w" else "import_value_preview"
                 self._forecast_preview = {
                     "count": str(len(intervals)),
                     "start": intervals[0]["start"], "end": intervals[-1]["end"],
-                    "peak": str(round(max(row["power_w"] for row in intervals), 1)),
-                    "energy": str(round(sum(row["power_w"] * 0.25 / 1000 for row in intervals), 3)),
                     "age": str(details["source_age_minutes"]),
                 }
+                if value_key == "power_w":
+                    self._forecast_preview.update({
+                        "peak": str(round(max(row[value_key] for row in intervals), 1)),
+                        "energy": str(round(sum(row[value_key] * 0.25 / 1000 for row in intervals), 3)),
+                    })
+                else:
+                    self._forecast_preview.update({"unit": unit,
+                        "minimum": str(round(min(row[value_key] for row in intervals), 4)),
+                        "maximum": str(round(max(row[value_key] for row in intervals), 4))})
                 return await self.async_step_import_preview()
         values = self._values()
         field = vol.Required("forecast_entity", default=values["forecast_entity"]) if "forecast_entity" in values else vol.Required("forecast_entity")
-        fields = self._name_fields("Building load forecast" if is_load else "PV generation forecast")
+        fields = self._name_fields(f"{label} forecast")
+        if is_pv:
+            basis = values.get(CONF_PV_POWER_TYPE)
+            basis_field = vol.Required(CONF_PV_POWER_TYPE, default=basis) if basis in ("ac", "dc") else vol.Required(CONF_PV_POWER_TYPE)
+            fields[basis_field] = _choice([{"value": "ac", "label": "AC"}, {"value": "dc", "label": "DC"}])
         fields.update({
-                field: selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": "W"}]}),
+                field: selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": unit}]}),
             })
-        return self.async_show_form(step_id="import_load" if is_load else "import_pv", errors=errors,
+        return self.async_show_form(step_id=self._import_step(), errors=errors,
             description_placeholders=placeholders, data_schema=vol.Schema(fields))
 
     async def async_step_import_preview(self, user_input=None):
@@ -276,8 +349,11 @@ class _ModuleSteps:
             except (ValueError, TypeError, KeyError, IndexError, OverflowError):
                 return await self._async_step_import(self._values())
             return self._finish(self._import_type)
-        return self.async_show_form(step_id="import_preview", data_schema=vol.Schema({}),
+        return self.async_show_form(step_id=self._import_preview_step, data_schema=vol.Schema({}),
                                     description_placeholders=self._forecast_preview)
+
+    async def async_step_import_value_preview(self, user_input=None):
+        return await self.async_step_import_preview(user_input)
 
     async def async_step_fbc_forecast(self, user_input=None):
         errors, placeholders = {}, {"reason": ""}
@@ -301,6 +377,7 @@ class _ModuleSteps:
                     "energy": str(round(sum(row["power_w"] * 0.25 / 1000 for row in intervals), 3)),
                     "age": str(details["source_age_minutes"]),
                     "load": load_info.get("load_input_name") or "None — PV generation only",
+                    "pv_type": details[CONF_PV_POWER_TYPE].upper(),
                 }
                 return await self.async_step_fbc_preview()
         values = self._values()
@@ -312,7 +389,7 @@ class _ModuleSteps:
             loads.append((selected_load, "Missing load input — select another input or PV only"))
         return self.async_show_form(step_id="fbc_forecast", errors=errors,
             description_placeholders=placeholders, data_schema=vol.Schema({
-                field: _choice([{"value": entry.entry_id, "label": entry.title} for entry in entries]),
+                field: _choice([{"value": entry.entry_id, "label": pv_input_label(entry)} for entry in entries]),
                 vol.Optional(CONF_LOAD_INPUT, default=selected_load): _choice([
                     {"value": "", "label": "None — use PV generation only"},
                     *({"value": reference, "label": name} for reference, name in loads),
@@ -354,39 +431,214 @@ class _ModuleSteps:
             fields[vol.Required(key, default=values.get(key, default))] = _number(minimum, maximum, unit, step)
         return self.async_show_form(step_id="fbc_battery", errors=errors, data_schema=vol.Schema(fields))
 
+    async def async_step_thermal_cost(self, user_input=None):
+        errors = {}
+        if user_input is not None:
+            self._remember(user_input)
+            from .thermal_cost import number
+            try:
+                number(user_input["thermal_power_kw"], "Thermal power", positive=True)
+                number(user_input["auxiliary_power_w"], "Auxiliary power", nonnegative=True)
+                if user_input["cop_model"] not in ("constant", "lookup"):
+                    raise ValueError("Choose a COP model")
+            except (ValueError, KeyError):
+                errors["base"] = "invalid_thermal_settings"
+            else:
+                return await (self.async_step_thermal_cop_table() if user_input["cop_model"] == "lookup"
+                              else self.async_step_thermal_cop_constant())
+        values = self._values()
+        fields = self._name_fields("DHW")
+        fields.update({
+            vol.Required("thermal_power_kw", default=values.get("thermal_power_kw", 7)): _number(0.001, 10000, "kW", "any"),
+            vol.Required("auxiliary_power_w", default=values.get("auxiliary_power_w", 0)): _number(0, 1000000, "W", "any"),
+            vol.Required("cop_model", default=values.get("cop_model", "constant")): _choice([
+                {"value": "constant", "label": "Constant COP"},
+                {"value": "lookup", "label": "Temperature/COP anchor points"}]),
+        })
+        return self.async_show_form(step_id="thermal_cost", errors=errors, data_schema=vol.Schema(fields))
+
+    async def async_step_thermal_cop_constant(self, user_input=None):
+        errors = {}
+        if user_input is not None:
+            self._remember(user_input)
+            try:
+                validate_settings(self._values())
+            except ValueError:
+                errors["base"] = "invalid_thermal_settings"
+            else:
+                return await self.async_step_thermal_cost_inputs()
+        return self.async_show_form(step_id="thermal_cop_constant", errors=errors, data_schema=vol.Schema({
+            vol.Required("constant_cop", default=self._values().get("constant_cop", 3)): _number(0.01, 100, step="any"),
+        }))
+
+    async def async_step_thermal_cop_table(self, user_input=None):
+        errors = {}
+        if user_input is not None:
+            self._remember(user_input)
+            count = user_input.get("cop_point_count")
+            from .thermal_cost import number
+            try:
+                if isinstance(count, bool) or not isinstance(count, (int, float)) or not 2 <= count <= 10 or int(count) != count:
+                    raise ValueError("Define 2–10 points")
+                number(user_input.get("fallback_cop"), "Fallback COP", positive=True)
+                if user_input.get(CONF_TEMPERATURE) not in {entry.entry_id for entry in input_entries(self.hass, MODULE_OUTDOOR_TEMP)}:
+                    raise ValueError("Select an outdoor temperature input")
+            except ValueError:
+                errors["base"] = "invalid_thermal_settings"
+            else:
+                return await self.async_step_thermal_cop_points()
+        values = self._values()
+        choices = self._thermal_choices(MODULE_OUTDOOR_TEMP, CONF_TEMPERATURE)
+        return self.async_show_form(step_id="thermal_cop_table", errors=errors, data_schema=vol.Schema({
+            self._thermal_field(CONF_TEMPERATURE): _choice(choices),
+            vol.Required("cop_point_count", default=values.get("cop_point_count", len(values.get("cop_points", [])) or 2)): _number(2, 10),
+            vol.Required("fallback_cop", default=values.get("fallback_cop", 3)): _number(0.01, 100, step="any"),
+        }))
+
+    async def async_step_thermal_cop_points(self, user_input=None):
+        errors = {}
+        count = int(self._values()["cop_point_count"])
+        if user_input is not None:
+            self._remember(user_input)
+            try:
+                points = [{"temperature_c": user_input[f"temperature_{i}"], "cop": user_input[f"cop_{i}"]}
+                          for i in range(1, count + 1)]
+                sorted_points = cop_points(points)
+            except (ValueError, KeyError):
+                errors["base"] = "invalid_cop_points"
+            else:
+                self._remember({"cop_points": [{"temperature_c": t, "cop": cop} for t, cop in sorted_points]})
+                return await self.async_step_thermal_cost_inputs()
+        values, fields = self._values(), {}
+        saved = values.get("cop_points", [])
+        for i in range(1, count + 1):
+            point = saved[i - 1] if i <= len(saved) else {}
+            for key, item, minimum, maximum, unit in (
+                (f"temperature_{i}", "temperature_c", -100, 100, "°C"),
+                (f"cop_{i}", "cop", 0.01, 100, None),
+            ):
+                field = vol.Required(key, default=values.get(key, point[item])) if item in point else (
+                    vol.Required(key, default=values[key]) if key in values else vol.Required(key))
+                fields[field] = _number(minimum, maximum, unit, "any")
+        return self.async_show_form(step_id="thermal_cop_points", errors=errors, data_schema=vol.Schema(fields))
+
+    def _thermal_field(self, key):
+        value = self._values().get(key)
+        return vol.Required(key, default=value) if value else vol.Required(key)
+
+    def _thermal_choices(self, module, key):
+        entries = input_entries(self.hass, module)
+        if module == MODULE_PV_IMPORT:
+            entries = [entry for entry in entries
+                       if entry.options.get(CONF_PV_POWER_TYPE, entry.data.get(CONF_PV_POWER_TYPE)) == "ac"]
+        choices = [{"value": entry.entry_id, "label": entry.title} for entry in entries]
+        saved = self._values().get(key)
+        if saved and saved not in {choice["value"] for choice in choices}:
+            choices.append({"value": saved, "label": "Missing input — choose another registration"})
+        return choices
+
+    async def async_step_thermal_cost_inputs(self, user_input=None):
+        errors, placeholders = {}, {"reason": ""}
+        if user_input is not None:
+            self._remember(user_input)
+            try:
+                result = await self._async_thermal_preview()
+            except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
+                errors["base"] = "invalid_thermal_inputs"
+                placeholders["reason"] = str(err)
+            else:
+                self._thermal_result = result
+                return await self.async_step_thermal_cost_preview()
+        fields = {}
+        for key, module in ((CONF_PV_IMPORT, MODULE_PV_IMPORT), (CONF_IMPORT_PRICE, MODULE_IMPORT_PRICE),
+                            (CONF_EXPORT_PRICE, MODULE_EXPORT_PRICE)):
+            fields[self._thermal_field(key)] = _choice(self._thermal_choices(module, key))
+        values = self._values()
+        loads = load_inputs(self.hass)
+        if values.get(CONF_LOAD_INPUT) and values[CONF_LOAD_INPUT] not in {ref for ref, _ in loads}:
+            loads.append((values[CONF_LOAD_INPUT], "Missing load input — choose another or explicitly choose no load"))
+        fields.update({
+            vol.Optional(CONF_LOAD_INPUT, default=values.get(CONF_LOAD_INPUT, "")): _choice([
+                {"value": "", "label": "None — all PV is available to this setup"},
+                *({"value": ref, "label": name} for ref, name in loads)]),
+            vol.Required("feed_in_limit_enabled", default=values.get("feed_in_limit_enabled", False)): bool,
+            vol.Required("feed_in_limit_w", default=values.get("feed_in_limit_w", 0)): _number(0, 10000000, "W", "any"),
+            vol.Required("curtailed_price_eur_per_kwh", default=values.get("curtailed_price_eur_per_kwh", 0)): _number(-100, 100, "EUR/kWh", "any"),
+        })
+        if any(not self._thermal_choices(module, key) for key, module in (
+                (CONF_PV_IMPORT, MODULE_PV_IMPORT), (CONF_IMPORT_PRICE, MODULE_IMPORT_PRICE),
+                (CONF_EXPORT_PRICE, MODULE_EXPORT_PRICE))):
+            placeholders["reason"] = "First register PV AC, import prices and export prices under BEMS forecast importer."
+        return self.async_show_form(step_id="thermal_cost_inputs", errors=errors,
+                                    description_placeholders=placeholders, data_schema=vol.Schema(fields))
+
+    async def _async_thermal_preview(self):
+        from .thermal_coordinator import async_calculate_cost
+
+        return await async_calculate_cost(self.hass, self._values())
+
+    async def async_step_thermal_cost_preview(self, user_input=None):
+        if user_input is not None:
+            try:
+                await self._async_thermal_preview()
+            except (ValueError, TypeError, KeyError, IndexError, OverflowError):
+                return await self.async_step_thermal_cost_inputs(self._values())
+            return self._finish(MODULE_THERMAL_COST)
+        result = self._thermal_result
+        costs = [row["cost_eur_per_timestep"] for row in result["forecast"]]
+        return self.async_show_form(step_id="thermal_cost_preview", data_schema=vol.Schema({}),
+            description_placeholders={"count": str(len(costs)), "start": result["forecast"][0]["start"],
+                "end": result["forecast"][-1]["end"], "current": f"{costs[0]:.6f}",
+                "minimum": f"{min(costs):.6f}", "maximum": f"{max(costs):.6f}",
+                "cop": f"{result['current_cop']:.4f}", "fallback": str(result["cop_fallback_intervals"]),
+                "reason": result["cop_fallback_reason"] or "None"})
+
 
 class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
-    """Each helper or device module gets an independent configuration entry."""
+    """Create one native category card; named modules live in its subentries."""
 
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     async def async_step_user(self, user_input=None):
         return self.async_show_menu(step_id="user", menu_options=["entity_creator", "entity_importer", "electrical_storage", "thermal_storage"])
 
     async def async_step_entity_creator(self, user_input=None):
-        return self.async_show_menu(step_id="entity_creator", menu_options=["soc", "load_profile"])
+        return await self._async_create_group("entity_creator")
 
     async def async_step_entity_importer(self, user_input=None):
-        return self.async_show_menu(step_id="entity_importer", menu_options=["import_pv", "import_load", "future_imports"])
-
-    async def async_step_future_imports(self, user_input=None):
-        if user_input is not None:
-            return await self.async_step_entity_importer()
-        return self.async_show_form(step_id="future_imports", data_schema=vol.Schema({}))
+        return await self._async_create_group("entity_importer")
 
     async def async_step_electrical_storage(self, user_input=None):
-        return self.async_show_menu(step_id="electrical_storage", menu_options=["fbc"])
+        return await self._async_create_group("electrical_storage")
 
     async def async_step_thermal_storage(self, user_input=None):
-        if user_input is not None:
-            return await self.async_step_user()
-        return self.async_show_form(step_id="thermal_storage", data_schema=vol.Schema({}))
+        return await self._async_create_group("thermal_storage")
+
+    async def _async_create_group(self, group):
+        await self.async_set_unique_id(f"group:{group}")
+        self._abort_if_unique_id_configured()
+        if any(entry.data.get(CONF_GROUP) == group for entry in self.hass.config_entries.async_entries(DOMAIN)):
+            return self.async_abort(reason="already_configured")
+        return self.async_create_entry(title=GROUP_TITLES[group], data={CONF_GROUP: group})
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(cls, config_entry):
+        group = config_entry.data.get(CONF_GROUP)
+        if group in GROUP_MODULES and GROUP_MODULES[group]:
+            return {group: HABEMSItemFlow}
+        return {}
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
         return HABEMSOptionsFlow()
+
+    @classmethod
+    @callback
+    def async_supports_options_flow(cls, config_entry):
+        return CONF_GROUP not in config_entry.data and not config_entry.data.get("migrated_to")
 
 
 class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
@@ -400,4 +652,51 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
             return await self.async_step_import_pv()
         if module == MODULE_LOAD_IMPORT:
             return await self.async_step_import_load()
+        if module == MODULE_IMPORT_PRICE:
+            return await self.async_step_import_price()
+        if module == MODULE_EXPORT_PRICE:
+            return await self.async_step_export_price()
+        if module == MODULE_OUTDOOR_TEMP:
+            return await self.async_step_import_temperature()
+        if module == MODULE_THERMAL_COST:
+            return await self.async_step_thermal_cost()
         return await self.async_step_soc()
+
+
+class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):
+    """Add/reconfigure one named item inside its category card."""
+
+    async def async_step_user(self, user_input=None):
+        group = self._get_entry().data[CONF_GROUP]
+        options = {
+            "entity_creator": ["soc", "load_profile"],
+            "entity_importer": ["import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature"],
+            "electrical_storage": ["fbc"],
+            "thermal_storage": ["thermal_cost"],
+        }
+        if group not in options:
+            return self.async_abort(reason="not_implemented")
+        return self.async_show_menu(step_id="user", menu_options=options[group])
+
+    async def async_step_reconfigure(self, user_input=None):
+        self._subentry = self._get_reconfigure_subentry()
+        if user_input is not None:
+            self._remember(user_input)
+            if not self._values().get(CONF_ENABLED, True):
+                # A broken source must not prevent the user disabling its item.
+                return self._finish(self._values()[CONF_MODULE])
+            return await self._async_edit_module()
+        return self.async_show_form(step_id="reconfigure", data_schema=vol.Schema({
+            vol.Required("name", default=self._subentry.title): str,
+            vol.Required(CONF_ENABLED, default=self._subentry.data.get(CONF_ENABLED, True)): bool,
+        }))
+
+    async def _async_edit_module(self):
+        method = {
+            MODULE_SOC: self.async_step_soc, MODULE_LOAD: self.async_step_load_profile,
+            MODULE_FBC: self.async_step_fbc, MODULE_PV_IMPORT: self.async_step_import_pv,
+            MODULE_LOAD_IMPORT: self.async_step_import_load, MODULE_IMPORT_PRICE: self.async_step_import_price,
+            MODULE_EXPORT_PRICE: self.async_step_export_price, MODULE_OUTDOOR_TEMP: self.async_step_import_temperature,
+            MODULE_THERMAL_COST: self.async_step_thermal_cost,
+        }[self._values()[CONF_MODULE]]
+        return await method()

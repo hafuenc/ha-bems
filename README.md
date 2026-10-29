@@ -7,12 +7,21 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.5.0**
-creates reusable entities and forecast-based battery charging plans, with optional
-building load forecasts and an FBC enable switch.
+Modular planning for flexible devices and energy storage. Version **0.6.0**
+adds reusable thermal runtime-cost forecasts for DHW, UFH and other tasks,
+alongside forecast-based battery charging and shared forecast imports.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
 them to your equipment.** Direct device control is outside the scope of every
 HA-BEMS module and future version.
+
+This release expands the **BEMS forecast importer** with
+separate PV AC/DC choices, import/export prices and outdoor air temperature.
+FBC users choose their PV source. Four category cards group the individual
+forecasts, helpers and storage modules as native subentries. Existing standalone
+entries migrate at startup. Thermal operating costs are implemented; thermal
+demand, storage duration and MILP scheduling remain separate planned parts.
+[Grouped setup and migration](docs/grouped_setup.md).
+[Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
 
 ## Install for the first manual check
 
@@ -20,11 +29,12 @@ HA-BEMS module and future version.
 2. Add `https://github.com/hafuenc/ha-bems` with type **Integration**.
 3. Download HA-BEMS and restart Home Assistant.
 4. Open **Settings → Devices & services → Add integration → HA-BEMS**.
-5. Choose a category from the setup menu below. Add HA-BEMS again to create
-   another helper or device module. Existing modules remain configured.
+5. Choose a category to create its integration card. Use **Add forecast**,
+   **Add helper** or **Add storage module** inside that card for individual items.
+   Add HA-BEMS again only to create a different category.
 
 The repository is a HACS custom repository; it is not included in the default
-HACS catalogue. The integration requires Home Assistant 2025.1 or newer.
+HACS catalogue. Version 0.6.0 requires Home Assistant 2026.10 or newer.
 
 ## Updates
 
@@ -37,7 +47,8 @@ repositories may otherwise take up to the next scheduled refresh (normally
 not treated as a new release. Install the offered version and restart Home
 Assistant when ready; HA-BEMS never installs updates automatically itself.
 
-For 0.5.0, existing FBC entries stay PV-only unless a building load is explicitly
+For 0.6.0, existing FBC entries migrate into Electrical storage management while
+retaining their entity IDs and selections. Entries stay PV-only unless a building load is explicitly
 selected in **Configure**. Each battery gets an **FBC charging limitation enabled**
 switch, initially on. Turning it off publishes maximum charging power; no device
 commands are sent. The switch remembers its state across restarts. You do not
@@ -54,22 +65,29 @@ HA-BEMS
 │       ├── H0
 │       ├── H25
 │       └── Constant throughout the year
-├── BEMS entity importer
-│   ├── PV generation forecast
-│   ├── Building load forecast
-│   └── Electricity prices and additional forecasts — coming soon
+├── BEMS forecast importer
+│   ├── PV AC generation forecast
+│   ├── PV DC generation forecast
+│   ├── Non-flexible building load forecast
+│   ├── Electricity import price forecast
+│   ├── Electricity export price forecast
+│   └── Outdoor air temperature forecast
 ├── Electrical storage management
 │   └── Forecast-based battery charging (FBC)
 └── Thermal storage management
-    └── Coming soon
+    ├── DHW runtime cost (user-defined name)
+    └── UFH runtime cost (user-defined name)
 ```
 
 Create a seasonal threshold first, or select an existing percentage entity in
 FBC setup. The load-profile helper is independently optional; select it in FBC
-to consider expected building consumption, or leave load empty for PV-only behaviour. Each helper/module has its
-own named entry and can be edited later using **Configure**. Multiple instances
-are supported, for example two batteries with separate sources and settings.
-Entries created by version 0.1 remain seasonal-threshold entries.
+to consider expected building consumption, or leave load empty for PV-only behaviour.
+Each helper/module is a named subentry inside its category and can be edited
+individually using **Configure**. Multiple instances are supported, for example
+two batteries inside Electrical storage management with separate settings.
+Thermal storage management supports multiple runtime-cost setups with independent
+COP, thermal power, auxiliary consumption and forecast selections.
+Older entries migrate into these groups while retaining entity IDs and selections.
 
 ### BEMS entity creator
 
@@ -97,20 +115,20 @@ standard-profile estimates rather than measured or learned building demand.
 
 Users can supply existing entities directly to modules. The entity creator will
 initially supply only these two helpers. The importer registers prepared external
-PV and building load forecasts for shared use; electricity import/export prices and further forecast
-input types will follow as their consuming modules are implemented.
+PV AC/DC, non-flexible building load, electricity import/export prices and outdoor
+air temperature forecasts for shared use. [Price and temperature format](docs/price_temperature_forecasts.md).
 
 ### Electrical storage management: FBC
 
 FBC uses the existing MATLAB calculation engine with no version selector.
 Configure measured SOC in %, the seasonal threshold source, battery parameters
-and a PV generation forecast. Optionally select a configured HA-BEMS load profile
+and a PV AC or DC generation forecast selected by the user. Optionally select a configured HA-BEMS load profile
 or imported building load forecast; FBC then uses `max(0, PV generation - load)`
 as its calculation input. Leaving load empty preserves PV-only behaviour. The virtual
 device's suggested name is **FBC Battery 1**, with type **Battery control strategy**.
 
 First register one prepared **PV generation forecast entity** under **BEMS
-entity importer → PV generation forecast**. Its `forecast` attribute
+forecast importer → PV AC generation forecast or PV DC generation forecast**. Its `forecast` attribute
 must contain gap-free 15-minute records (`start`, `end`, `power_w`) covering the
 current interval and at least the next 72 hours. Setup tests the format, coverage
 then shows a successful preview. Source age is informational only. The former provider,
@@ -139,8 +157,10 @@ power for the complete remaining plan, independently of input availability.
 Users can operate it manually or with their own automations; it never sends
 commands to the physical battery.
 
-With load selected, use an AC PV forecast without unaccounted inverter clipping.
-The calculation does not simulate discharge during load deficits. Both inputs
+FBC accepts either registered AC or DC PV power without conversion. Choose
+charging efficiency for that source. With load selected, keep PV and demand on a
+consistent power basis, accounting for conversion losses externally. The
+calculation does not reconstruct clipped PV peaks or simulate discharge during load deficits. Both inputs
 need aligned 15-minute records with full rolling 72-hour coverage.
 [Building load helper format and copy-and-paste AI prompt](docs/load_forecast_helper.md).
 
@@ -183,14 +203,14 @@ Return complete YAML with a unique_id, availability handling, source-change,
 quarter-hour and startup updates, plus an initial refresh method. Explain safe
 merging with existing templates, configuration checking, reload and verification
 of all attributes and the full 72-hour horizon. Do not write device setpoints.
-Then explain registering this sensor under HA-BEMS → BEMS entity importer → PV
+Then explain registering this sensor under HA-BEMS → BEMS forecast importer → PV
 generation forecast and selecting that named input in FBC.
 ```
 
 [Detailed prompts for any PV provider, Open-Meteo and troubleshooting](docs/helper_prompts.md)
 include the full requirements and source-information placeholders. Electricity
-price importers are planned; these PV prompts apply only to the implemented PV
-schema. [Exact input contract](docs/pv_forecast_helper.md).
+price and outdoor temperature importers use their own value fields and units;
+these PV prompts apply only to the PV power schema. [Exact input contract](docs/pv_forecast_helper.md).
 For consumption forecasts, use the separate
 [building load helper prompt](docs/load_forecast_helper.md#copy-and-paste-ai-prompt).
 
@@ -200,8 +220,8 @@ For consumption forecasts, use the separate
 
 Keep these simpler strategies available:
 
-- **FBC:** selectable algorithm variants; only the existing DC variant is
-  implemented initially.
+- **FBC:** the existing calculation engine with user-selected AC or DC PV input
+  and optional non-flexible load.
 - **Night feed-in for the energy community:** planned export scheduling while
   respecting the configured battery reserve.
 
@@ -227,7 +247,9 @@ historical model training or automatic parameter identification.
 
 Where DHW and underfloor heating share a heat pump, run **DHW first**, reserve its
 operating windows, then optimise **building heating** with those windows blocked.
-These are future modules; the current setup shows only “Coming soon”.
+These scheduling modules remain planned. The Thermal storage management card
+currently provides independent [runtime-cost forecasts](docs/thermal_runtime_cost.md)
+as inputs for a future MILP engine.
 
 ### Electric vehicle
 
@@ -264,7 +286,8 @@ the final authority applying them to each device. Future solver selection and ru
 actual local-hardware measurements; no solver package is needed for this FBC
 release. HiGHS is a candidate for the later open-source MILP implementation.
 
-The current code implements separate module entries, reusable entity selection,
+The current code implements grouped category entries with individually configurable
+module subentries, reusable entity selection,
 the common timestamped forecast shape and background calculation. The future
 thermal orchestration, reservations and battery MILP described above are design
 requirements, not implemented features.

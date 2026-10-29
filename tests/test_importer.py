@@ -11,7 +11,7 @@ from tests.test_forecast import records_for
 from tests.test_forecast_input import NOW
 
 with patch.dict('sys.modules', modules()):
-    from custom_components.ha_bems.config_flow import HABEMSConfigFlow, HABEMSOptionsFlow
+    from custom_components.ha_bems.config_flow import HABEMSConfigFlow, HABEMSOptionsFlow, HABEMSItemFlow
     from custom_components.ha_bems.input_coordinator import ForecastImportCoordinator
     from custom_components.ha_bems.import_registry import coordinators, read_pv_import
 
@@ -119,7 +119,7 @@ class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.flow.hass = self.hass
 
     async def test_import_test_preview_then_registration(self):
-        result = await self.flow.async_step_import_pv({'name': 'Shared solar',
+        result = await self.flow.async_step_import_pv({'name': 'Shared solar', 'pv_power_type': 'dc',
             'forecast_entity': 'sensor.pv', 'forecast_max_age_minutes': 180})
         self.assertEqual(result['step_id'], 'import_preview')
         result = await self.flow.async_step_import_preview({})
@@ -128,7 +128,7 @@ class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['title'], 'Shared solar')
 
     async def test_source_changed_during_preview_blocks_save(self):
-        await self.flow.async_step_import_pv({'name': 'Shared solar',
+        await self.flow.async_step_import_pv({'name': 'Shared solar', 'pv_power_type': 'dc',
             'forecast_entity': 'sensor.pv', 'forecast_max_age_minutes': 180})
         self.hass.state.attributes['forecast'] = self.hass.state.attributes['forecast'][:288]
         result = await self.flow.async_step_import_preview({})
@@ -149,7 +149,7 @@ class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
         options = HABEMSOptionsFlow()
         options.hass = self.hass
         options.config_entry = self.hass.entries[0]
-        result = await options.async_step_import_pv({'forecast_entity': 'sensor.pv',
+        result = await options.async_step_import_pv({'forecast_entity': 'sensor.pv', 'pv_power_type': 'dc',
                                                     'forecast_max_age_minutes': 120})
         self.assertEqual(result['step_id'], 'import_preview')
         result = await options.async_step_import_preview({})

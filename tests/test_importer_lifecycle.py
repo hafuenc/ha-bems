@@ -11,7 +11,8 @@ from tests.test_importer import Hass, entry
 
 from custom_components.ha_bems import async_setup_entry, async_unload_entry
 with patch.dict('sys.modules', modules()):
-    from custom_components.ha_bems.import_registry import coordinators, import_signal, planners, read_load_input, read_pv_import
+    from custom_components.ha_bems.import_registry import coordinators, import_signal, planners, read_load_input, read_pv_import, read_forecast_import
+from custom_components.ha_bems.forecast_types import forecast_type
 from tests.test_forecast_input import NOW
 
 
@@ -22,14 +23,27 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_load_import_change_unload_and_reload_notify_same_registration(self):
         await self.check_import_lifecycle('load_forecast_import')
 
+    async def test_price_and_temperature_import_lifecycle(self):
+        for module in ('electricity_import_price_forecast', 'electricity_export_price_forecast',
+                       'outdoor_temperature_forecast'):
+            with self.subTest(module=module):
+                await self.check_import_lifecycle(module)
+
     async def check_import_lifecycle(self, module):
         hass = Hass()
+        _label, unit, value_key, _nonnegative = forecast_type({'module': module})
+        hass.state.attributes['unit_of_measurement'] = unit
+        def source_rows(now):
+            from tests.test_forecast import records_for
+            return [{'start': row['start'], 'end': row['end'], value_key: row['power_w']}
+                    for row in records_for(now)]
+        hass.state.attributes['forecast'] = source_rows(NOW)
         registered = entry('pv-main', module=module, forecast_entity='sensor.pv')
         hass.entries = [registered]
         def read_import():
             if module == 'load_forecast_import':
                 return read_load_input(hass, {'load_forecast_input': 'imported:pv-main'}, NOW)
-            return read_pv_import(hass, {'pv_import_entry_id': 'pv-main'}, NOW)
+            return read_forecast_import(hass, 'pv-main', module, NOW)
         registered.callbacks = []
         registered.async_on_unload = registered.callbacks.append
         registered.add_update_listener = lambda fn: (lambda: None)
@@ -70,14 +84,13 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             await original.async_refresh()
             self.assertEqual(len(notifications), count)
             # A changed power value must still notify immediately.
-            hass.state.attributes['forecast'][0]['power_w'] = 123
+            hass.state.attributes['forecast'][0][value_key] = 123
             await original.async_refresh()
             self.assertEqual(len(notifications), count + 1)
             count = len(notifications)
             # Rolling to the next quarter changes the coverage window.
-            from tests.test_forecast import records_for
             injected['homeassistant.util'].dt.now = lambda: NOW + timedelta(minutes=15)
-            hass.state.attributes['forecast'] = records_for(NOW + timedelta(minutes=15))
+            hass.state.attributes['forecast'] = source_rows(NOW + timedelta(minutes=15))
             await original.async_refresh()
             self.assertEqual(len(notifications), count + 1)
             hass.state.state = 'unavailable'
@@ -102,7 +115,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             registered.callbacks.clear()
             self.assertEqual(watches, [])
             injected['homeassistant.util'].dt.now = lambda: NOW
-            hass.state.attributes['forecast'] = records_for(NOW)
+            hass.state.attributes['forecast'] = source_rows(NOW)
             hass.state.state = '0'
             await async_setup_entry(hass, registered)
             self.assertIsNot(coordinators(hass)['pv-main'], original)

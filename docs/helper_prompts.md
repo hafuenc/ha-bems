@@ -21,7 +21,7 @@ and [module input matrix](shared_inputs.md).
 
 ```text
 Create a Home Assistant YAML template sensor that converts my existing PV
-forecasts into an entity accepted by the HA-BEMS PV entity importer, schema 1.
+forecasts into an entity accepted by the HA-BEMS PV forecast importer, schema 1.
 
 My inputs:
 - Home Assistant version: [VERSION]
@@ -93,8 +93,8 @@ timestamps, continuity and final end >= now + 72 hours. Check source_updated_at:
 Source age is informational only: do not add a maximum-age input or an
 age-based availability cutoff. HA-BEMS still rejects timestamps more than five
 minutes in the future.
-Explain how to register the resulting entity under HA-BEMS → BEMS entity importer
-→ PV generation forecast, pass its test, then select the named import in FBC.
+Explain how to register the resulting entity under HA-BEMS → BEMS forecast importer
+→ PV AC generation forecast or PV DC generation forecast, pass its test, then select the named import in FBC.
 ```
 
 ## Prompt 2: combine Open-Meteo daily PV forecasts
@@ -104,7 +104,7 @@ available attributes differ between installations and integration versions.
 
 ```text
 Build a Home Assistant template sensor named "PV generation forecast 72h" for
-HA-BEMS's PV entity importer. I use ha-open-meteo-solar-forecast.
+HA-BEMS's PV forecast importer. I use ha-open-meteo-solar-forecast.
 
 My source entities are:
 - Today: [TODAY ENTITY, commonly sensor.energy_production_today]
@@ -157,7 +157,7 @@ no gaps/overlaps/duplicates, current-interval coverage, >=72-hour future coverag
 and source timestamp format. Report source age for information only; do not
 introduce a maximum-age setting or age-based cutoff. Future timestamp tolerance
 is five minutes.
-Explain registering the sensor under HA-BEMS → BEMS entity importer → PV
+Explain registering the sensor under HA-BEMS → BEMS forecast importer → PV
 generation forecast and selecting that registered input in FBC. Do not change
 the provider's PV model, battery controls or any device setpoints.
 ```
@@ -165,7 +165,7 @@ the provider's PV model, battery controls or any device setpoints.
 ## Prompt 3: fix an importer test failure
 
 ```text
-My forecast helper fails the HA-BEMS PV entity importer test. Diagnose the
+My forecast helper fails the HA-BEMS PV forecast importer test. Diagnose the
 specific cause and propose the smallest helper correction, preserving its
 entity ID and unrelated Home Assistant configuration.
 

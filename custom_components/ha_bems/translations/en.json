@@ -4,12 +4,12 @@
     "step": {
       "user": {
         "title": "HA-BEMS",
-        "description": "Create missing shared inputs, import existing forecast entities, or add a flexible-device management module. Inputs can be reused by multiple modules.",
+        "description": "Create a category once, then add and configure individual forecasts, helpers or storage modules inside its integration card. Each category groups its items together.",
         "menu_options": {
           "entity_creator": "BEMS entity creator",
           "electrical_storage": "Electrical storage management",
-          "thermal_storage": "Thermal storage management — coming soon",
-          "entity_importer": "BEMS entity importer"
+          "thermal_storage": "Thermal storage management",
+          "entity_importer": "BEMS forecast importer"
         }
       },
       "entity_creator": {
@@ -28,8 +28,8 @@
         }
       },
       "thermal_storage": {
-        "title": "Thermal storage management — coming soon",
-        "description": "Planned: local feed-forward MILP for domestic hot water and building heating, using tunable energy demand, electricity prices, PV availability and a simple COP. Domestic hot water runs first; heating respects its reserved heat-pump windows. No indoor-temperature feedback or historical model training is planned for this first thermal approach. Submit to return to the main menu."
+        "title": "Thermal storage management",
+        "description": "Create the thermal storage category, then add individual runtime-cost setups, such as DHW and UFH. Demand, storage and scheduling will be separate parts."
       },
       "soc": {
         "title": "Battery seasonal SOC min threshold",
@@ -105,9 +105,9 @@
       },
       "fbc_forecast": {
         "title": "Select FBC forecast inputs",
-        "description": "Select a PV forecast registered under BEMS entity importer. Optionally select an existing HA-BEMS non-flexible load profile or a building load forecast registered in the importer. Without load, FBC uses PV generation only. With load, FBC uses max(0, PV generation minus building demand), assuming AC PV generation without unaccounted inverter clipping. Inputs must cover at least the next 72 hours at 15-minute resolution. A selected load input must be valid; FBC will not silently revert to PV only.\n\n{reason}",
+        "description": "Select a registered PV AC or PV DC forecast. The choice is yours; FBC uses the selected values without converting AC/DC. Set charging efficiency to match the selected source. Optionally select a generated or imported non-flexible load forecast. With load, FBC uses max(0, PV minus load); keep both powers on a consistent basis, accounting for conversion losses outside this subtraction. AC clipping cannot be recovered by a constant efficiency. Inputs must cover the next 72 hours at 15-minute resolution. A failed selected load never silently falls back to PV only.\n\n{reason}",
         "data": {
-          "pv_import_entry_id": "Imported PV generation forecast",
+          "pv_import_entry_id": "PV forecast (choose AC or DC input)",
           "load_forecast_input": "Building load forecast (optional)"
         },
         "data_description": {
@@ -116,30 +116,31 @@
       },
       "fbc_preview": {
         "title": "FBC forecast input tests passed",
-        "description": "PV format, timezone-aware timestamps, 15-minute intervals and full next-72-hour coverage passed. Any selected load input also passed its coverage and interval checks.\n\nPV intervals: {count}\nStart: {start}\nEnd: {end}\nPeak PV power: {peak} W\nPV energy over the displayed period: {energy} kWh\nPV source age (information only): {age} minutes\nBuilding load: {load}\n\nTimestamps use UTC. FBC plans through local midnight. No load selection keeps the original PV-only calculation; selecting load feeds predicted PV surplus into the same calculation engine."
+        "description": "PV format, timezone-aware timestamps, 15-minute intervals and full next-72-hour coverage passed. Any selected load input also passed its coverage and interval checks.\n\nPV power type: {pv_type}\nPV intervals: {count}\nStart: {start}\nEnd: {end}\nPeak PV power: {peak} W\nPV energy over the displayed period: {energy} kWh\nPV source age (information only): {age} minutes\nBuilding load: {load}\n\nTimestamps use UTC. FBC plans through local midnight. No load selection keeps the original PV-only calculation; selecting load feeds predicted PV surplus into the same calculation engine."
       },
       "entity_importer": {
-        "title": "BEMS entity importer",
-        "description": "Register existing forecast entities as shared inputs. HA-BEMS tests their format and coverage, and exposes an input status. Modules reuse the same validated input.",
+        "title": "BEMS forecast importer",
+        "description": "Register prepared forecast sensors for reuse by planning modules. Choose the forecast type; setup tests its units, values and coverage.",
         "menu_options": {
-          "import_pv": "PV generation forecast",
-          "future_imports": "Electricity prices and additional forecasts — coming soon",
-          "import_load": "Building load forecast"
+          "import_pv_ac": "PV AC generation forecast",
+          "import_pv_dc": "PV DC generation forecast",
+          "import_load": "Non-flexible building load forecast",
+          "import_price": "Electricity import price forecast",
+          "export_price": "Electricity export price forecast",
+          "import_temperature": "Outdoor air temperature forecast"
         }
-      },
-      "future_imports": {
-        "title": "Additional forecast inputs — coming soon",
-        "description": "Planned input types: electricity import prices, electricity export prices and further forecasts needed by future modules. Each type will have a documented unit and value format. Price inputs are not implemented in this version. Submit to return to the importer menu."
       },
       "import_pv": {
         "title": "Import PV generation forecast",
-        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format and coverage before registering this input for reuse by modules. Source age is informational and does not reject an input. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format and coverage before registering this input for reuse by modules. Source age is informational and does not reject an input. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason} Choose the actual AC or DC basis of the source. Existing registrations keep working until you explicitly classify them in Configure.",
         "data": {
           "name": "Shared input name",
-          "forecast_entity": "PV generation forecast entity"
+          "forecast_entity": "PV generation forecast entity",
+          "pv_power_type": "PV power type"
         },
         "data_description": {
-          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format."
+          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format.",
+          "pv_power_type": "AC is inverter output; DC is PV power before conversion. Select the actual basis of your source; HA-BEMS does not convert between them."
         }
       },
       "import_preview": {
@@ -154,7 +155,7 @@
         }
       },
       "import_load": {
-        "title": "Import building load forecast",
+        "title": "Import non-flexible building load forecast",
         "description": "Select a prepared building demand forecast sensor, before PV/battery balancing and excluding battery charging. Its state must be finite nonnegative interval-average power in W. Required attributes: integer schema_version: 1, source_updated_at (original source update timestamp with timezone), and forecast (a native list of start, end and power_w records). Include the current quarter-hour and at least the next 72 hours in ordered, contiguous 15-minute intervals. Never replace missing consumption data with zero. A rolling helper normally needs 289 intervals. Setup tests the format and coverage; source age is information only. The importer exposes input health and keeps the forecast on your source entity. Existing HA-BEMS load profiles can be selected directly in FBC without importing them. [Helper format and AI prompt]({helper_docs_url}).\n\n{reason}",
         "data": {
           "name": "Shared input name",
@@ -163,6 +164,111 @@
         "data_description": {
           "forecast_entity": "Select a forecast of building consumption, not net grid import, measured consumption history or an energy total in kWh."
         }
+      },
+      "import_price": {
+        "title": "Import electricity import price forecast",
+        "description": "Select a prepared sensor with a finite numeric state in EUR/kWh. Use the full marginal import tariff, including applicable grid fees, taxes and VAT. Negative prices are allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and price_eur_per_kwh records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity import price forecast entity"
+        }
+      },
+      "export_price": {
+        "title": "Import electricity export price forecast",
+        "description": "Select a prepared sensor with a finite numeric state in EUR/kWh. Use the actual export remuneration per exported kWh. Negative remuneration is allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and price_eur_per_kwh records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity export price forecast entity"
+        }
+      },
+      "import_temperature": {
+        "title": "Import outdoor air temperature forecast",
+        "description": "Select a prepared sensor with a finite numeric state in °C. Use interval-average outdoor air temperature in degrees Celsius. Negative temperatures are allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and temperature_c records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Outdoor air temperature forecast entity"
+        }
+      },
+      "import_value_preview": {
+        "title": "Forecast input test passed",
+        "description": "Format, finite numeric values, 15-minute continuity and full next-72-hour coverage passed.\n\nIntervals: {count}\nStart: {start}\nEnd: {end}\nMinimum: {minimum} {unit}\nMaximum: {maximum} {unit}\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register. The source is checked again before saving, on source changes and at least once a minute."
+      },
+      "thermal_cost": {
+        "title": "Thermal runtime cost — system",
+        "description": "Create a named cost forecast, for example DHW or UFH. Each setup calculates the cost of running its complete system for one full 15-minute interval. It publishes current and next-72-hour costs; demand, storage duration and MILP scheduling are separate future modules. No device commands are sent.",
+        "data": {
+          "name": "System name",
+          "thermal_power_kw": "Nominal thermal output",
+          "auxiliary_power_w": "Additional electrical power while running",
+          "cop_model": "COP model"
+        },
+        "data_description": {
+          "thermal_power_kw": "Constant delivered heat output in kW. Heat-pump electrical power is this output divided by COP.",
+          "auxiliary_power_w": "Sum of electrical loads running with this task, such as circulation pumps. Enter only consumption not already included in your COP.",
+          "cop_model": "Use a constant COP or 2–10 freely defined temperature/COP anchor points. Supply temperature is not modelled."
+        }
+      },
+      "thermal_cop_constant": {
+        "title": "Constant COP",
+        "description": "A positive constant COP is used for every interval. No temperature forecast is required.",
+        "data": {
+          "constant_cop": "COP"
+        }
+      },
+      "thermal_cop_table": {
+        "title": "Temperature-dependent COP",
+        "description": "Select a registered outdoor temperature forecast and define 2–10 anchors in the next step. COP is interpolated linearly; outside the anchor range the nearest end segment is extrapolated linearly. Missing/invalid temperatures or non-positive extrapolated COPs use your fallback COP and are flagged in output attributes. Register a temperature source under BEMS forecast importer first.",
+        "data": {
+          "temperature_entry_id": "Outdoor temperature forecast",
+          "cop_point_count": "Number of anchor points",
+          "fallback_cop": "Fallback COP"
+        }
+      },
+      "thermal_cop_points": {
+        "title": "Temperature / COP anchor points",
+        "description": "Enter each temperature and its positive COP. Temperatures must be unique; points are sorted automatically. Linear interpolation/extrapolation follows your MATLAB lookup approach.",
+        "data": {
+          "temperature_1": "Point 1: temperature",
+          "cop_1": "Point 1: COP",
+          "temperature_2": "Point 2: temperature",
+          "cop_2": "Point 2: COP",
+          "temperature_3": "Point 3: temperature",
+          "cop_3": "Point 3: COP",
+          "temperature_4": "Point 4: temperature",
+          "cop_4": "Point 4: COP",
+          "temperature_5": "Point 5: temperature",
+          "cop_5": "Point 5: COP",
+          "temperature_6": "Point 6: temperature",
+          "cop_6": "Point 6: COP",
+          "temperature_7": "Point 7: temperature",
+          "cop_7": "Point 7: COP",
+          "temperature_8": "Point 8: temperature",
+          "cop_8": "Point 8: COP",
+          "temperature_9": "Point 9: temperature",
+          "cop_9": "Point 9: COP",
+          "temperature_10": "Point 10: temperature",
+          "cop_10": "Point 10: COP"
+        }
+      },
+      "thermal_cost_inputs": {
+        "title": "Thermal runtime cost — electricity inputs",
+        "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
+        "data": {
+          "pv_import_entry_id": "PV AC forecast",
+          "import_price_entry_id": "Electricity import prices",
+          "export_price_entry_id": "Electricity export prices",
+          "load_forecast_input": "Non-flexible building load (optional)",
+          "feed_in_limit_enabled": "Consider an export power limit",
+          "feed_in_limit_w": "Maximum export power",
+          "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
+        },
+        "data_description": {
+          "curtailed_price_eur_per_kwh": "Opportunity cost of otherwise curtailed PV; zero matches the MATLAB default. Negative prices are supported."
+        }
+      },
+      "thermal_cost_preview": {
+        "title": "Thermal runtime cost — preview",
+        "description": "Current cost: {current} EUR/timestep\nRange: {minimum} to {maximum} EUR/timestep\nCurrent COP: {cop}\nCOP fallback intervals: {fallback}\nFallback reason: {reason}\nIntervals: {count}\nUTC coverage: {start} to {end}\n\nEach value is the cost of one complete 15-minute activation, including any additional electrical power. The current state equals the first forecast value. This is an independent cost estimate, not a heating schedule. Submit to save; inputs are checked again."
       }
     },
     "error": {
@@ -171,7 +277,13 @@
       "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
       "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
       "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
-      "no_pv_import": "No PV input is registered yet. Add HA-BEMS again, choose BEMS entity importer → PV generation forecast, and complete its test before setting up FBC."
+      "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test.",
+      "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
+      "invalid_cop_points": "Define 2–10 finite temperature/COP pairs with unique temperatures and positive COPs.",
+      "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
+    },
+    "abort": {
+      "already_configured": "This category already exists. Use Add inside its integration card to add another item."
     }
   },
   "options": {
@@ -234,9 +346,9 @@
       },
       "fbc_forecast": {
         "title": "Select FBC forecast inputs",
-        "description": "Select a PV forecast registered under BEMS entity importer. Optionally select an existing HA-BEMS non-flexible load profile or a building load forecast registered in the importer. Without load, FBC uses PV generation only. With load, FBC uses max(0, PV generation minus building demand), assuming AC PV generation without unaccounted inverter clipping. Inputs must cover at least the next 72 hours at 15-minute resolution. A selected load input must be valid; FBC will not silently revert to PV only.\n\n{reason}",
+        "description": "Select a registered PV AC or PV DC forecast. The choice is yours; FBC uses the selected values without converting AC/DC. Set charging efficiency to match the selected source. Optionally select a generated or imported non-flexible load forecast. With load, FBC uses max(0, PV minus load); keep both powers on a consistent basis, accounting for conversion losses outside this subtraction. AC clipping cannot be recovered by a constant efficiency. Inputs must cover the next 72 hours at 15-minute resolution. A failed selected load never silently falls back to PV only.\n\n{reason}",
         "data": {
-          "pv_import_entry_id": "Imported PV generation forecast",
+          "pv_import_entry_id": "PV forecast (choose AC or DC input)",
           "load_forecast_input": "Building load forecast (optional)"
         },
         "data_description": {
@@ -245,7 +357,7 @@
       },
       "fbc_preview": {
         "title": "FBC forecast input tests passed",
-        "description": "PV format, timezone-aware timestamps, 15-minute intervals and full next-72-hour coverage passed. Any selected load input also passed its coverage and interval checks.\n\nPV intervals: {count}\nStart: {start}\nEnd: {end}\nPeak PV power: {peak} W\nPV energy over the displayed period: {energy} kWh\nPV source age (information only): {age} minutes\nBuilding load: {load}\n\nTimestamps use UTC. FBC plans through local midnight. No load selection keeps the original PV-only calculation; selecting load feeds predicted PV surplus into the same calculation engine."
+        "description": "PV format, timezone-aware timestamps, 15-minute intervals and full next-72-hour coverage passed. Any selected load input also passed its coverage and interval checks.\n\nPV power type: {pv_type}\nPV intervals: {count}\nStart: {start}\nEnd: {end}\nPeak PV power: {peak} W\nPV energy over the displayed period: {energy} kWh\nPV source age (information only): {age} minutes\nBuilding load: {load}\n\nTimestamps use UTC. FBC plans through local midnight. No load selection keeps the original PV-only calculation; selecting load feeds predicted PV surplus into the same calculation engine."
       },
       "fbc_battery": {
         "title": "Battery parameters",
@@ -265,13 +377,15 @@
       },
       "import_pv": {
         "title": "Import PV generation forecast",
-        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format and coverage before registering this input for reuse by modules. Source age is informational and does not reject an input. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason}",
+        "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format and coverage before registering this input for reuse by modules. Source age is informational and does not reject an input. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason} Choose the actual AC or DC basis of the source. Existing registrations keep working until you explicitly classify them in Configure.",
         "data": {
           "name": "Shared input name",
-          "forecast_entity": "PV generation forecast entity"
+          "forecast_entity": "PV generation forecast entity",
+          "pv_power_type": "PV power type"
         },
         "data_description": {
-          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format."
+          "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format.",
+          "pv_power_type": "AC is inverter output; DC is PV power before conversion. Select the actual basis of your source; HA-BEMS does not convert between them."
         }
       },
       "import_preview": {
@@ -286,7 +400,7 @@
         }
       },
       "import_load": {
-        "title": "Import building load forecast",
+        "title": "Import non-flexible building load forecast",
         "description": "Select a prepared building demand forecast sensor, before PV/battery balancing and excluding battery charging. Its state must be finite nonnegative interval-average power in W. Required attributes: integer schema_version: 1, source_updated_at (original source update timestamp with timezone), and forecast (a native list of start, end and power_w records). Include the current quarter-hour and at least the next 72 hours in ordered, contiguous 15-minute intervals. Never replace missing consumption data with zero. A rolling helper normally needs 289 intervals. Setup tests the format and coverage; source age is information only. The importer exposes input health and keeps the forecast on your source entity. Existing HA-BEMS load profiles can be selected directly in FBC without importing them. [Helper format and AI prompt]({helper_docs_url}).\n\n{reason}",
         "data": {
           "name": "Shared input name",
@@ -295,6 +409,34 @@
         "data_description": {
           "forecast_entity": "Select a forecast of building consumption, not net grid import, measured consumption history or an energy total in kWh."
         }
+      },
+      "import_price": {
+        "title": "Import electricity import price forecast",
+        "description": "Select a prepared sensor with a finite numeric state in EUR/kWh. Use the full marginal import tariff, including applicable grid fees, taxes and VAT. Negative prices are allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and price_eur_per_kwh records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity import price forecast entity"
+        }
+      },
+      "export_price": {
+        "title": "Import electricity export price forecast",
+        "description": "Select a prepared sensor with a finite numeric state in EUR/kWh. Use the actual export remuneration per exported kWh. Negative remuneration is allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and price_eur_per_kwh records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity export price forecast entity"
+        }
+      },
+      "import_temperature": {
+        "title": "Import outdoor air temperature forecast",
+        "description": "Select a prepared sensor with a finite numeric state in °C. Use interval-average outdoor air temperature in degrees Celsius. Negative temperatures are allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and temperature_c records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Outdoor air temperature forecast entity"
+        }
+      },
+      "import_value_preview": {
+        "title": "Forecast input test passed",
+        "description": "Format, finite numeric values, 15-minute continuity and full next-72-hour coverage passed.\n\nIntervals: {count}\nStart: {start}\nEnd: {end}\nMinimum: {minimum} {unit}\nMaximum: {maximum} {unit}\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register. The source is checked again before saving, on source changes and at least once a minute."
       }
     },
     "error": {
@@ -303,7 +445,383 @@
       "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
       "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
       "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
-      "no_pv_import": "No PV input is registered yet. Add HA-BEMS again, choose BEMS entity importer → PV generation forecast, and complete its test before setting up FBC."
+      "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+    }
+  },
+  "config_subentries": {
+    "entity_creator": {
+      "entry_type": "Helper",
+      "initiate_flow": {
+        "user": "Add helper",
+        "reconfigure": "Configure helper"
+      },
+      "step": {
+        "soc": {
+          "title": "Battery seasonal SOC min threshold",
+          "description": "Create a monthly seasonal SOC threshold with twelve editable percentages. If you already have a threshold entity, select it directly in FBC setup instead.",
+          "data": {
+            "name": "Entity group name"
+          }
+        },
+        "monthly": {
+          "title": "Battery seasonal SOC min threshold",
+          "description": "January to December. Default values are editable suggestions based on Central European solar irradiation conditions. At or below this threshold, HA-BEMS plans to leave the battery in standard operation. For FBC, the planned charging limit equals the configured maximum charging power. Your Home Assistant automations apply the plan.\n\nElectricity consumption varies unpredictably, and forecasts inevitably contain errors. This threshold acts as a safeguard: it reduces the flexibility available to HA-BEMS while lowering the risk of undesirable battery operation.",
+          "data": {
+            "january": "January",
+            "february": "February",
+            "march": "March",
+            "april": "April",
+            "may": "May",
+            "june": "June",
+            "july": "July",
+            "august": "August",
+            "september": "September",
+            "october": "October",
+            "november": "November",
+            "december": "December"
+          }
+        },
+        "existing_entity": {
+          "title": "Battery seasonal SOC min threshold",
+          "description": "Select an available sensor, number or input_number containing the active threshold from 0 to 100 with unit %. Its calendar logic stays with that entity. No automatic fallback is used if it becomes unavailable.",
+          "data": {
+            "seasonal_soc_entity": "Existing threshold entity"
+          }
+        },
+        "load_profile": {
+          "title": "Non-flexible load profile",
+          "description": "Estimate the non-flexible behind-the-meter building demand at 15-minute resolution. Enter annual consumption excluding separately controlled flexible loads like heat pumps, EVs, etc. Modelling is based on standard load profiles: choose H0, H25 or a constant profile throughout the year. H25 contains some average PV self-consumption influence. Select the public holiday calendar here, then choose a Bundesland or National holidays only in the next step. All fields can be changed later.\n\nSources: [H0 — VDEW 1999/2000 profile tables (ZIP)]({h0_source_url}); [H25 — BDEW 2025 profile tables (XLSX)]({h25_source_url}). [BDEW background and application notes]({profile_docs_url}).",
+          "data": {
+            "name": "Entity group name",
+            "annual_consumption_kwh": "Non-flexible annual consumption",
+            "load_profile": "Standard load profile",
+            "holiday_country": "Public holiday calendar"
+          }
+        },
+        "load_region": {
+          "title": "Non-flexible load profile — holiday region",
+          "description": "Choose the Bundesland for the selected country, or National holidays only. Regional public holidays use the Sunday load profile. This setting can be changed later.",
+          "data": {
+            "holiday_subdivision": "Holiday region (Bundesland)"
+          }
+        },
+        "user": {
+          "title": "BEMS entity creator",
+          "description": "Choose an item to add to this category. Existing items can be configured individually.",
+          "menu_options": {
+            "soc": "Battery seasonal SOC min threshold",
+            "load_profile": "Non-flexible load profile"
+          }
+        },
+        "reconfigure": {
+          "title": "Configure helper",
+          "description": "Change the item name or enable/disable it. Enabled items continue to their settings; disabling saves immediately, even if a source is unavailable. Disabled items keep their configuration and entity registrations but stop planning/input updates. Dependent plans cannot use a disabled input.",
+          "data": {
+            "name": "Item name",
+            "enabled": "Enabled"
+          }
+        }
+      },
+      "error": {
+        "invalid_threshold": "Enter twelve percentages between 0 and 100.",
+        "invalid_entity": "Choose an available numeric percentage entity from 0 to 100 with unit %.",
+        "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
+        "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
+        "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
+        "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+      },
+      "abort": {
+        "wrong_group": "This item does not belong to this category.",
+        "not_implemented": "No modules are available in this category yet."
+      }
+    },
+    "entity_importer": {
+      "entry_type": "Forecast",
+      "initiate_flow": {
+        "user": "Add forecast",
+        "reconfigure": "Configure forecast"
+      },
+      "step": {
+        "import_pv": {
+          "title": "Import PV generation forecast",
+          "description": "Select one forecast sensor prepared in Home Assistant. Its state must be nonnegative power in W. Required attributes: schema_version: 1, source_updated_at (original source update time with timezone), and forecast (ordered list of start, end and power_w records). Each record must contain a timezone-aware start/end and the interval-average power in W for exactly 15 minutes. Include the current quarter-hour and at least the next 72 hours without gaps, including explicit nighttime zeros. Never replace missing data with zero. A rolling helper normally needs 289 intervals. HA-BEMS tests the format and coverage before registering this input for reuse by modules. Source age is informational and does not reject an input. The original forecast remains on your source entity; the importer adds a status sensor without duplicating the forecast. [Helper design and example]({helper_docs_url}).\n\n{reason} Choose the actual AC or DC basis of the source. Existing registrations keep working until you explicitly classify them in Configure.",
+          "data": {
+            "name": "Shared input name",
+            "forecast_entity": "PV generation forecast entity",
+            "pv_power_type": "PV power type"
+          },
+          "data_description": {
+            "forecast_entity": "Use a prepared helper such as sensor.pv_generation_forecast_72h. Provider sensors must first be converted to the documented shared format.",
+            "pv_power_type": "AC is inverter output; DC is PV power before conversion. Select the actual basis of your source; HA-BEMS does not convert between them."
+          }
+        },
+        "import_preview": {
+          "title": "Forecast input test passed",
+          "description": "The forecast format, 15-minute continuity, complete next 72 hours passed.\n\nValidated intervals: {count}\nStart: {start}\nEnd: {end}\nPeak power: {peak} W\nEnergy over this period: {energy} kWh\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register this shared input. The source is checked again before saving and whenever it changes, and at least once a minute. Multiple modules can use this input."
+        },
+        "import_load": {
+          "title": "Import non-flexible building load forecast",
+          "description": "Select a prepared building demand forecast sensor, before PV/battery balancing and excluding battery charging. Its state must be finite nonnegative interval-average power in W. Required attributes: integer schema_version: 1, source_updated_at (original source update timestamp with timezone), and forecast (a native list of start, end and power_w records). Include the current quarter-hour and at least the next 72 hours in ordered, contiguous 15-minute intervals. Never replace missing consumption data with zero. A rolling helper normally needs 289 intervals. Setup tests the format and coverage; source age is information only. The importer exposes input health and keeps the forecast on your source entity. Existing HA-BEMS load profiles can be selected directly in FBC without importing them. [Helper format and AI prompt]({helper_docs_url}).\n\n{reason}",
+          "data": {
+            "name": "Shared input name",
+            "forecast_entity": "Building load forecast entity"
+          },
+          "data_description": {
+            "forecast_entity": "Select a forecast of building consumption, not net grid import, measured consumption history or an energy total in kWh."
+          }
+        },
+        "import_price": {
+          "title": "Import electricity import price forecast",
+          "description": "Select a prepared sensor with a finite numeric state in EUR/kWh. Use the full marginal import tariff, including applicable grid fees, taxes and VAT. Negative prices are allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and price_eur_per_kwh records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+          "data": {
+            "name": "Shared input name",
+            "forecast_entity": "Electricity import price forecast entity"
+          }
+        },
+        "export_price": {
+          "title": "Import electricity export price forecast",
+          "description": "Select a prepared sensor with a finite numeric state in EUR/kWh. Use the actual export remuneration per exported kWh. Negative remuneration is allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and price_eur_per_kwh records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+          "data": {
+            "name": "Shared input name",
+            "forecast_entity": "Electricity export price forecast entity"
+          }
+        },
+        "import_temperature": {
+          "title": "Import outdoor air temperature forecast",
+          "description": "Select a prepared sensor with a finite numeric state in °C. Use interval-average outdoor air temperature in degrees Celsius. Negative temperatures are allowed. Required attributes: integer schema_version: 1, source_updated_at (original source timestamp with timezone), and forecast (a native ordered list of start, end and temperature_c records). Include the current quarter-hour and at least the next 72 hours in contiguous 15-minute intervals. Source age is informational. Prepare any source conversions or predictions in your helper; HA-BEMS does not fill missing future data. The importer provides a status sensor for shared use. [Input format]({helper_docs_url}).\n\n{reason}",
+          "data": {
+            "name": "Shared input name",
+            "forecast_entity": "Outdoor air temperature forecast entity"
+          }
+        },
+        "import_value_preview": {
+          "title": "Forecast input test passed",
+          "description": "Format, finite numeric values, 15-minute continuity and full next-72-hour coverage passed.\n\nIntervals: {count}\nStart: {start}\nEnd: {end}\nMinimum: {minimum} {unit}\nMaximum: {maximum} {unit}\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register. The source is checked again before saving, on source changes and at least once a minute."
+        },
+        "user": {
+          "title": "BEMS forecast importer",
+          "description": "Choose an item to add to this category. Existing items can be configured individually.",
+          "menu_options": {
+            "import_pv_ac": "PV AC generation forecast",
+            "import_pv_dc": "PV DC generation forecast",
+            "import_load": "Non-flexible building load forecast",
+            "import_price": "Electricity import price forecast",
+            "export_price": "Electricity export price forecast",
+            "import_temperature": "Outdoor air temperature forecast"
+          }
+        },
+        "reconfigure": {
+          "title": "Configure forecast",
+          "description": "Change the item name or enable/disable it. Enabled items continue to their settings; disabling saves immediately, even if a source is unavailable. Disabled items keep their configuration and entity registrations but stop planning/input updates. Dependent plans cannot use a disabled input.",
+          "data": {
+            "name": "Item name",
+            "enabled": "Enabled"
+          }
+        }
+      },
+      "error": {
+        "invalid_threshold": "Enter twelve percentages between 0 and 100.",
+        "invalid_entity": "Choose an available numeric percentage entity from 0 to 100 with unit %.",
+        "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
+        "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
+        "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
+        "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+      },
+      "abort": {
+        "wrong_group": "This item does not belong to this category.",
+        "not_implemented": "No modules are available in this category yet."
+      }
+    },
+    "electrical_storage": {
+      "entry_type": "Storage module",
+      "initiate_flow": {
+        "user": "Add storage module",
+        "reconfigure": "Configure storage module"
+      },
+      "step": {
+        "fbc": {
+          "title": "Electrical storage management — FBC",
+          "description": "FBC (Forecast based charging) provides operating plans and recommendations. Optionally consider predicted building demand by selecting a generated or imported load forecast in the next step. Each virtual device includes an FBC charging limitation enabled switch: off publishes maximum charging power for the complete plan. Use your own Home Assistant automations to apply the results to your battery system.",
+          "data": {
+            "name": "Virtual device",
+            "soc_entity": "Select actual battery SOC in % used by the FBC algorithm",
+            "seasonal_soc_entity": "Battery seasonal SOC min threshold entity"
+          },
+          "data_description": {
+            "name": "Name of the virtual Battery control strategy device; this does not rename your physical battery.",
+            "soc_entity": "Select the measured battery state of charge, with unit % and a value from 0 to 100.",
+            "seasonal_soc_entity": "If you don't already have this entity, create it using HA-BEMS: BEMS entity creator → Battery seasonal SOC min threshold."
+          }
+        },
+        "fbc_battery": {
+          "title": "Battery parameters",
+          "description": "Use the usable (net) battery capacity corresponding to the selected SOC sensor's full 0–100% range. The efficiency is one constant factor converting forecast PV energy into stored battery energy (for example 0.95). Include the combined conversion and charging losses once. At or below the seasonal minimum SOC, the complete FBC plan allows maximum charging power.",
+          "data": {
+            "capacity_kwh": "Usable battery capacity (net) in kWh",
+            "target_soc_percent": "Target SOC in %",
+            "charge_efficiency": "PV forecast-to-battery storage efficiency",
+            "max_charge_power_w": "Maximum charging power in W"
+          },
+          "data_description": {
+            "charge_efficiency": "Factor from 0 to 1: 0.95 means that 95% of forecast PV energy becomes stored battery energy. A constant factor cannot recover PV peaks already clipped in the forecast.",
+            "capacity_kwh": "Enter the usable energy in kWh corresponding to a change from 0% to 100% on the selected battery SOC sensor.",
+            "target_soc_percent": "SOC that FBC aims to reach by the end of the day. Keep this value aligned with the maximum SOC configured in your battery system.",
+            "max_charge_power_w": "Maximum charging power supported by your battery system, in W. Also used as the output limit."
+          }
+        },
+        "fbc_forecast": {
+          "title": "Select FBC forecast inputs",
+          "description": "Select a registered PV AC or PV DC forecast. The choice is yours; FBC uses the selected values without converting AC/DC. Set charging efficiency to match the selected source. Optionally select a generated or imported non-flexible load forecast. With load, FBC uses max(0, PV minus load); keep both powers on a consistent basis, accounting for conversion losses outside this subtraction. AC clipping cannot be recovered by a constant efficiency. Inputs must cover the next 72 hours at 15-minute resolution. A failed selected load never silently falls back to PV only.\n\n{reason}",
+          "data": {
+            "pv_import_entry_id": "PV forecast (choose AC or DC input)",
+            "load_forecast_input": "Building load forecast (optional)"
+          },
+          "data_description": {
+            "load_forecast_input": "Choose None for unchanged PV-only behaviour. For load-aware FBC, use building demand before PV/battery balancing; exclude battery charging. Demand above PV becomes zero available surplus; predicted battery discharge is not simulated."
+          }
+        },
+        "fbc_preview": {
+          "title": "FBC forecast input tests passed",
+          "description": "PV format, timezone-aware timestamps, 15-minute intervals and full next-72-hour coverage passed. Any selected load input also passed its coverage and interval checks.\n\nPV power type: {pv_type}\nPV intervals: {count}\nStart: {start}\nEnd: {end}\nPeak PV power: {peak} W\nPV energy over the displayed period: {energy} kWh\nPV source age (information only): {age} minutes\nBuilding load: {load}\n\nTimestamps use UTC. FBC plans through local midnight. No load selection keeps the original PV-only calculation; selecting load feeds predicted PV surplus into the same calculation engine."
+        },
+        "user": {
+          "title": "Electrical storage management",
+          "description": "Choose an item to add to this category. Existing items can be configured individually.",
+          "menu_options": {
+            "fbc": "Forecast-based battery charging (FBC)"
+          }
+        },
+        "reconfigure": {
+          "title": "Configure storage module",
+          "description": "Change the item name or enable/disable it. Enabled items continue to their settings; disabling saves immediately, even if a source is unavailable. Disabled items keep their configuration and entity registrations but stop planning/input updates. Dependent plans cannot use a disabled input.",
+          "data": {
+            "name": "Item name",
+            "enabled": "Enabled"
+          }
+        }
+      },
+      "error": {
+        "invalid_threshold": "Enter twelve percentages between 0 and 100.",
+        "invalid_entity": "Choose an available numeric percentage entity from 0 to 100 with unit %.",
+        "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
+        "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
+        "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
+        "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+      },
+      "abort": {
+        "wrong_group": "This item does not belong to this category.",
+        "not_implemented": "No modules are available in this category yet."
+      }
+    },
+    "thermal_storage": {
+      "entry_type": "Runtime cost setup",
+      "initiate_flow": {
+        "user": "Add runtime cost setup",
+        "reconfigure": "Configure runtime cost setup"
+      },
+      "step": {
+        "user": {
+          "title": "Thermal storage management",
+          "description": "Add independent named cost forecasts. A future MILP module will consume these forecasts.",
+          "menu_options": {
+            "thermal_cost": "Thermal runtime cost (EUR/timestep)"
+          }
+        },
+        "reconfigure": {
+          "title": "Configure runtime cost setup",
+          "description": "Change the item name or enable/disable it. Enabled items continue to their settings; disabling saves immediately, even if a source is unavailable. Disabled items keep their configuration and entity registrations but stop planning/input updates. Dependent plans cannot use a disabled input.",
+          "data": {
+            "name": "Item name",
+            "enabled": "Enabled"
+          }
+        },
+        "thermal_cost": {
+          "title": "Thermal runtime cost — system",
+          "description": "Create a named cost forecast, for example DHW or UFH. Each setup calculates the cost of running its complete system for one full 15-minute interval. It publishes current and next-72-hour costs; demand, storage duration and MILP scheduling are separate future modules. No device commands are sent.",
+          "data": {
+            "name": "System name",
+            "thermal_power_kw": "Nominal thermal output",
+            "auxiliary_power_w": "Additional electrical power while running",
+            "cop_model": "COP model"
+          },
+          "data_description": {
+            "thermal_power_kw": "Constant delivered heat output in kW. Heat-pump electrical power is this output divided by COP.",
+            "auxiliary_power_w": "Sum of electrical loads running with this task, such as circulation pumps. Enter only consumption not already included in your COP.",
+            "cop_model": "Use a constant COP or 2–10 freely defined temperature/COP anchor points. Supply temperature is not modelled."
+          }
+        },
+        "thermal_cop_constant": {
+          "title": "Constant COP",
+          "description": "A positive constant COP is used for every interval. No temperature forecast is required.",
+          "data": {
+            "constant_cop": "COP"
+          }
+        },
+        "thermal_cop_table": {
+          "title": "Temperature-dependent COP",
+          "description": "Select a registered outdoor temperature forecast and define 2–10 anchors in the next step. COP is interpolated linearly; outside the anchor range the nearest end segment is extrapolated linearly. Missing/invalid temperatures or non-positive extrapolated COPs use your fallback COP and are flagged in output attributes. Register a temperature source under BEMS forecast importer first.",
+          "data": {
+            "temperature_entry_id": "Outdoor temperature forecast",
+            "cop_point_count": "Number of anchor points",
+            "fallback_cop": "Fallback COP"
+          }
+        },
+        "thermal_cop_points": {
+          "title": "Temperature / COP anchor points",
+          "description": "Enter each temperature and its positive COP. Temperatures must be unique; points are sorted automatically. Linear interpolation/extrapolation follows your MATLAB lookup approach.",
+          "data": {
+            "temperature_1": "Point 1: temperature",
+            "cop_1": "Point 1: COP",
+            "temperature_2": "Point 2: temperature",
+            "cop_2": "Point 2: COP",
+            "temperature_3": "Point 3: temperature",
+            "cop_3": "Point 3: COP",
+            "temperature_4": "Point 4: temperature",
+            "cop_4": "Point 4: COP",
+            "temperature_5": "Point 5: temperature",
+            "cop_5": "Point 5: COP",
+            "temperature_6": "Point 6: temperature",
+            "cop_6": "Point 6: COP",
+            "temperature_7": "Point 7: temperature",
+            "cop_7": "Point 7: COP",
+            "temperature_8": "Point 8: temperature",
+            "cop_8": "Point 8: COP",
+            "temperature_9": "Point 9: temperature",
+            "cop_9": "Point 9: COP",
+            "temperature_10": "Point 10: temperature",
+            "cop_10": "Point 10: COP"
+          }
+        },
+        "thermal_cost_inputs": {
+          "title": "Thermal runtime cost — electricity inputs",
+          "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
+          "data": {
+            "pv_import_entry_id": "PV AC forecast",
+            "import_price_entry_id": "Electricity import prices",
+            "export_price_entry_id": "Electricity export prices",
+            "load_forecast_input": "Non-flexible building load (optional)",
+            "feed_in_limit_enabled": "Consider an export power limit",
+            "feed_in_limit_w": "Maximum export power",
+            "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
+          },
+          "data_description": {
+            "curtailed_price_eur_per_kwh": "Opportunity cost of otherwise curtailed PV; zero matches the MATLAB default. Negative prices are supported."
+          }
+        },
+        "thermal_cost_preview": {
+          "title": "Thermal runtime cost — preview",
+          "description": "Current cost: {current} EUR/timestep\nRange: {minimum} to {maximum} EUR/timestep\nCurrent COP: {cop}\nCOP fallback intervals: {fallback}\nFallback reason: {reason}\nIntervals: {count}\nUTC coverage: {start} to {end}\n\nEach value is the cost of one complete 15-minute activation, including any additional electrical power. The current state equals the first forecast value. This is an independent cost estimate, not a heating schedule. Submit to save; inputs are checked again."
+        }
+      },
+      "error": {
+        "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
+        "invalid_cop_points": "Define 2–10 finite temperature/COP pairs with unique temperatures and positive COPs.",
+        "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
+      },
+      "abort": {
+        "wrong_group": "This item does not belong to this category.",
+        "not_implemented": "No modules are available in this category yet."
+      }
     }
   }
 }

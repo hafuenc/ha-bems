@@ -16,7 +16,7 @@ will directly control batteries, heat pumps, EVs or other plant.
   filters for percentage entities and setup validates the current value.
 - Battery seasonal SOC min threshold entity: an existing percentage source or
   the helper created under **BEMS entity creator**. No duplicate helper is required.
-- A shared PV forecast registered under **BEMS entity importer**, using the
+- A shared PV forecast registered under **BEMS forecast importer**, using the
   documented 72-hour contract.
 - An optional building load forecast: choose an already configured HA-BEMS
   non-flexible load profile or a **Building load forecast** registration from the
@@ -25,7 +25,7 @@ will directly control batteries, heat pumps, EVs or other plant.
   sensor's full 0–100% range, target SOC in %, and maximum charging power in W.
 - **PV forecast-to-battery storage efficiency**: one constant factor, e.g. 0.95.
   It represents the fraction of forecast PV energy becoming stored battery energy.
-  Include conversion/charging losses once; no extra DC/AC setup choice is required.
+  Include conversion/charging losses once for the selected AC or DC forecast.
 
 Target SOC is the charge level FBC aims to reach by the end of the day. Keep it
 aligned with the maximum SOC configured in the battery system; FBC does not
@@ -40,7 +40,7 @@ entity IDs are preserved.
 
 ## PV generation forecast input
 
-Register a prepared sensor under **BEMS entity importer → PV generation forecast**
+Register a prepared sensor under **BEMS forecast importer → PV AC generation forecast or PV DC generation forecast**
 and select that named input in FBC. The source has state/unit W and attributes `schema_version: 1`,
 `source_updated_at` and `forecast`. Each forecast record has timezone-aware
 `start`, `end` and interval-average `power_w`. The ordered, contiguous series
@@ -65,7 +65,7 @@ The informational source age follows the helper's `source_updated_at`, never its
 
 Both inputs must cover the current quarter through at least now + 72 hours with
 aligned 15-minute intervals. Generated profiles are reused through their stable
-configuration entry; renaming their sensor does not break selection. External
+item identity; renaming their sensor does not break selection. External
 load sensors first pass [building load import](load_forecast_helper.md). Failure,
 disable, removal or expired coverage invalidates FBC without silently switching
 to PV-only mode; the maximum-power overrides below remain available.
@@ -76,8 +76,11 @@ balancing and must exclude battery charging. A generated non-flexible profile
 excludes separately controlled heat pumps and EVs; an external forecast may
 include them if their expected consumption is known. Do not count loads twice.
 
-This variant assumes an AC PV forecast without unaccounted inverter clipping,
-with demand and charging efficiency on a consistent power basis. It does not
+Choose either an AC or a DC PV registration in FBC; its type is displayed beside
+the input name and reported as `pv_power_type` in the plan. HA-BEMS uses the
+selected power directly, without AC/DC conversion. Match charging efficiency to
+the source. When subtracting load, keep demand and PV on a consistent basis;
+account for any conversion losses externally. It does not
 recover clipped DC production or simulate battery discharge in deficit periods.
 Negative balance becomes zero charging surplus. Actual SOC updates correct past
 discharge in subsequent calculations, without guaranteeing the end-of-day target.
