@@ -447,7 +447,7 @@ class _ModuleSteps:
                 return await (self.async_step_thermal_cop_table() if user_input["cop_model"] == "lookup"
                               else self.async_step_thermal_cop_constant())
         values = self._values()
-        fields = self._name_fields("DHW")
+        fields = self._name_fields("Thermal system")
         fields.update({
             vol.Required("thermal_power_kw", default=values.get("thermal_power_kw", 7)): _number(0.001, 10000, "kW", "any"),
             vol.Required("auxiliary_power_w", default=values.get("auxiliary_power_w", 0)): _number(0, 1000000, "W", "any"),
@@ -669,10 +669,9 @@ class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):
     async def async_step_user(self, user_input=None):
         group = self._get_entry().data[CONF_GROUP]
         options = {
-            "entity_creator": ["soc", "load_profile"],
+            "entity_creator": ["soc", "load_profile", "thermal_cost"],
             "entity_importer": ["import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature"],
             "electrical_storage": ["fbc"],
-            "thermal_storage": ["thermal_cost"],
         }
         if group not in options:
             return self.async_abort(reason="not_implemented")

@@ -1,15 +1,22 @@
 # Thermal runtime cost forecasts
 
-In HA-BEMS 0.6.0, **Thermal storage management → Add runtime cost setup →
-Thermal runtime cost (EUR/timestep)** creates one independent named system.
-Repeat setup for **DHW**, **UFH**, or other thermal tasks. Each item has its own
+Under **BEMS entity creator → Add helper → Thermal runtime cost (EUR/timestep)**,
+create an independent named system. Repeat the same setup procedure for any
+number of systems. There are no separate DHW/UFH modes. Each item has its own
 parameters, input selections, Configure action, enabled setting and Runtime cost
 sensor. Renaming/configuring an item retains its entity identity.
 
-This is the first of three thermal management parts: **cost of operation**.
-Demand/runtime requirements and storage/duration settings follow later. A future
-MILP engine consumes these forecasts as inputs; no solver, heat-pump commands,
-operating schedule or storage model is included here.
+This helper calculates the **cost of operation** as a reusable entity. A future
+generic thermal operation planner can consume these forecasts; its detailed
+setup remains open. No solver, heat-pump commands, operating schedule or storage
+model is included here.
+
+Existing v0.6.0 runtime-cost setups move from Thermal storage management into
+BEMS entity creator on startup. Their settings, user-defined names, module IDs,
+sensor entity IDs and device names/areas are preserved. When no creator category
+exists, the existing cost category becomes the creator card; otherwise cost
+items join the existing creator card. An empty thermal category is left available
+for future planning. No new operating strategy is created by this migration.
 
 ## Setup
 

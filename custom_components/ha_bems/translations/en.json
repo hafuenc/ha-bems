@@ -17,7 +17,8 @@
         "description": "Create entities you don't already have in Home Assistant. Modules can also use existing entities.",
         "menu_options": {
           "soc": "Battery seasonal SOC min threshold",
-          "load_profile": "Non-flexible load profile"
+          "load_profile": "Non-flexible load profile",
+          "thermal_cost": "Thermal runtime cost (EUR/timestep)"
         }
       },
       "electrical_storage": {
@@ -29,7 +30,7 @@
       },
       "thermal_storage": {
         "title": "Thermal storage management",
-        "description": "Create the thermal storage category, then add individual runtime-cost setups, such as DHW and UFH. Demand, storage and scheduling will be separate parts."
+        "description": "Reserved for a future generic thermal operation planner; its detailed setup remains open. Create reusable thermal runtime-cost forecasts under BEMS entity creator."
       },
       "soc": {
         "title": "Battery seasonal SOC min threshold",
@@ -195,7 +196,7 @@
       },
       "thermal_cost": {
         "title": "Thermal runtime cost — system",
-        "description": "Create a named cost forecast, for example DHW or UFH. Each setup calculates the cost of running its complete system for one full 15-minute interval. It publishes current and next-72-hour costs; demand, storage duration and MILP scheduling are separate future modules. No device commands are sent.",
+        "description": "Create a user-named runtime-cost forecast. The same procedure is used for every instance; each has its own COP, thermal output, auxiliary consumption and forecast inputs. It publishes the current and next-72-hour costs of full 15-minute activations. A future thermal operation planner can consume these entities. No device commands are sent.",
         "data": {
           "name": "System name",
           "thermal_power_kw": "Nominal thermal output",
@@ -510,7 +511,8 @@
           "description": "Choose an item to add to this category. Existing items can be configured individually.",
           "menu_options": {
             "soc": "Battery seasonal SOC min threshold",
-            "load_profile": "Non-flexible load profile"
+            "load_profile": "Non-flexible load profile",
+            "thermal_cost": "Thermal runtime cost (EUR/timestep)"
           }
         },
         "reconfigure": {
@@ -520,6 +522,83 @@
             "name": "Item name",
             "enabled": "Enabled"
           }
+        },
+        "thermal_cost": {
+          "title": "Thermal runtime cost — system",
+          "description": "Create a user-named runtime-cost forecast. The same procedure is used for every instance; each has its own COP, thermal output, auxiliary consumption and forecast inputs. It publishes the current and next-72-hour costs of full 15-minute activations. A future thermal operation planner can consume these entities. No device commands are sent.",
+          "data": {
+            "name": "System name",
+            "thermal_power_kw": "Nominal thermal output",
+            "auxiliary_power_w": "Additional electrical power while running",
+            "cop_model": "COP model"
+          },
+          "data_description": {
+            "thermal_power_kw": "Constant delivered heat output in kW. Heat-pump electrical power is this output divided by COP.",
+            "auxiliary_power_w": "Sum of electrical loads running with this task, such as circulation pumps. Enter only consumption not already included in your COP.",
+            "cop_model": "Use a constant COP or 2–10 freely defined temperature/COP anchor points. Supply temperature is not modelled."
+          }
+        },
+        "thermal_cop_constant": {
+          "title": "Constant COP",
+          "description": "A positive constant COP is used for every interval. No temperature forecast is required.",
+          "data": {
+            "constant_cop": "COP"
+          }
+        },
+        "thermal_cop_table": {
+          "title": "Temperature-dependent COP",
+          "description": "Select a registered outdoor temperature forecast and define 2–10 anchors in the next step. COP is interpolated linearly; outside the anchor range the nearest end segment is extrapolated linearly. Missing/invalid temperatures or non-positive extrapolated COPs use your fallback COP and are flagged in output attributes. Register a temperature source under BEMS forecast importer first.",
+          "data": {
+            "temperature_entry_id": "Outdoor temperature forecast",
+            "cop_point_count": "Number of anchor points",
+            "fallback_cop": "Fallback COP"
+          }
+        },
+        "thermal_cop_points": {
+          "title": "Temperature / COP anchor points",
+          "description": "Enter each temperature and its positive COP. Temperatures must be unique; points are sorted automatically. Linear interpolation/extrapolation follows your MATLAB lookup approach.",
+          "data": {
+            "temperature_1": "Point 1: temperature",
+            "cop_1": "Point 1: COP",
+            "temperature_2": "Point 2: temperature",
+            "cop_2": "Point 2: COP",
+            "temperature_3": "Point 3: temperature",
+            "cop_3": "Point 3: COP",
+            "temperature_4": "Point 4: temperature",
+            "cop_4": "Point 4: COP",
+            "temperature_5": "Point 5: temperature",
+            "cop_5": "Point 5: COP",
+            "temperature_6": "Point 6: temperature",
+            "cop_6": "Point 6: COP",
+            "temperature_7": "Point 7: temperature",
+            "cop_7": "Point 7: COP",
+            "temperature_8": "Point 8: temperature",
+            "cop_8": "Point 8: COP",
+            "temperature_9": "Point 9: temperature",
+            "cop_9": "Point 9: COP",
+            "temperature_10": "Point 10: temperature",
+            "cop_10": "Point 10: COP"
+          }
+        },
+        "thermal_cost_inputs": {
+          "title": "Thermal runtime cost — electricity inputs",
+          "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
+          "data": {
+            "pv_import_entry_id": "PV AC forecast",
+            "import_price_entry_id": "Electricity import prices",
+            "export_price_entry_id": "Electricity export prices",
+            "load_forecast_input": "Non-flexible building load (optional)",
+            "feed_in_limit_enabled": "Consider an export power limit",
+            "feed_in_limit_w": "Maximum export power",
+            "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
+          },
+          "data_description": {
+            "curtailed_price_eur_per_kwh": "Opportunity cost of otherwise curtailed PV; zero matches the MATLAB default. Negative prices are supported."
+          }
+        },
+        "thermal_cost_preview": {
+          "title": "Thermal runtime cost — preview",
+          "description": "Current cost: {current} EUR/timestep\nRange: {minimum} to {maximum} EUR/timestep\nCurrent COP: {cop}\nCOP fallback intervals: {fallback}\nFallback reason: {reason}\nIntervals: {count}\nUTC coverage: {start} to {end}\n\nEach value is the cost of one complete 15-minute activation, including any additional electrical power. The current state equals the first forecast value. This is an independent cost estimate, not a heating schedule. Submit to save; inputs are checked again."
         }
       },
       "error": {
@@ -528,7 +607,10 @@
         "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
         "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
         "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
-        "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+        "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test.",
+        "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
+        "invalid_cop_points": "Define 2–10 finite temperature/COP pairs with unique temperatures and positive COPs.",
+        "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
       },
       "abort": {
         "wrong_group": "This item does not belong to this category.",
@@ -707,116 +789,6 @@
         "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
         "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
         "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
-      },
-      "abort": {
-        "wrong_group": "This item does not belong to this category.",
-        "not_implemented": "No modules are available in this category yet."
-      }
-    },
-    "thermal_storage": {
-      "entry_type": "Runtime cost setup",
-      "initiate_flow": {
-        "user": "Add runtime cost setup",
-        "reconfigure": "Configure runtime cost setup"
-      },
-      "step": {
-        "user": {
-          "title": "Thermal storage management",
-          "description": "Add independent named cost forecasts. A future MILP module will consume these forecasts.",
-          "menu_options": {
-            "thermal_cost": "Thermal runtime cost (EUR/timestep)"
-          }
-        },
-        "reconfigure": {
-          "title": "Configure runtime cost setup",
-          "description": "Change the item name or enable/disable it. Enabled items continue to their settings; disabling saves immediately, even if a source is unavailable. Disabled items keep their configuration and entity registrations but stop planning/input updates. Dependent plans cannot use a disabled input.",
-          "data": {
-            "name": "Item name",
-            "enabled": "Enabled"
-          }
-        },
-        "thermal_cost": {
-          "title": "Thermal runtime cost — system",
-          "description": "Create a named cost forecast, for example DHW or UFH. Each setup calculates the cost of running its complete system for one full 15-minute interval. It publishes current and next-72-hour costs; demand, storage duration and MILP scheduling are separate future modules. No device commands are sent.",
-          "data": {
-            "name": "System name",
-            "thermal_power_kw": "Nominal thermal output",
-            "auxiliary_power_w": "Additional electrical power while running",
-            "cop_model": "COP model"
-          },
-          "data_description": {
-            "thermal_power_kw": "Constant delivered heat output in kW. Heat-pump electrical power is this output divided by COP.",
-            "auxiliary_power_w": "Sum of electrical loads running with this task, such as circulation pumps. Enter only consumption not already included in your COP.",
-            "cop_model": "Use a constant COP or 2–10 freely defined temperature/COP anchor points. Supply temperature is not modelled."
-          }
-        },
-        "thermal_cop_constant": {
-          "title": "Constant COP",
-          "description": "A positive constant COP is used for every interval. No temperature forecast is required.",
-          "data": {
-            "constant_cop": "COP"
-          }
-        },
-        "thermal_cop_table": {
-          "title": "Temperature-dependent COP",
-          "description": "Select a registered outdoor temperature forecast and define 2–10 anchors in the next step. COP is interpolated linearly; outside the anchor range the nearest end segment is extrapolated linearly. Missing/invalid temperatures or non-positive extrapolated COPs use your fallback COP and are flagged in output attributes. Register a temperature source under BEMS forecast importer first.",
-          "data": {
-            "temperature_entry_id": "Outdoor temperature forecast",
-            "cop_point_count": "Number of anchor points",
-            "fallback_cop": "Fallback COP"
-          }
-        },
-        "thermal_cop_points": {
-          "title": "Temperature / COP anchor points",
-          "description": "Enter each temperature and its positive COP. Temperatures must be unique; points are sorted automatically. Linear interpolation/extrapolation follows your MATLAB lookup approach.",
-          "data": {
-            "temperature_1": "Point 1: temperature",
-            "cop_1": "Point 1: COP",
-            "temperature_2": "Point 2: temperature",
-            "cop_2": "Point 2: COP",
-            "temperature_3": "Point 3: temperature",
-            "cop_3": "Point 3: COP",
-            "temperature_4": "Point 4: temperature",
-            "cop_4": "Point 4: COP",
-            "temperature_5": "Point 5: temperature",
-            "cop_5": "Point 5: COP",
-            "temperature_6": "Point 6: temperature",
-            "cop_6": "Point 6: COP",
-            "temperature_7": "Point 7: temperature",
-            "cop_7": "Point 7: COP",
-            "temperature_8": "Point 8: temperature",
-            "cop_8": "Point 8: COP",
-            "temperature_9": "Point 9: temperature",
-            "cop_9": "Point 9: COP",
-            "temperature_10": "Point 10: temperature",
-            "cop_10": "Point 10: COP"
-          }
-        },
-        "thermal_cost_inputs": {
-          "title": "Thermal runtime cost — electricity inputs",
-          "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
-          "data": {
-            "pv_import_entry_id": "PV AC forecast",
-            "import_price_entry_id": "Electricity import prices",
-            "export_price_entry_id": "Electricity export prices",
-            "load_forecast_input": "Non-flexible building load (optional)",
-            "feed_in_limit_enabled": "Consider an export power limit",
-            "feed_in_limit_w": "Maximum export power",
-            "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
-          },
-          "data_description": {
-            "curtailed_price_eur_per_kwh": "Opportunity cost of otherwise curtailed PV; zero matches the MATLAB default. Negative prices are supported."
-          }
-        },
-        "thermal_cost_preview": {
-          "title": "Thermal runtime cost — preview",
-          "description": "Current cost: {current} EUR/timestep\nRange: {minimum} to {maximum} EUR/timestep\nCurrent COP: {cop}\nCOP fallback intervals: {fallback}\nFallback reason: {reason}\nIntervals: {count}\nUTC coverage: {start} to {end}\n\nEach value is the cost of one complete 15-minute activation, including any additional electrical power. The current state equals the first forecast value. This is an independent cost estimate, not a heating schedule. Submit to save; inputs are checked again."
-        }
-      },
-      "error": {
-        "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
-        "invalid_cop_points": "Define 2–10 finite temperature/COP pairs with unique temperatures and positive COPs.",
-        "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
       },
       "abort": {
         "wrong_group": "This item does not belong to this category.",

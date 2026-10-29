@@ -15,14 +15,14 @@ BEMS forecast importer
 BEMS entity creator
   Battery seasonal SOC min threshold
   Non-flexible building load profile
+  Thermal runtime cost (repeatable, user-defined names)
 
 Electrical storage management
   FBC Battery 1
   FBC Battery 2
 
 Thermal storage management
-  DHW runtime cost
-  UFH runtime cost
+  Future generic operation planner (details open)
 ```
 
 These are the top-level cards on the HA-BEMS integration page, rather than a
@@ -40,10 +40,12 @@ user-defined. Multiple instances of a helper, forecast or FBC module are allowed
 5. Add the integration again only to create another category. An existing
    category cannot be created twice. Additional items go inside its existing card.
 
-Thermal storage management offers **Add runtime cost setup**. Create multiple
+**BEMS entity creator → Add helper → Thermal runtime cost** creates repeatable
 named instances with current and 72-hour EUR/timestep forecasts; see
-[thermal runtime costs](thermal_runtime_cost.md). Demand, storage duration and
-MILP scheduling remain separate future modules. Electrical storage offers FBC.
+[thermal runtime costs](thermal_runtime_cost.md). Every instance uses the same
+procedure with its own settings. Thermal storage management is reserved for a
+future generic operation planner; its detailed setup remains open and no planner
+is currently implemented. Electrical storage offers FBC.
 
 Deleting an item removes its own entities and configuration; other items stay
 configured. Removing a category removes its contained items too. Editing an item

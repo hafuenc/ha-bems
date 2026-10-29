@@ -47,10 +47,10 @@ GROUP_TITLES = {
     GROUP_THERMAL: "Thermal storage management",
 }
 GROUP_MODULES = {
-    GROUP_CREATOR: (MODULE_SOC, MODULE_LOAD),
+    GROUP_CREATOR: (MODULE_SOC, MODULE_LOAD, MODULE_THERMAL_COST),
     GROUP_IMPORTER: FORECAST_IMPORT_MODULES,
     GROUP_ELECTRICAL: (MODULE_FBC,),
-    GROUP_THERMAL: (MODULE_THERMAL_COST,),
+    GROUP_THERMAL: (),
 }
 
 # Values are the subdivision codes used by the holidays library and saved entries.

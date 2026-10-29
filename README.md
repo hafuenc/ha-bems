@@ -8,7 +8,7 @@
 > without notice.
 
 Modular planning for flexible devices and energy storage. Version **0.6.0**
-adds reusable thermal runtime-cost forecasts for DHW, UFH and other tasks,
+adds reusable, independently configurable thermal runtime-cost forecasts,
 alongside forecast-based battery charging and shared forecast imports.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
 them to your equipment.** Direct device control is outside the scope of every
@@ -19,7 +19,8 @@ separate PV AC/DC choices, import/export prices and outdoor air temperature.
 FBC users choose their PV source. Four category cards group the individual
 forecasts, helpers and storage modules as native subentries. Existing standalone
 entries migrate at startup. Thermal operating costs are implemented; thermal
-demand, storage duration and MILP scheduling remain separate planned parts.
+operation planning remains open for a future generic planner. Runtime-cost
+forecasts are created under BEMS entity creator.
 [Grouped setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
 
@@ -61,10 +62,11 @@ HA-BEMS
 ├── BEMS entity creator
 │   ├── Battery seasonal SOC min threshold
 │   │   └── Editable monthly schedule
-│   └── Non-flexible load profile
-│       ├── H0
-│       ├── H25
-│       └── Constant throughout the year
+│   ├── Non-flexible load profile
+│   │   ├── H0
+│   │   ├── H25
+│   │   └── Constant throughout the year
+│   └── Thermal runtime cost (repeatable, user-defined names)
 ├── BEMS forecast importer
 │   ├── PV AC generation forecast
 │   ├── PV DC generation forecast
@@ -75,8 +77,7 @@ HA-BEMS
 ├── Electrical storage management
 │   └── Forecast-based battery charging (FBC)
 └── Thermal storage management
-    ├── DHW runtime cost (user-defined name)
-    └── UFH runtime cost (user-defined name)
+    └── Future generic operation planner (details open)
 ```
 
 Create a seasonal threshold first, or select an existing percentage entity in
@@ -85,8 +86,8 @@ to consider expected building consumption, or leave load empty for PV-only behav
 Each helper/module is a named subentry inside its category and can be edited
 individually using **Configure**. Multiple instances are supported, for example
 two batteries inside Electrical storage management with separate settings.
-Thermal storage management supports multiple runtime-cost setups with independent
-COP, thermal power, auxiliary consumption and forecast selections.
+BEMS entity creator supports multiple runtime-cost setups using the same procedure,
+with independent COP, thermal power, auxiliary consumption and forecast selections.
 Older entries migrate into these groups while retaining entity IDs and selections.
 
 ### BEMS entity creator
@@ -234,22 +235,11 @@ must not independently issue competing setpoints.
 
 ### Heat pump / thermal storage energy management
 
-Plan a simple local feed-forward MILP using freely available solvers. A few
-explicitly tunable building/heat-pump parameters determine energy demand and
-storage flexibility. The first approach uses no indoor-temperature feedback,
-historical model training or automatic parameter identification.
-
-- **Domestic hot water:** largely temperature-independent daily demand.
-- **Building heating:** outdoor-temperature-driven energy demand.
-- Shift operation in time within configured thermal bounds, taking PV
-  availability, electricity import prices, a simple COP approximation and
-  equipment operating constraints into account.
-
-Where DHW and underfloor heating share a heat pump, run **DHW first**, reserve its
-operating windows, then optimise **building heating** with those windows blocked.
-These scheduling modules remain planned. The Thermal storage management card
-currently provides independent [runtime-cost forecasts](docs/thermal_runtime_cost.md)
-as inputs for a future MILP engine.
+A future generic thermal operation planner may use the reusable
+[runtime-cost forecasts](docs/thermal_runtime_cost.md) created under BEMS entity
+creator. There are no separate DHW and UFH procedures. Demand, thermal storage,
+shared-equipment constraints and solver configuration belong to the future
+planner's design; its detailed setup remains open.
 
 ### Electric vehicle
 
@@ -258,18 +248,16 @@ charging is sufficient for the present scope. No EV controller is implemented.
 
 ### Hierarchy and shared planning core
 
-The intended final planning order is:
+The current separation of responsibilities is:
 
 ```text
 Shared actual values, forecasts, prices and helper entities
     ↓
-Domestic hot water optimisation
-    ↓  reserves heat-pump operating windows and predicts electrical load
-Building-heating optimisation
-    ↓  respects DHW windows and predicts additional electrical load
-Battery MILP
-    ↓  sees non-flexible demand + scheduled thermal electrical demand
-One coordinated set of device recommendations
+BEMS entity creator: reusable runtime-cost forecasts
+    ↓
+Future generic thermal operation planner (design open)
+    ↓
+Operating recommendations applied by user automations
 ```
 
 Use a common interval contract: timezone-aware start/end timestamps, explicit
@@ -277,8 +265,8 @@ units and interval-average powers (with interval energy where useful). Share
 sources across modules, track input freshness and carry forward committed
 operating windows and predicted loads. Every plan must state which input
 snapshot and upstream plans it used. A failed or stale upstream plan must not
-silently be interpreted as zero demand. Sequential optimisation is the intended
-hierarchy; it is not a claim of a globally joint optimum.
+silently be interpreted as zero demand. Coordination with electrical storage
+remains a future design task.
 
 Keep calculations independent from the HA UI and source adapters. Coordinate
 plans and battery energy budgets inside HA-BEMS; a user-defined automation is
