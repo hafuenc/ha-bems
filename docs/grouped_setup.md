@@ -32,7 +32,7 @@ DHW/UFH setup modes or extra planner layers are introduced.
 
 1. Add HA-BEMS once. It creates the installation and both service devices.
 2. Open **HA-BEMS → Configure** on its integration entry.
-3. Choose **Add forecast import**, **Create helper entity** or **Add operation
+3. Choose **BEMS forecast importer**, **BEMS entity creator** or **Add operation
    planner**, then select the item type, name it and complete setup/validation.
 4. Choose **Configure an item** to select an existing item, rename or
    enable/disable it, and edit its settings. Disabling saves immediately even

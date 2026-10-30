@@ -15,24 +15,23 @@ def number(value, label, *, positive=False, nonnegative=False):
 
 
 def cop_points(points):
-    """Accept two to ten unique, freely ordered temperature/COP anchors."""
+    """Accept two to ten unique, freely ordered temperature/COP reference points."""
     if not isinstance(points, list) or not 2 <= len(points) <= 10:
         raise ValueError("Define between 2 and 10 temperature/COP points")
     values = []
     for point in points:
         if not isinstance(point, dict):
             raise ValueError("Each COP point requires temperature_c and cop")
-        values.append((number(point.get("temperature_c"), "Anchor temperature"),
-                       number(point.get("cop"), "Anchor COP", positive=True)))
+        values.append((number(point.get("temperature_c"), "Reference temperature"),
+                       number(point.get("cop"), "Reference COP", positive=True)))
     values.sort()
     if len({temperature for temperature, _cop in values}) != len(values):
-        raise ValueError("COP anchor temperatures must be unique")
+        raise ValueError("COP reference temperatures must be unique")
     return values
 
 
 def validate_settings(config):
     number(config.get("thermal_power_kw"), "Thermal power", positive=True)
-    number(config.get("auxiliary_power_w", 0), "Auxiliary electrical power", nonnegative=True)
     model = config.get("cop_model")
     if model == "constant":
         number(config.get("constant_cop"), "Constant COP", positive=True)
@@ -107,8 +106,7 @@ def calculate_cost_forecast(config, now, pv, import_prices, export_prices,
                     reasons.add("Interpolated/extrapolated COP is non-positive or non-finite")
         else:
             cop = config["constant_cop"]
-        heat_pump_w = config["thermal_power_kw"] * 1000 / cop
-        power = heat_pump_w + config.get("auxiliary_power_w", 0)
+        power = config["thermal_power_kw"] * 1000 / cop
         surplus = max(0, row["power_w"] - loads[index])
         pv_power = min(power, surplus)
         curtailed = min(power, max(0, surplus - config["feed_in_limit_w"])) if config.get("feed_in_limit_enabled") else 0
@@ -126,7 +124,6 @@ def calculate_cost_forecast(config, now, pv, import_prices, export_prices,
     return {"value": records[0]["cost_eur_per_timestep"], "forecast": records,
             "cop_model": config["cop_model"], "current_cop": records[0]["cop"],
             "thermal_power_kw": config["thermal_power_kw"],
-            "auxiliary_power_w": config.get("auxiliary_power_w", 0),
             "current_electrical_power_w": records[0]["electrical_power_w"],
             "cop_fallback_active": any(row["cop_fallback"] for row in records),
             "cop_fallback_intervals": sum(row["cop_fallback"] for row in records),

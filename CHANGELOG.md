@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.0
+
+- Enter outdoor-temperature/COP lookup tables in one multiline text field,
+  prefilled to the selected 2–10 reference point count. Accept decimal dots or
+  commas with semicolon-separated pairs. Default to four reference points:
+  -7/2.32, 2/3.12, 7/4.11 and 12/4.61. Preserve saved values when editing and
+  validate row count, unique temperatures and positive finite COPs.
+- Simplify thermal runtime costs to nominal thermal output divided by COP;
+  remove additional electrical power from setup and calculation. Older saved
+  values are ignored and dropped on save. Clarify nominal heat-pump output,
+  constant COP examples and the outdoor temperature dependent COP lookup table
+  with 2–10 reference points.
+- Open a forecast-source overview from the importer device's Visit link. Show
+  each source's live value, BEMS validation status and coverage, with links to
+  HA entity details. Include disabled inputs and validation errors.
+- Add source entity navigation URLs to imported-input status attributes.
+  Forecast sources retain their original integration and device ownership.
+- Use BEMS forecast importer and BEMS entity creator consistently in Configure,
+  clarify feed-in limitation at the grid connection point, and remove
+  development references from user-facing descriptions and guides.
+
 ## 0.7.0
 
 - Flatten HA-BEMS into one configuration entry with shared BEMS forecast importer

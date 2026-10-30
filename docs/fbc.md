@@ -110,15 +110,15 @@ seasonal threshold, PV or load input. Switching back on validates inputs again.
    energy and forecast energy above that threshold.
 3. Charging power per interval is `max(0, curve power - threshold)`, rounded to 0.1 W.
 4. At **SOC <= seasonal minimum**, replace the full profile with maximum
-   charging power. This intentionally changes the MATLAB strict `<` comparison.
+   charging power.
    The HA adapter can issue this plan without a valid PV forecast. An invalid SOC
    or threshold still makes the plan unavailable.
-5. Preserve the MATLAB first-value override: compare first charging power and
+5. Apply the first-value override: compare first charging power and
    first input-curve power rounded to whole W; if equal, allow maximum power throughout.
    With load selected, this refers to surplus rather than gross PV. The inherited
    rule also applies when the first curve value is zero, even if later PV exists.
-6. Clamp the current first value to the configured maximum charging power. As in the MATLAB
-   fragment, the non-override future profile is not individually capped.
+6. Clamp the current first value to the configured maximum charging power.
+   The non-override future profile is not individually capped.
 
 No future battery SOC trajectory, dynamic prices or physical
 charging-power clipping is included in the threshold energy matching. Target SOC

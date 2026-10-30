@@ -12,6 +12,9 @@ async def async_setup(hass, config):
     from .migration import async_flatten_entries
 
     await async_flatten_entries(hass)
+    from .frontend import async_setup_frontend
+
+    await async_setup_frontend(hass)
     return True
 
 

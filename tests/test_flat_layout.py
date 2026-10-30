@@ -236,7 +236,7 @@ class FlatOptionsTests(unittest.IsolatedAsyncioTestCase):
         for name, cop in [('System A', 2), ('System B', 4)]:
             flow = self.flow()
             await flow.async_step_add_helper()
-            await flow.async_step_thermal_cost({'name': name, 'thermal_power_kw': 7, 'auxiliary_power_w': 0, 'cop_model': 'constant'})
+            await flow.async_step_thermal_cost({'name': name, 'thermal_power_kw': 7, 'cop_model': 'constant'})
             await flow.async_step_thermal_cop_constant({'constant_cop': cop})
             result = await flow.async_step_thermal_cost_inputs({
                 'pv_import_entry_id': identifiers['PV'], 'import_price_entry_id': identifiers['Import'],

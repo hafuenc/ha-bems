@@ -1,6 +1,6 @@
 # Thermal runtime cost forecasts
 
-Under **HA-BEMS → Configure → Create helper entity → Thermal runtime cost (EUR/timestep)**,
+Under **HA-BEMS → Configure → BEMS entity creator → Thermal runtime cost (EUR/timestep)**,
 create an independent named system. Repeat the same setup procedure for any
 number of systems. There are no separate DHW/UFH modes. Each item has its own
 parameters, input selections, Configure action, enabled setting and Runtime cost
@@ -18,7 +18,7 @@ single HA-BEMS Configure menu. No new operating strategy is created by migration
 
 ## Setup
 
-First register the needed forecasts under **HA-BEMS → Configure → Add forecast import**:
+First register the needed forecasts under **HA-BEMS → Configure → BEMS forecast importer**:
 
 - **PV AC** generation. Thermal electrical demand and building load use an AC
   basis. DC registrations remain selectable in FBC, but not in thermal costs.
@@ -36,17 +36,26 @@ registrations rather than copying provider-specific attributes.
 
 Each runtime-cost setup asks for:
 
-1. A system name, constant nominal **thermal output in kW**, and optional
-   **additional electrical power in W** running with that task. Sum circulation
-   pumps and similar concurrent consumers here. Include only consumption not
-   already represented in the COP. Independently switched devices need separate
-   cost setups; they are not assumed to run together.
-2. A **constant positive COP**, or **2–10 temperature/COP anchor points**. Anchor
-   temperatures must be unique and COPs positive; points are sorted automatically.
-   The lookup model linearly interpolates between points and extrapolates using
-   the nearest end segment, matching `fcn_cop_lookup`. No supply temperature is
-   modelled. A lookup also requires a temperature registration and a positive
-   fallback COP.
+1. A system name and constant nominal **thermal output in kW**, e.g. the nominal
+   thermal output of the heat pump or rated output of an electric heating element.
+   Electrical demand is thermal output divided by COP, focusing on compressor
+   consumption for heat pumps.
+2. A **constant positive COP**, e.g. for a ground source heat pump or direct
+   electric heating elements with COP = 1, or an **outdoor temperature dependent
+   COP**, e.g. for an air source heat pump. Define **2–10 reference points in a
+   lookup table**, using your heat pump specifications. The default count is four,
+   prefilled with −7 °C / COP 2.32, 2 °C / COP 3.12, 7 °C / COP 4.11 and
+   12 °C / COP 4.61. Keep the desired reference count in the preceding step;
+   the text field contains exactly that many rows. Enter one `outdoor temperature;COP`
+   pair per line, using decimal dots or commas. The submitted row count must
+   match the selected count. Saved reference values are reused when editing;
+   reducing the count keeps a subset including both endpoints, and increasing
+   it adds linearly interpolated points within the existing temperature range.
+   Reference temperatures must be unique and COPs positive; points are sorted
+   automatically. The lookup model linearly interpolates between reference points
+   and extrapolates using the nearest end segment.
+   No supply temperature is modelled. A lookup also requires an outdoor temperature
+   registration and a positive fallback COP.
 3. Electricity/PV/load registrations and an optional export power limit. With the
    limit enabled, PV above the limit is costed at the configured curtailed-PV
    price, normally zero. A limit of zero means no export. With the option off,
@@ -54,13 +63,16 @@ Each runtime-cost setup asks for:
 4. A calculated preview showing current cost, range, coverage and COP fallback
    use. Sources are revalidated before saving.
 
+Older saved additional electrical power settings are ignored and removed when
+the setup is saved again. Only thermal output divided by COP determines electrical
+demand.
+
 ## Calculation
 
 For each complete 15-minute timestep:
 
 ```text
-heat_pump_w = thermal_power_kw × 1000 / COP
-running_w = heat_pump_w + auxiliary_power_w
+running_w = thermal_power_kw × 1000 / COP
 surplus_w = max(PV_AC_w - non_flexible_load_w, 0)
 grid_w = max(running_w - surplus_w, 0)
 curtailed_w = min(running_w, max(surplus_w - export_limit_w, 0))
@@ -74,8 +86,7 @@ cost_eur_per_timestep = 0.25 / 1000 × (
 )
 ```
 
-Without auxiliary power this is algebraically equivalent to the MATLAB
-`share_*_net`, `share_*_pvs`, `share_*_lim` calculation. PV consumption is valued
+PV consumption is valued
 at lost export revenue, not added on top of the import tariff. Negative prices
 and negative operating costs are retained. No taxes, markups, battery losses or
 unconfigured additional costs are added inside BEMS.

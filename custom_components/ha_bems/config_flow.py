@@ -27,7 +27,8 @@ from .forecast_input import async_read_forecast
 from .forecast_types import forecast_type, pv_input_label
 from .forecast import daily_forecast, surplus_forecast
 from .import_registry import input_entries, load_inputs, pv_imports, read_load_input, read_pv_import
-from .thermal_cost import cop_points, validate_settings
+from .thermal_cost import validate_settings
+from .cop_table import default_table_text, parse_table_text
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -82,6 +83,8 @@ class _ModuleSteps:
                         "forecast_entity"):
                 values.pop(key, None)
         if module == MODULE_THERMAL_COST:
+            values.pop("auxiliary_power_w", None)
+            values.pop("cop_table_text", None)
             for index in range(1, 11):
                 values.pop(f"temperature_{index}", None)
                 values.pop(f"cop_{index}", None)
@@ -454,7 +457,6 @@ class _ModuleSteps:
             from .thermal_cost import number
             try:
                 number(user_input["thermal_power_kw"], "Thermal power", positive=True)
-                number(user_input["auxiliary_power_w"], "Auxiliary power", nonnegative=True)
                 if user_input["cop_model"] not in ("constant", "lookup"):
                     raise ValueError("Choose a COP model")
             except (ValueError, KeyError):
@@ -466,10 +468,9 @@ class _ModuleSteps:
         fields = self._name_fields("Thermal system")
         fields.update({
             vol.Required("thermal_power_kw", default=values.get("thermal_power_kw", 7)): _number(0.001, 10000, "kW", "any"),
-            vol.Required("auxiliary_power_w", default=values.get("auxiliary_power_w", 0)): _number(0, 1000000, "W", "any"),
             vol.Required("cop_model", default=values.get("cop_model", "constant")): _choice([
                 {"value": "constant", "label": "Constant COP"},
-                {"value": "lookup", "label": "Temperature/COP anchor points"}]),
+                {"value": "lookup", "label": "Outdoor temperature dependent COP"}]),
         })
         return self.async_show_form(step_id="thermal_cost", errors=errors, data_schema=vol.Schema(fields))
 
@@ -502,12 +503,13 @@ class _ModuleSteps:
             except ValueError:
                 errors["base"] = "invalid_thermal_settings"
             else:
+                self._draft.pop("cop_table_text", None)
                 return await self.async_step_thermal_cop_points()
         values = self._values()
         choices = self._thermal_choices(MODULE_OUTDOOR_TEMP, CONF_TEMPERATURE)
         return self.async_show_form(step_id="thermal_cop_table", errors=errors, data_schema=vol.Schema({
             self._thermal_field(CONF_TEMPERATURE): _choice(choices),
-            vol.Required("cop_point_count", default=values.get("cop_point_count", len(values.get("cop_points", [])) or 2)): _number(2, 10),
+            vol.Required("cop_point_count", default=values.get("cop_point_count", len(values.get("cop_points", [])) or 4)): _number(2, 10),
             vol.Required("fallback_cop", default=values.get("fallback_cop", 3)): _number(0.01, 100, step="any"),
         }))
 
@@ -517,26 +519,19 @@ class _ModuleSteps:
         if user_input is not None:
             self._remember(user_input)
             try:
-                points = [{"temperature_c": user_input[f"temperature_{i}"], "cop": user_input[f"cop_{i}"]}
-                          for i in range(1, count + 1)]
-                sorted_points = cop_points(points)
+                points = parse_table_text(user_input["cop_table_text"], count)
             except (ValueError, KeyError):
                 errors["base"] = "invalid_cop_points"
             else:
-                self._remember({"cop_points": [{"temperature_c": t, "cop": cop} for t, cop in sorted_points]})
+                self._remember({"cop_points": points})
                 return await self.async_step_thermal_cost_inputs()
-        values, fields = self._values(), {}
-        saved = values.get("cop_points", [])
-        for i in range(1, count + 1):
-            point = saved[i - 1] if i <= len(saved) else {}
-            for key, item, minimum, maximum, unit in (
-                (f"temperature_{i}", "temperature_c", -100, 100, "°C"),
-                (f"cop_{i}", "cop", 0.01, 100, None),
-            ):
-                field = vol.Required(key, default=values.get(key, point[item])) if item in point else (
-                    vol.Required(key, default=values[key]) if key in values else vol.Required(key))
-                fields[field] = _number(minimum, maximum, unit, "any")
-        return self.async_show_form(step_id="thermal_cop_points", errors=errors, data_schema=vol.Schema(fields))
+        values = self._values()
+        text = values.get("cop_table_text")
+        if text is None:
+            text = default_table_text(count, values.get("cop_points"))
+        return self.async_show_form(step_id="thermal_cop_points", errors=errors, data_schema=vol.Schema({
+            vol.Required("cop_table_text", default=text): selector.TextSelector({"multiline": True}),
+        }))
 
     def _thermal_field(self, key):
         value = self._values().get(key)

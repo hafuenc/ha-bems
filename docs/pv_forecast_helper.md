@@ -128,7 +128,7 @@ still recommend maximum charging without a PV forecast. Initial setup always
 requires the forecast test to pass, even when that safeguard is active.
 
 **FBC still calculates only the remaining local day's charging plan.**
-Requiring a reusable 72-hour input does not change its MATLAB-derived horizon.
+The shared input covers 72 hours; FBC uses the portion through local midnight.
 
 ## Existing HA-BEMS entries
 
