@@ -1,6 +1,6 @@
 # Thermal storage management — MILP
 
-Open **HA-BEMS → Configure → Add operation planner → Thermal storage management
+Open **HA-BEMS → Add entry → Add operation planner → Thermal storage management
 (MILP)**. Repeat the same procedure for DHW, UFH or any other named thermal system.
 Each planner has its own device and settings. It publishes recommendations only;
 your automations apply them to the equipment.
@@ -17,18 +17,19 @@ your automations apply them to the equipment.
      Values interpolate/extrapolate linearly and are clamped to the chosen
      minimum and maximum runtime. The optional heating cutoff defaults to
      20 °C; strictly above it, demand is zero even if the minimum is positive.
-3. Define minimum and maximum **storage duration**, in hours. The maximum
-   defaults to 6.4 h and minimum to 0 h. Duration expresses capacity in equivalent
+3. Define **storage duration**, in hours, defaulting to 6.4 h. The lower storage
+   bound is always 0 h. Duration expresses capacity in equivalent
    full-output operating hours, not literal time until the tank or building is
    full. Ongoing thermal demand changes the actual filling/emptying time.
 4. Optionally enter the initial storage level in hours. Leaving it empty starts
-   halfway between the minimum and maximum. The model starts with operation off
+   at 50% of the storage duration. The model starts with operation off
    and its initial minimum off-time already satisfied. Future on/off history is
    taken exclusively from the planner's own recommendations.
 5. Set minimum on/off times in hours. Values round upward to complete 15-minute
    steps; the effective times are published in the output attributes.
-6. Optionally select an operation-constraint import. Zero **blocks** operation;
-   one **permits** it without forcing it. The default solver limit is 20 seconds.
+6. Optionally select an imported constraint forecast or an existing MILP operation
+   plan. Choose **Direct** (1 permits, 0 blocks) or **Inverted** (1 blocks, 0 permits).
+   Permission never forces operation. The default solver limit is 20 seconds.
 7. Check the feasible-plan preview and save.
 
 **24 h/24h means continuous operation; 12 h/24h means running half the time on
@@ -76,21 +77,30 @@ invent missing operating history or silently reset to 50%.
 ## DHW → UFH hierarchy
 
 1. Create the DHW planner and let it produce a valid operation plan.
-2. Open **BEMS forecast importer → Operation constraint forecast**.
-3. Select the DHW **operation-plan binary sensor**.
-4. Choose **1 = another system running — invert to block this planner**.
-5. In the UFH planner, select this imported operation constraint.
+2. Create the UFH planner. In its storage/constraints step, select the DHW
+   **MILP operation plan** directly in the constraint dropdown.
+3. Choose **Inverted: 1 blocks operation, 0 allows operation**.
 
-| DHW forecast operation | Imported UFH permission | UFH decision |
+No intermediate forecast import is required. The dropdown also lists external
+constraint forecasts registered under **BEMS forecast importer**. Interpretation
+belongs to each consuming planner, so different planners can use the same source
+directly or inverted independently.
+
+| DHW forecast operation | Inverted UFH permission | UFH decision |
 |---:|---:|---|
 | 1 | 0 | Forced off |
 | 0 | 1 | Optimizer chooses on or off |
 
-For a source that already describes availability, choose **1 = operation allowed
-— use directly**. Both interpretations consume records with numeric `operation`
+For an external source that already describes availability, register it as an
+operation constraint forecast and select **Direct** in the consuming MILP.
+The importer always preserves the source values: **1 = allowed, 0 = blocked**.
+Both source types consume records with numeric `operation`
 values of exactly 0 or 1; boolean or fractional values are rejected. A native
 binary sensor's current `on`/`off` state is accepted because numeric values come
 from its forecast attributes.
+
+Existing planner/import configurations retain their effective permissions on
+upgrade: the former importer interpretation moves into each planner's settings.
 
 The downstream planner refreshes its upstream BEMS planner first and consumes
 the resulting validated permissions. Circular dependencies are rejected.
@@ -129,7 +139,7 @@ time and optimality gap; their forecast lists remain live attributes and are
 excluded from recorder to keep history compact.
 
 **Storage level** publishes the same estimated storage as a percentage: 0% at
-the configured minimum duration, 100% at the maximum. Its forecast follows the
+0 h, 100% at the configured storage duration. Its forecast follows the
 standard format, with `storage_level_percent` at `effective_start` and
 `storage_level_end_percent` at the interval end. This is a feed-forward estimate,
 not a measured tank or building state.

@@ -30,16 +30,16 @@
       },
       "thermal_storage": {
         "title": "Storage duration & operation constraints",
-        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. Leave the initial value empty to start halfway between the minimum and maximum storage levels. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an optional imported operation constraint for a one-way hierarchy. {reason}",
+        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. The lower storage bound is always 0 h. Leave the initial value empty to start at 50% of the storage duration. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an imported constraint forecast or an existing MILP operation plan. Direct: 1 allows operation, 0 blocks it. Inverted: 1 blocks operation, 0 allows it. For DHW to UFH, select the DHW operation plan and invert it. With no constraint selected, interpretation is ignored. {reason}",
         "data": {
-          "storage_duration_h": "Maximum storage duration",
-          "storage_min_h": "Minimum storage duration",
+          "storage_duration_h": "Storage duration",
           "initial_storage_h": "Initial storage duration (optional)",
           "min_on_h": "Minimum on-time",
           "min_off_h": "Minimum off-time",
-          "constraint_entry_id": "Operation constraint forecast",
           "solver_time_limit_s": "Maximum solver time",
-          "restart_storage_model": "Restart feed-forward model from the initial storage value"
+          "restart_storage_model": "Restart feed-forward model from the initial storage value",
+          "constraint_source": "Constraint forecast or MILP operation plan",
+          "constraint_mode": "Constraint interpretation"
         }
       },
       "soc": {
@@ -263,11 +263,10 @@
       },
       "import_operation": {
         "title": "Operation constraint forecast",
-        "description": "Select a 72-hour operation forecast. For a DHW → UFH hierarchy, select the DHW operation-plan entity and choose “1 = another system running”. The importer inverts its values: DHW on (1) blocks UFH (permission 0); DHW off (0) allows UFH (permission 1). Alternatively use 1 = operation allowed directly. Permission 1 permits operation; it does not force it. Forecast records require start, end and operation: 0 or 1. {reason}",
+        "description": "Select a prepared external 72-hour constraint forecast. Each record uses start, end and operation: 1 = allowed to operate; 0 = blocked. The importer preserves these values. Direct or inverted interpretation is selected in each consuming MILP setup. Existing BEMS MILP operation plans can be selected there directly, without another forecast import. {reason}",
         "data": {
           "name": "Input name",
-          "forecast_entity": "Operation forecast entity",
-          "operation_meaning": "Meaning of forecast value 1"
+          "forecast_entity": "Operation forecast entity"
         }
       },
       "thermal_plan": {
@@ -612,11 +611,10 @@
       },
       "import_operation": {
         "title": "Operation constraint forecast",
-        "description": "Select a 72-hour operation forecast. For a DHW → UFH hierarchy, select the DHW operation-plan entity and choose “1 = another system running”. The importer inverts its values: DHW on (1) blocks UFH (permission 0); DHW off (0) allows UFH (permission 1). Alternatively use 1 = operation allowed directly. Permission 1 permits operation; it does not force it. Forecast records require start, end and operation: 0 or 1. {reason}",
+        "description": "Select a prepared external 72-hour constraint forecast. Each record uses start, end and operation: 1 = allowed to operate; 0 = blocked. The importer preserves these values. Direct or inverted interpretation is selected in each consuming MILP setup. Existing BEMS MILP operation plans can be selected there directly, without another forecast import. {reason}",
         "data": {
           "name": "Input name",
-          "forecast_entity": "Operation forecast entity",
-          "operation_meaning": "Meaning of forecast value 1"
+          "forecast_entity": "Operation forecast entity"
         }
       },
       "thermal_plan": {
@@ -656,16 +654,16 @@
       },
       "thermal_storage": {
         "title": "Storage duration & operation constraints",
-        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. Leave the initial value empty to start halfway between the minimum and maximum storage levels. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an optional imported operation constraint for a one-way hierarchy. {reason}",
+        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. The lower storage bound is always 0 h. Leave the initial value empty to start at 50% of the storage duration. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an imported constraint forecast or an existing MILP operation plan. Direct: 1 allows operation, 0 blocks it. Inverted: 1 blocks operation, 0 allows it. For DHW to UFH, select the DHW operation plan and invert it. With no constraint selected, interpretation is ignored. {reason}",
         "data": {
-          "storage_duration_h": "Maximum storage duration",
-          "storage_min_h": "Minimum storage duration",
+          "storage_duration_h": "Storage duration",
           "initial_storage_h": "Initial storage duration (optional)",
           "min_on_h": "Minimum on-time",
           "min_off_h": "Minimum off-time",
-          "constraint_entry_id": "Operation constraint forecast",
           "solver_time_limit_s": "Maximum solver time",
-          "restart_storage_model": "Restart feed-forward model from the initial storage value"
+          "restart_storage_model": "Restart feed-forward model from the initial storage value",
+          "constraint_source": "Constraint forecast or MILP operation plan",
+          "constraint_mode": "Constraint interpretation"
         }
       },
       "thermal_plan_preview": {
@@ -923,11 +921,10 @@
         },
         "import_operation": {
           "title": "Operation constraint forecast",
-          "description": "Select a 72-hour operation forecast. For a DHW → UFH hierarchy, select the DHW operation-plan entity and choose “1 = another system running”. The importer inverts its values: DHW on (1) blocks UFH (permission 0); DHW off (0) allows UFH (permission 1). Alternatively use 1 = operation allowed directly. Permission 1 permits operation; it does not force it. Forecast records require start, end and operation: 0 or 1. {reason}",
+          "description": "Select a prepared external 72-hour constraint forecast. Each record uses start, end and operation: 1 = allowed to operate; 0 = blocked. The importer preserves these values. Direct or inverted interpretation is selected in each consuming MILP setup. Existing BEMS MILP operation plans can be selected there directly, without another forecast import. {reason}",
           "data": {
             "name": "Input name",
-            "forecast_entity": "Operation forecast entity",
-            "operation_meaning": "Meaning of forecast value 1"
+            "forecast_entity": "Operation forecast entity"
           }
         }
       },
@@ -1071,16 +1068,16 @@
         },
         "thermal_storage": {
           "title": "Storage duration & operation constraints",
-          "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. Leave the initial value empty to start halfway between the minimum and maximum storage levels. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an optional imported operation constraint for a one-way hierarchy. {reason}",
+          "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. The lower storage bound is always 0 h. Leave the initial value empty to start at 50% of the storage duration. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an imported constraint forecast or an existing MILP operation plan. Direct: 1 allows operation, 0 blocks it. Inverted: 1 blocks operation, 0 allows it. For DHW to UFH, select the DHW operation plan and invert it. With no constraint selected, interpretation is ignored. {reason}",
           "data": {
-            "storage_duration_h": "Maximum storage duration",
-            "storage_min_h": "Minimum storage duration",
+            "storage_duration_h": "Storage duration",
             "initial_storage_h": "Initial storage duration (optional)",
             "min_on_h": "Minimum on-time",
             "min_off_h": "Minimum off-time",
-            "constraint_entry_id": "Operation constraint forecast",
             "solver_time_limit_s": "Maximum solver time",
-            "restart_storage_model": "Restart feed-forward model from the initial storage value"
+            "restart_storage_model": "Restart feed-forward model from the initial storage value",
+            "constraint_source": "Constraint forecast or MILP operation plan",
+            "constraint_mode": "Constraint interpretation"
           }
         },
         "thermal_plan_preview": {

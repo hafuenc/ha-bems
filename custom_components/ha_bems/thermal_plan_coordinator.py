@@ -9,11 +9,11 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, MODULE_OPERATION_IMPORT, MODULE_OUTDOOR_TEMP
+from .const import DOMAIN, MODULE_OUTDOOR_TEMP
 from .forecast import parse_timestamp
 from .forecast_input import _async_read_forecast
 from .import_registry import coordinators, planners, read_forecast_import
-from .operation_constraints import constraint_dependency, validate_hierarchy
+from .operation_constraints import constraint_dependency, constraint_selection, read_constraint_forecast, validate_hierarchy
 from .thermal_milp import InfeasiblePlanError, required_runtimes, solve_plan, validate_plan_settings
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def model_key(config):
     keys = ("storage_duration_h", "storage_min_h", "storage_model_revision", "initial_storage_h",
             "runtime_model", "runtime_h_per_24h", "runtime_points", "runtime_min_h", "runtime_max_h",
             "runtime_temperature_entry_id", "heating_cutoff_enabled", "heating_cutoff_c")
-    return json.dumps({key: config.get(key) for key in keys}, sort_keys=True)
+    return json.dumps({key: 0 if key == "storage_min_h" else config.get(key) for key in keys}, sort_keys=True)
 
 
 def aligned_values(reference, other, key):
@@ -76,8 +76,7 @@ async def read_plan_inputs(hass, config, now):
         other, _ = read_forecast_import(hass, config.get("runtime_temperature_entry_id"), MODULE_OUTDOOR_TEMP, now)
         temperatures = aligned_values(rows, other, "temperature_c")
     allowed = [1] * len(rows)
-    if reference := config.get("constraint_entry_id"):
-        other, _ = read_forecast_import(hass, reference, MODULE_OPERATION_IMPORT, now)
+    if (other := read_constraint_forecast(hass, config, now)) is not None:
         allowed = aligned_values(rows, other, "allowed")
     return rows, required_runtimes(config, temperatures, len(rows)), allowed, info
 
@@ -87,6 +86,7 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name=entry.title, config_entry=parent or entry,
                          update_interval=None)
         self.config = {**entry.data, **entry.options}
+        self.config.pop("storage_min_h", None)
         self.identifier = entry.entry_id
         self._store = Store(hass, 1, f"{DOMAIN}.thermal_plan.{self.identifier}")
         self._loaded = False
@@ -156,7 +156,9 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             await coordinator.async_request_refresh()
             if not coordinator.last_update_success:
                 raise ValueError("The upstream thermal planner has no valid plan")
-        if reference := self.config.get("constraint_entry_id"):
+        source, mode = constraint_selection(self.hass, self.config)
+        if source and source.startswith("imported:"):
+            reference = source.split(":", 1)[1]
             coordinator = coordinators(self.hass).get(reference)
             if coordinator is None:
                 raise ValueError("The selected operation constraint import is not loaded")
@@ -174,7 +176,7 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             if saved and saved.get("model_key") == self._model_key:
                 self._plan = saved["plan"]
             self._loaded = True
-        low, high = self.config.get("storage_min_h", 0), self.config["storage_duration_h"]
+        low, high = 0, self.config["storage_duration_h"]
         if self._plan:
             level, previous, elapsed, fixed = projected_state(self._plan, planning_at)
             if not low - 1e-7 <= level <= high + 1e-7:
@@ -206,7 +208,7 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             "state_basis": "feed_forward_assuming_plan_is_followed", "feedback_used": False,
             "initial_previous_operation": previous, "initial_previous_elapsed_h": elapsed,
             "terminal_storage_min_h": terminal, "storage_min_h": low, "storage_max_h": high,
-            "cost_entity": self.config["cost_entity"], "constraint_entry_id": self.config.get("constraint_entry_id"),
+            "cost_entity": self.config["cost_entity"], "constraint_source": source, "constraint_mode": mode,
             "runtime_model": self.config["runtime_model"], "input_source_updated_at": info["source_updated_at"],
             **{key: value for key, value in result.items() if key not in ("storage", "operations")}}
         await self._store.async_save({"model_key": self._model_key, "plan": plan})

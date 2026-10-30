@@ -53,6 +53,14 @@ class ThermalMILPTests(unittest.TestCase):
         with self.assertRaisesRegex(InfeasiblePlanError, 'No feasible'):
             solve_plan([.2]*8, [24]*8, [.25]*8, 0, CONFIG, allowed=[0]*8, terminal_min=0)
 
+    def test_retired_minimum_storage_setting_cannot_raise_the_zero_lower_bound(self):
+        from custom_components.ha_bems.thermal_milp import validate_plan_settings
+        config={**CONFIG,'storage_min_h':.75,'initial_storage_h':0}
+        validate_plan_settings(config)
+        result=solve_plan([.2]*8,[0]*8,[.25]*8,0,config,terminal_min=0)
+        self.assertEqual(result['operations'],[0]*8)
+        self.assertEqual(result['storage'],[0]*9)
+
     def test_time_limit_accepts_only_verified_feasible_binary_results(self):
         import numpy as np
         config={**CONFIG,'min_on_h':0,'min_off_h':0}

@@ -80,10 +80,12 @@ The [thermal operation planner](thermal_operation_planner.md) uses these inputs:
 | --- | --- | --- |
 | Runtime costs in EUR/timestep | Existing BEMS runtime-cost entity or compatible forecast entity | Required |
 | Outdoor temperature | Registered forecast | Required for the runtime lookup model |
-| Operation permissions | Registered operation-constraint forecast | Optional; zero forces operation off |
+| Operation permissions | Registered constraint forecast or existing MILP operation plan | Optional; interpreted permission zero forces operation off |
 
-Choose whether the constraint source's `operation: 1` means **running** (invert
-to block the downstream system) or **allowed** (use directly). This supports
+Imported constraint values always mean **1 = allowed, 0 = blocked**. In each
+MILP setup, choose an imported forecast or another MILP's operation plan and
+select **Direct** or **Inverted** interpretation. For DHW → UFH, select the DHW
+operation plan directly and invert it; no extra importer is required. This supports
 a sequential DHW → UFH hierarchy without equipment feedback or shared runtime
 subtraction. Invalid upstream plans invalidate downstream planning.
 

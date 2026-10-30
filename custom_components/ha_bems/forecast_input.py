@@ -62,7 +62,7 @@ async def _async_read_operation(hass, config):
         "source_age_minutes": age, "forecast_schema_version": 1,
         "input_forecast_start": rows[0]["start"], "input_forecast_end": rows[-1]["end"],
         "input_forecast_intervals": len(rows), "forecast_unit": "", "forecast_value_key": "allowed",
-        "operation_meaning": config.get("operation_meaning", "running"), "upstream_planner_id": identifier}
+        "constraint_semantics": "1_allowed_0_blocked", "upstream_planner_id": identifier}
 
 
 async def _async_read_forecast(hass, config, label, unit, value_key, nonnegative):

@@ -22,7 +22,9 @@ CONFIG_SCHEMA = _config_schema
 async def async_setup(hass, config):
     """Consolidate old standalone entries before any module platforms load."""
     from .migration import async_flatten_entries
+    from .constraint_migration import migrate_constraint_settings
 
+    migrate_constraint_settings(hass)
     await async_flatten_entries(hass)
     return True
 
@@ -149,8 +151,14 @@ async def _async_setup_module(hass, entry, parent):
                 hass, refresh, minute=[0, 15, 30, 45], second=0))
             entry.async_on_unload(async_track_state_change_event(
                 hass, [config["cost_entity"]], input_ready))
-            for key in ("constraint_entry_id", "runtime_temperature_entry_id"):
-                if reference := config.get(key):
+            from .operation_constraints import constraint_selection
+
+            source, _ = constraint_selection(hass, config)
+            references = [config.get("runtime_temperature_entry_id")]
+            if source:
+                references.append(source.split(":", 1)[1])
+            for reference in references:
+                if reference:
                     entry.async_on_unload(async_dispatcher_connect(
                         hass, import_signal(reference), input_ready))
 

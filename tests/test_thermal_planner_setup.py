@@ -66,8 +66,11 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('thermal_plan', (await flow.async_step_add_planner())['menu_options'])
         self.assertEqual((await flow.async_step_thermal_plan({'name':'DHW','cost_entity':'sensor.cost','runtime_model':'constant'}))['step_id'], 'runtime_constant')
         form = await flow.async_step_runtime_constant({'runtime_h_per_24h':0})
-        self.assertEqual(form['data_schema']({})['constraint_entry_id'],'none')
-        constraint_selector = form['data_schema'].schema['constraint_entry_id']
+        self.assertNotIn('storage_min_h',form['data_schema'].schema)
+        self.assertEqual(form['data_schema']({})['storage_duration_h'],6.4)
+        self.assertEqual(form['data_schema']({})['constraint_source'],'none')
+        self.assertEqual(form['data_schema']({})['constraint_mode'],'direct')
+        constraint_selector = form['data_schema'].schema['constraint_source']
         self.assertTrue(all(option['value'] for option in constraint_selector.config['options']))
         result = await flow.async_step_thermal_storage({**CONFIG,'runtime_h_per_24h':0,'constraint_entry_id':'none','initial_storage_h':None})
         self.assertEqual(result['step_id'],'thermal_plan_preview',result)
@@ -76,7 +79,10 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved['module'], MODULE_THERMAL_PLAN)
         self.assertNotIn('soc_entity', saved)
         self.assertNotIn('runtime_table_text', saved)
-        self.assertIsNone(saved['constraint_entry_id'])
+        self.assertNotIn('storage_min_h', saved)
+        self.assertIsNone(saved['constraint_source'])
+        self.assertEqual(saved['constraint_mode'],'direct')
+        self.assertNotIn('constraint_entry_id',saved)
 
     async def test_restart_preserves_feedforward_storage_and_current_operation(self):
         config = {**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'}
@@ -123,10 +129,11 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.imports(self.hass)['permissions'] = importer
         await importer.async_refresh()
         self.assertTrue(importer.last_update_success, importer.last_exception)
-        self.assertEqual(importer.data['forecast'][0]['allowed'],1)
+        self.assertEqual(importer.data['forecast'][0]['allowed'],0)  # Import never inverts.
         ufh = self.add('ufh', {**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost','constraint_entry_id':'permissions'})
         await ufh.async_refresh()
         self.assertTrue(ufh.last_update_success, ufh.last_exception)
+        self.assertEqual(ufh.data['forecast'][0]['allowed'],1)  # Legacy consumer keeps its meaning.
         # An invalid upstream cost input cannot become unrestricted permission.
         self.states['sensor.cost'].state='unavailable'
         await ufh.async_refresh()
@@ -184,10 +191,106 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_import_permission_values_are_strict_and_can_be_used_directly(self):
         source = rows(1,'operation')
-        self.assertEqual(permission_rows(source, {'operation_meaning':'running'},NOW)[0]['allowed'],0)
+        self.assertEqual(permission_rows(source, {'operation_meaning':'running'},NOW)[0]['allowed'],1)
         self.assertEqual(permission_rows(source, {'operation_meaning':'allowed'},NOW)[0]['allowed'],1)
         source[0]['operation']=.5
         with self.assertRaises(ValueError): permission_rows(source,{},NOW)
+
+    async def test_direct_milp_source_needs_no_import_and_is_solved_upstream_first(self):
+        from custom_components.ha_bems.thermal_plan_coordinator import solve_plan
+        dhw=self.add('dhw',{**CONFIG,'runtime_h_per_24h':24,'cost_entity':'sensor.cost'})
+        ufh=self.add('ufh',{**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost',
+            'constraint_source':'planner:dhw','constraint_mode':'inverted'})
+        # Exercise the actual separate-entry layout, without published source entities.
+        parents={}
+        for identifier in ('dhw','ufh'):
+            record=self.root.data['items'].pop(identifier)
+            parents[identifier]=entry(identifier+'-entry',layout='separate_entries',items={identifier:record})
+            parents[identifier].disabled_by=None
+            self.hass.entries.append(parents[identifier])
+        with patch('custom_components.ha_bems.thermal_plan_coordinator.solve_plan',wraps=solve_plan) as solver:
+            await ufh.async_refresh()
+            self.assertTrue(dhw.last_update_success,dhw.last_exception)
+            self.assertTrue(ufh.last_update_success,ufh.last_exception)
+            self.assertEqual(solver.call_count,2)
+            await ufh.async_refresh()
+            self.assertEqual(solver.call_count,2)
+        self.assertEqual(self.imports(self.hass),{})
+        self.assertTrue(all(row['operation']==1 for row in dhw.data['forecast']))
+        self.assertTrue(all(row['operation']==0 and row['allowed']==0 for row in ufh.data['forecast']))
+        self.assertEqual(ufh.data['constraint_source'],'planner:dhw')
+        self.assertEqual(ufh.data['constraint_mode'],'inverted')
+        parents['dhw'].data['items']['dhw']['data'].update(constraint_source='planner:ufh',constraint_mode='direct')
+        with self.assertRaisesRegex(ValueError,'Circular'):
+            validate_hierarchy(self.hass,'ufh',ufh.config)
+
+    async def test_constraint_dropdown_includes_imports_and_milps_and_saves_interpretation(self):
+        from custom_components.ha_bems.operation_constraints import constraint_choices
+        dhw=self.add('dhw',{**CONFIG,'runtime_h_per_24h':24,'cost_entity':'sensor.cost'})
+        await dhw.async_refresh()
+        self.root.data['items']['external']={'title':'External permissions','data':{
+            'module':MODULE_OPERATION_IMPORT,'forecast_entity':'sensor.permissions'}}
+        self.hass.config_entries.async_update_entry=lambda target,**values:setattr(target,'data',values['data'])
+        flow=HABEMSOptionsFlow();flow.hass=self.hass;flow.config_entry=self.root
+        await flow.async_step_add_planner()
+        await flow.async_step_thermal_plan({'name':'UFH','cost_entity':'sensor.cost','runtime_model':'constant'})
+        form=await flow.async_step_runtime_constant({'runtime_h_per_24h':0})
+        options=form['data_schema'].schema['constraint_source'].config['options']
+        self.assertEqual({row['value'] for row in options},{'none','imported:external','planner:dhw'})
+        choices=constraint_choices(self.hass,'dhw',{})
+        self.assertNotIn('planner:dhw',{row['value'] for row in choices})
+        result=await flow.async_step_thermal_storage({**CONFIG,'runtime_h_per_24h':0,
+            'constraint_source':'planner:dhw','constraint_mode':'inverted','initial_storage_h':None})
+        self.assertEqual(result['step_id'],'thermal_plan_preview',result)
+        await flow.async_step_thermal_plan_preview({})
+        saved=next(record['data'] for record in self.root.data['items'].values() if record['title']=='UFH')
+        self.assertEqual(saved['constraint_source'],'planner:dhw')
+        self.assertEqual(saved['constraint_mode'],'inverted')
+
+    async def test_external_import_is_fixed_permission_and_each_consumer_can_invert(self):
+        from custom_components.ha_bems.input_coordinator import ForecastImportCoordinator
+        from custom_components.ha_bems.entries import module_entries
+        self.states['sensor.permissions']=SimpleNamespace(entity_id='sensor.permissions',state='1',attributes={
+            'schema_version':1,'source_updated_at':NOW.isoformat(),'forecast':rows(1,'operation')})
+        self.root.data['items']['external']={'title':'External','data':{'module':MODULE_OPERATION_IMPORT,
+            'forecast_entity':'sensor.permissions'}}
+        item=next(item for item in module_entries(self.root) if item.entry_id=='external')
+        importer=ForecastImportCoordinator(self.hass,item,self.root)
+        self.imports(self.hass)['external']=importer
+        await importer.async_refresh()
+        for mode,allowed in [('direct',1),('inverted',0)]:
+            planner=self.add(mode,{**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost',
+                'constraint_source':'imported:external','constraint_mode':mode})
+            await planner.async_refresh()
+            self.assertTrue(planner.last_update_success,planner.last_exception)
+            self.assertTrue(all(row['allowed']==allowed for row in planner.data['forecast']))
+        self.assertEqual(importer.data['forecast'][0]['allowed'],1)
+        self.assertEqual(importer.data['constraint_semantics'],'1_allowed_0_blocked')
+        self.hass.config_entries.async_update_entry=lambda target,**values:setattr(target,'data',values['data'])
+        flow=HABEMSOptionsFlow();flow.hass=self.hass;flow.config_entry=self.root
+        await flow.async_step_add_import()
+        form=await flow.async_step_import_operation()
+        self.assertNotIn('operation_meaning',form['data_schema'].schema)
+        result=await flow.async_step_import_operation({'name':'Second external','forecast_entity':'sensor.permissions'})
+        self.assertEqual(result['step_id'],'import_value_preview',result)
+        await flow.async_step_import_value_preview({})
+        saved=next(record['data'] for record in self.root.data['items'].values() if record['title']=='Second external')
+        self.assertNotIn('operation_meaning',saved)
+
+    async def test_direct_milp_source_fails_closed_when_disabled_missing_or_invalid(self):
+        from custom_components.ha_bems.operation_constraints import read_constraint_forecast
+        dhw=self.add('dhw',{**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'})
+        await dhw.async_refresh()
+        config={'constraint_source':'planner:dhw','constraint_mode':'direct'}
+        self.assertEqual(read_constraint_forecast(self.hass,config,NOW)[0]['allowed'],0)
+        dhw.data['forecast'][0]['operation']=.5
+        with self.assertRaises(ValueError):read_constraint_forecast(self.hass,config,NOW)
+        dhw.last_update_success=False
+        with self.assertRaisesRegex(ValueError,'unavailable'):read_constraint_forecast(self.hass,config,NOW)
+        self.root.data['items']['dhw']['data']['enabled']=False
+        with self.assertRaisesRegex(ValueError,'disabled'):read_constraint_forecast(self.hass,config,NOW)
+        self.root.data['items'].pop('dhw')
+        with self.assertRaisesRegex(ValueError,'no longer exists'):read_constraint_forecast(self.hass,config,NOW)
 
     async def test_partial_plan_projection_and_expiry_never_reset_storage_silently(self):
         from custom_components.ha_bems.thermal_plan_coordinator import projected_state
