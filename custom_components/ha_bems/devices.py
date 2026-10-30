@@ -1,7 +1,7 @@
 """Shared virtual service devices for reusable inputs and generated entities."""
 
 from .const import DOMAIN, GROUP_CREATOR, GROUP_IMPORTER, GROUP_TITLES
-from .entries import ModuleEntry, group_for_module, is_flat, module_type
+from .entries import ModuleEntry, group_for_module, is_flat, is_split, module_type
 
 SERVICE_GROUPS = (GROUP_IMPORTER, GROUP_CREATOR)
 
@@ -22,6 +22,11 @@ def shared_device_info(item):
     if (group := shared_group(item)) is None:
         return None
     from homeassistant.helpers.device_registry import DeviceEntryType
+
+    if is_split(item.parent):
+        return {"identifiers": {(DOMAIN, item.entry_id)}, "name": item.title,
+                "manufacturer": "HA-BEMS", "model": GROUP_TITLES[group],
+                "entry_type": DeviceEntryType.SERVICE}
 
     return {"identifiers": {service_identifier(group)}, "name": GROUP_TITLES[group],
             "manufacturer": "HA-BEMS", "model": GROUP_TITLES[group],

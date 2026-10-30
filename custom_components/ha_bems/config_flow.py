@@ -18,9 +18,9 @@ from .const import (
     CONF_PV_POWER_TYPE, MODULE_IMPORT_PRICE, MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
     CONF_GROUP, CONF_ITEM_ID, CONF_ENABLED, GROUP_TITLES, GROUP_MODULES,
     MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, MODULE_OPERATION_IMPORT, CONF_IMPORT_PRICE, CONF_EXPORT_PRICE, CONF_TEMPERATURE,
-    CONF_ITEMS, CONF_LAYOUT, LAYOUT_FLAT,
+    CONF_ITEMS, CONF_LAYOUT, LAYOUT_FLAT, LAYOUT_SPLIT, GROUP_CREATOR, GROUP_IMPORTER,
 )
-from .entries import group_for_module, is_flat
+from .entries import group_for_module, is_flat, is_split
 from .seasonal_soc import resolve_threshold
 from .seasonal_soc import validate_threshold
 from .forecast_input import async_read_forecast
@@ -103,13 +103,17 @@ class _ModuleSteps(ThermalPlanSteps):
             else:
                 values.pop("runtime_h_per_24h", None)
         if getattr(self, "_flat_mode", None):
+            if is_split(self.config_entry) and (group := self.config_entry.data.get(CONF_GROUP)):
+                if group_for_module(module) != group:
+                    return self.async_abort(reason="wrong_group")
             name = values.pop("name", "HA-BEMS").strip() or "HA-BEMS"
             identifier = getattr(self, "_flat_item_id", None) or uuid4().hex
             values.update({CONF_ITEM_ID: identifier, CONF_ENABLED: values.get(CONF_ENABLED, True)})
             items = dict(self.config_entry.data.get(CONF_ITEMS, {}))
             items[identifier] = {"title": name, "data": values}
             self.hass.config_entries.async_update_entry(self.config_entry,
-                data={CONF_LAYOUT: LAYOUT_FLAT, CONF_ITEMS: items}, options={})
+                data={**self.config_entry.data, CONF_ITEMS: items}, options={},
+                **({"title": name} if is_split(self.config_entry) and CONF_GROUP not in self.config_entry.data else {}))
             return self.async_create_entry(title="", data={})
         if isinstance(self, config_entries.ConfigSubentryFlow):
             parent = self._get_entry()
@@ -127,6 +131,11 @@ class _ModuleSteps(ThermalPlanSteps):
         if isinstance(self, config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=values)
         name = values.pop("name").strip()
+        if getattr(self, "_split_setup", False):
+            identifier = uuid4().hex
+            values.update({CONF_ITEM_ID: identifier, CONF_ENABLED: True})
+            return self.async_create_entry(title=name or "HA-BEMS",
+                data={CONF_LAYOUT: LAYOUT_SPLIT, CONF_ITEMS: {identifier: {"title": name or "HA-BEMS", "data": values}}})
         return self.async_create_entry(title=name or "HA-BEMS", data=values)
 
     async def async_step_soc(self, user_input=None):
@@ -628,19 +637,39 @@ class _ModuleSteps(ThermalPlanSteps):
 
 
 class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
-    """Create one installation; manage individual items in its options menu."""
+    """Create reusable service entries or an independently named planner."""
 
     VERSION = 1
-    MINOR_VERSION = 4
+    MINOR_VERSION = 5
 
     async def async_step_user(self, user_input=None):
-        if any(not entry.data.get("migrated_to") for entry in self.hass.config_entries.async_entries(DOMAIN)):
+        self._split_setup = True
+        return self.async_show_menu(step_id="user", menu_options=["creator_entry", "importer_entry", "add_planner"])
+
+    async def _service_entry(self, group):
+        await self.async_set_unique_id(f"service_entry:{group}")
+        if any(is_split(entry) and entry.data.get(CONF_GROUP) == group
+               for entry in self.hass.config_entries.async_entries(DOMAIN)):
             return self.async_abort(reason="already_configured")
-        await self.async_set_unique_id("ha_bems_installation")
         self._abort_if_unique_id_configured()
-        if user_input is not None:
-            return self.async_create_entry(title="HA-BEMS", data={CONF_LAYOUT: LAYOUT_FLAT, CONF_ITEMS: {}})
-        return self.async_show_form(step_id="user", data_schema=vol.Schema({}))
+        return self.async_create_entry(title=GROUP_TITLES[group],
+            data={CONF_LAYOUT: LAYOUT_SPLIT, CONF_GROUP: group, CONF_ITEMS: {}})
+
+    async def async_step_creator_entry(self, user_input=None):
+        return await self._service_entry(GROUP_CREATOR)
+
+    async def async_step_importer_entry(self, user_input=None):
+        return await self._service_entry(GROUP_IMPORTER)
+
+    async def async_step_add_planner(self, user_input=None):
+        self._split_setup = True
+        return self.async_show_menu(step_id="add_planner", menu_options=["fbc", "thermal_plan"])
+
+    async def async_step_import(self, user_input):
+        """Internal migration creates empty staged owners before registry moves."""
+        await self.async_set_unique_id(user_input["split_unique_id"])
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title=user_input["title"], data=user_input["data"])
 
     @classmethod
     @callback
@@ -666,6 +695,15 @@ class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
 class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         if is_flat(self.config_entry):
+            if is_split(self.config_entry):
+                group = self.config_entry.data.get(CONF_GROUP)
+                if group is None:
+                    identifier = next(iter(self.config_entry.data[CONF_ITEMS]))
+                    return await self.async_step_edit_item({CONF_ITEM_ID: identifier})
+                options = ["add_import" if group == GROUP_IMPORTER else "add_helper"]
+                if self.config_entry.data.get(CONF_ITEMS):
+                    options += ["edit_item", "remove_item"]
+                return self.async_show_menu(step_id="init", menu_options=options)
             options = ["add_import", "add_helper", "add_planner"]
             if self.config_entry.data.get(CONF_ITEMS):
                 options += ["edit_item", "remove_item"]
@@ -749,7 +787,7 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
             items = dict(self.config_entry.data.get(CONF_ITEMS, {}))
             items.pop(identifier, None)
             self.hass.config_entries.async_update_entry(self.config_entry,
-                data={CONF_LAYOUT: LAYOUT_FLAT, CONF_ITEMS: items}, options={})
+                data={**self.config_entry.data, CONF_ITEMS: items}, options={})
             from .flat_migration import remove_item_registrations
 
             remove_item_registrations(self.hass, self.config_entry, identifier)

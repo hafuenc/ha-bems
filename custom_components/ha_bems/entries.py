@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from .const import (CONF_ENABLED, CONF_GROUP, CONF_ITEM_ID, CONF_MODULE, DOMAIN, GROUP_MODULES,
-                    MODULE_SOC, CONF_LAYOUT, CONF_ITEMS, LAYOUT_FLAT)
+                    MODULE_SOC, CONF_LAYOUT, CONF_ITEMS, LAYOUT_FLAT, LAYOUT_SPLIT)
 
 
 def group_for_module(module):
@@ -95,4 +95,8 @@ def add_item_entities(async_add_entities, entities, item):
 
 
 def is_flat(entry):
-    return entry.data.get(CONF_LAYOUT) == LAYOUT_FLAT
+    return entry.data.get(CONF_LAYOUT) in (LAYOUT_FLAT, LAYOUT_SPLIT)
+
+
+def is_split(entry):
+    return entry.data.get(CONF_LAYOUT) == LAYOUT_SPLIT

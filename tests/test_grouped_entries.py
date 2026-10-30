@@ -33,13 +33,13 @@ class GroupFlowTests(unittest.IsolatedAsyncioTestCase):
         hass.entries = []
         flow = HABEMSConfigFlow()
         flow.hass = hass
-        self.assertEqual((await flow.async_step_user())['type'], 'form')
-        result = await flow.async_step_user({})
-        self.assertEqual(result['title'], 'HA-BEMS')
-        self.assertEqual(result['data'], {'layout': 'flat_devices', 'items': {}})
+        self.assertEqual((await flow.async_step_user())['menu_options'], ['creator_entry','importer_entry','add_planner'])
+        result = await flow.async_step_creator_entry()
+        self.assertEqual(result['title'], 'BEMS entity creator')
+        self.assertEqual(result['data'], {'layout': 'separate_entries', 'group':'entity_creator', 'items': {}})
         installation = entry('installation', **result['data'])
         hass.entries.append(installation)
-        self.assertEqual((await flow.async_step_user())['reason'], 'already_configured')
+        self.assertEqual((await flow.async_step_creator_entry())['reason'], 'already_configured')
         self.assertEqual(flow.async_get_supported_subentry_types(installation), {})
         self.assertTrue(flow.async_supports_options_flow(installation))
 

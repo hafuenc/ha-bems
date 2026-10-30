@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0
+
+- Split the integration overview into BEMS entity creator, BEMS forecast
+  importer and an individual integration entry for each operation planner.
+- Give each helper/import registration its own service-device row underneath
+  its category entry. Imported external sensors retain their original owners.
+- Adapt Add entry and Configure menus to the separate entry layout.
+- Migrate existing installations with a resumable ownership journal, preserving
+  entity IDs, unique IDs, custom names, disabled settings, planner devices,
+  forecast references and feed-forward model identities.
+
 ## 0.9.3
 
 - Add storage level in percent with a 72-hour forecast, normalized between the

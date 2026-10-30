@@ -1,78 +1,78 @@
-# Shared service devices and migration
+# Integration entries and migration
 
-HA-BEMS 0.7.0 uses **one configuration entry**. Two virtual service devices group
-related entities, without per-item category entries or per-helper devices:
+HA-BEMS 0.10.0 uses separate integration entries for BEMS forecast importer,
+BEMS entity creator, and each independently named operation planner.
 
 ```text
-HA-BEMS
-  BEMS forecast importer [service device]
-    User-named PV AC/DC input statuses
-    User-named building-load input statuses
-    User-named import/export price input statuses
-    User-named outdoor-temperature input statuses
-    User-named operation-constraint input statuses
-  BEMS entity creator [service device]
-    User-named seasonal SOC thresholds
-    User-named non-flexible load forecasts
-    User-named thermal runtime-cost forecasts
-  Individual operation-planner devices
-    User-named FBC batteries
-    User-named thermal MILP planners
+HA-BEMS integration
+  BEMS forecast importer [integration entry]
+    PV AC forecast [service device, input-status entity]
+    Import/export prices [individual service devices]
+    Other forecasts [individual service devices]
+  BEMS entity creator [integration entry]
+    Non-flexible load [service device, generated entity]
+    Runtime costs [service device, generated entity]
+    Other helpers [individual service devices]
+  FBC Battery 1 [integration entry]
+    Battery planner device and its entities
+  Thermal MILP - DHW [integration entry]
+    Thermal planner device and its entities
+  Thermal MILP - UFH [integration entry]
+    Thermal planner device and its entities
 ```
 
-External forecast sensors stay with their supplying integrations. The shared
-importer device owns BEMS status entities; it does not take ownership of the
-original source sensors or duplicate their full forecast lists. The creator
-device owns the entities calculated by BEMS. Each item retains independent
-parameters and can be created multiple times.
-
-Thermal runtime costs use one generic procedure with configurable COP and other
-system parameters. Thermal operation planners use the same generic procedure
-for any named system, including DHW and UFH. Optional imported permissions form
-a one-way hierarchy between planners.
+Rows below an entry are Home Assistant devices/services. Each helper or forecast
+registration gets its own virtual service device, displaying its name directly
+in the overview. External forecast sensors stay with their supplying integration.
+The importer owns its BEMS input-status entity, without copying or linking the
+external source into that device.
 
 ## Create and configure
 
-1. Add HA-BEMS once. It creates the installation and both service devices.
-2. Open **HA-BEMS → Configure** on its integration entry.
-3. Choose **BEMS forecast importer**, **BEMS entity creator** or **Add operation
-   planner**, then select the item type, name it and complete setup/validation.
-4. Choose **Configure an item** to select an existing item, rename or
-   enable/disable it, and edit its settings. Disabling saves immediately even
-   when a selected source is unavailable.
-5. Choose **Remove an item** to select and confirm removal. Only that item's
-   configuration and BEMS entities are removed. External source sensors, shared
-   service devices and other items remain. Dependent planners report a removed
-   input unavailable until another input is selected.
+1. Open **Add entry** on HA-BEMS.
+2. Choose **BEMS forecast importer**, **BEMS entity creator** or **Add operation
+   planner**. Each service category can exist once; multiple planners are supported.
+3. Open **Configure** on a service entry to add, configure or remove its items.
+4. Open **Configure** on a planner entry to edit its name, enabled setting and
+   module parameters. Remove a planner through the native integration-entry menu.
 
-Changes reload the single BEMS installation briefly. FBC's enable switches
-restore their previous state independently. Adding the integration again is
-blocked, since additional items belong in the existing installation.
+Changes reload the affected entry. Dependent planners use updated inputs on their
+normal schedule. Thermal MILP calculates on the fixed quarter-hour clock, with
+immediate startup/reload calculations. FBC switches retain their state on restart.
+
+Runtime-cost forecasts belong to BEMS entity creator, separately from the MILP
+planners consuming them. Both support independently named systems with a generic
+procedure for DHW, UFH or other uses. Imported permissions form one-way hierarchies.
 
 ## Existing installations
 
-The integration requires **Home Assistant 2026.10 or newer**. After updating
-through HACS, restart HA to load the new code and migrate the stored layout.
+Home Assistant 2026.10 or newer is required. After updating through HACS, restart
+Home Assistant. Older standalone/category layouts first pass through the legacy
+migration. The former single entry is then split after startup, while destination
+entries are staged without creating output entities.
 
-Both standalone entries and the category/subentry layout are supported as
-upgrade sources. The migration first captures every item and a resumable
-ownership plan, then moves registry ownership before retiring old subentries and
-entries. An interrupted move can be retried on the next startup.
+Before registry ownership changes, the migration saves all item settings in a
+resumable journal. The old entry becomes BEMS entity creator. Importer and planner
+entries are created independently. Ownership moves before final entries load;
+importers and helpers load before planners. Interrupted moves resume on restart.
+Failures produce a persistent notification and an HA-BEMS log entry.
 
-Preserved information includes item names and parameters, disabled settings,
-entity IDs and unique IDs, PV/load/price/temperature selections, stable input
-references, and FBC device identities and enable-switch state. Input consumers
-therefore reconnect without needing their selections recreated.
+Preserved information includes:
 
-The old individual importer/helper devices are consolidated into the two shared
-service devices. Their individual device IDs are retired. Any explicit
-entity-area assignments are retained; inherited old device areas are copied onto
-the entities before consolidation. User overrides on entity names remain.
-Automations targeting an old per-helper **device** must use its preserved entity
-IDs or the appropriate new shared device. Battery-planner devices retain their
-existing IDs and device settings.
+- Entity IDs, unique IDs, history identities, user names and disabled overrides.
+- Item names, settings, enabled flags and stable cross-entry forecast references.
+- Existing planner device IDs and FBC switch identity/state.
+- Thermal feed-forward model identity, saved estimates and on/off commitments.
+- Entity area assignments and inherited service-device areas.
 
-Automated checks cover old-layout migration, interrupted-move recovery, shared
-device ownership, independent add/edit/disable/remove operations, stable input
-references and multiple cost forecasts. The final integration-page appearance
-can be checked after installing the release.
+The two former shared service devices are replaced by per-item service devices.
+Their device IDs are retired once empty. Entity references continue to work.
+References explicitly targeting an old shared device need adapting to the new
+per-item device or preserved entity. Planner devices retain their IDs.
+
+Keep a pre-upgrade configuration backup: downgrading code alone does not convert
+the new configuration back to the former single-entry layout.
+
+Automated checks cover legacy migration, interrupted moves/retry, stable entity
+and device identities, area assignments, independent edits, category boundaries,
+multiple planners and preserved input references.

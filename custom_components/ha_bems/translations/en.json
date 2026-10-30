@@ -4,7 +4,12 @@
     "step": {
       "user": {
         "title": "HA-BEMS",
-        "description": "Create one HA-BEMS installation. BEMS forecast importer and BEMS entity creator are shared service devices containing their related entities. Use Configure on the HA-BEMS integration to add, configure or remove individual forecasts, helpers and operation planners. Thermal operation planning remains reserved for future development."
+        "description": "Choose a service entry or create an independently named operation planner. Each service entry groups its own helper or forecast registrations. Each operation planner appears as a separate integration entry.",
+        "menu_options": {
+          "creator_entry": "BEMS entity creator",
+          "importer_entry": "BEMS forecast importer",
+          "add_planner": "Add operation planner"
+        }
       },
       "entity_creator": {
         "title": "BEMS entity creator",
@@ -303,6 +308,14 @@
       "thermal_plan_preview": {
         "title": "Thermal operating plan — preview",
         "description": "Solver: {status}\nIntervals: {count}\nInitial estimated storage: {initial} h\nPlanned operating cost: {cost} EUR\n\nThe plan is feed-forward and assumes its recommendation is followed. It does not control equipment. Save to create an operation-plan binary sensor and a storage-duration sensor, each with forecast attributes. Inputs are checked again before saving."
+      },
+      "add_planner": {
+        "title": "Add operation planner",
+        "description": "Create an independent integration entry for this planner.",
+        "menu_options": {
+          "fbc": "Forecast-based battery charging (FBC)",
+          "thermal_plan": "Thermal storage management (MILP)"
+        }
       }
     },
     "error": {
@@ -319,7 +332,7 @@
       "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
     },
     "abort": {
-      "already_configured": "This category already exists. Use Add inside its integration card to add another item."
+      "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items."
     }
   },
   "options": {
@@ -532,7 +545,7 @@
       },
       "init": {
         "title": "Configure HA-BEMS",
-        "description": "Manage independently named items. Forecasts and helpers share their two service devices; planners have individual devices. Changes retain existing entity IDs. Applying an item change reloads HA-BEMS briefly.",
+        "description": "Manage the items belonging to this integration entry. Each helper or forecast registration has its own service row. Operation planners have separate integration entries. Existing entity IDs are retained when settings change.",
         "menu_options": {
           "add_import": "BEMS forecast importer",
           "add_helper": "BEMS entity creator",
@@ -595,7 +608,7 @@
       },
       "remove_confirm": {
         "title": "Confirm item removal",
-        "description": "Remove the configuration and BEMS entities for {name}? Its external source entities remain untouched. Other items and the shared service devices remain configured. Any planner using this input will report it unavailable until another input is selected."
+        "description": "Remove the configuration and BEMS entities for {name}? Its external source entities and other items remain configured. Any planner using this input will report it unavailable until another input is selected."
       },
       "import_operation": {
         "title": "Operation constraint forecast",
@@ -674,7 +687,7 @@
       "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
     },
     "abort": {
-      "already_configured": "This category already exists. Use Add inside its integration card to add another item."
+      "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items."
     }
   },
   "config_subentries": {
