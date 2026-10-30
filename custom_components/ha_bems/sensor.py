@@ -19,7 +19,6 @@ from .import_registry import coordinators, import_signal, planners
 from .seasonal_soc import resolve_threshold
 from .entries import add_item_entities, enabled_module_entries, module_type
 from .devices import shared_device_info
-from .navigation import source_entity_path, source_entity_url
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -222,8 +221,6 @@ class ImportedForecastStatusSensor(CoordinatorEntity, SensorEntity):
                 MODULE_LOAD_IMPORT: "building_load_forecast",
             }.get(self.coordinator.config.get(CONF_MODULE), self.coordinator.config.get(CONF_MODULE)),
             "source_entity": self.coordinator.config["forecast_entity"],
-            "source_entity_path": source_entity_path(self.coordinator.config["forecast_entity"]),
-            "source_entity_url": source_entity_url(self.hass, self.coordinator.config["forecast_entity"]),
         }
         if self.coordinator.config.get(CONF_MODULE) == MODULE_PV_IMPORT:
             attributes[CONF_PV_POWER_TYPE] = self.coordinator.config.get(CONF_PV_POWER_TYPE, "unspecified")

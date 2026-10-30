@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1
+
+- Remove imported-forecast entity links, the custom forecast overview and its
+  frontend dependencies. Restore the importer device's Visit link to the
+  HA-BEMS integration page. Forecast registrations, diagnostic statuses and
+  thermal runtime-cost calculations are retained.
+
 ## 0.8.0
 
 - Enter outdoor-temperature/COP lookup tables in one multiline text field,
