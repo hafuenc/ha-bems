@@ -1,0 +1,171 @@
+"""Persistent, feed-forward storage state and hierarchical thermal planning."""
+
+from datetime import UTC, timedelta
+import json
+import logging
+
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
+
+from .const import DOMAIN, MODULE_OPERATION_IMPORT, MODULE_OUTDOOR_TEMP
+from .forecast import parse_timestamp
+from .forecast_input import _async_read_forecast
+from .import_registry import coordinators, planners, read_forecast_import
+from .operation_constraints import constraint_dependency, validate_hierarchy
+from .thermal_milp import required_runtimes, solve_plan, validate_plan_settings
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def model_key(config):
+    keys = ("storage_duration_h", "storage_min_h", "storage_model_revision", "initial_storage_h",
+            "runtime_model", "runtime_h_per_24h", "runtime_points", "runtime_min_h", "runtime_max_h",
+            "runtime_temperature_entry_id", "heating_cutoff_enabled", "heating_cutoff_c")
+    return json.dumps({key: config.get(key) for key in keys}, sort_keys=True)
+
+
+def aligned_values(reference, other, key):
+    index = {row["start"]: row for row in other}
+    result = []
+    for row in reference:
+        matching = index.get(row["start"])
+        if matching is None or matching["end"] != row["end"]:
+            raise ValueError("All planner input forecasts must match the same 15-minute intervals")
+        result.append(matching[key])
+    return result
+
+
+def projected_state(plan, now):
+    """Advance only along the published plan, never by equipment feedback."""
+    previous = plan["initial_previous_operation"]
+    elapsed = plan["initial_previous_elapsed_h"]
+    for row in plan["forecast"]:
+        start = parse_timestamp(row["effective_start"])
+        end = parse_timestamp(row["end"])
+        if now < start:
+            break
+        if now == start:
+            return row["storage_start_h"], previous, elapsed, None
+        if row["operation"] != previous:
+            previous, elapsed = row["operation"], 0
+        consumed = (min(now, end) - start).total_seconds() / 3600
+        if consumed < 0:
+            raise ValueError("Stored plan timestamps are inconsistent")
+        elapsed += consumed
+        if now < end:
+            level = row["storage_start_h"] + (row["operation"] - row["runtime_h_per_24h"] / 24) * consumed
+            return level, previous, elapsed, previous
+        if now == end:
+            return row["storage_end_h"], previous, elapsed, None
+    raise ValueError("Feed-forward plan has expired; edit the initial storage level to restart the model")
+
+
+async def read_plan_inputs(hass, config, now):
+    rows, info = await _async_read_forecast(hass, {"forecast_entity": config["cost_entity"]},
+        "Thermal runtime cost", "EUR/timestep", "cost_eur_per_timestep", False)
+    rows = rows[:289]
+    temperatures = None
+    if config["runtime_model"] == "lookup":
+        other, _ = read_forecast_import(hass, config.get("runtime_temperature_entry_id"), MODULE_OUTDOOR_TEMP, now)
+        temperatures = aligned_values(rows, other, "temperature_c")
+    allowed = [1] * len(rows)
+    if reference := config.get("constraint_entry_id"):
+        other, _ = read_forecast_import(hass, reference, MODULE_OPERATION_IMPORT, now)
+        allowed = aligned_values(rows, other, "allowed")
+    return rows, required_runtimes(config, temperatures, len(rows)), allowed, info
+
+
+class ThermalPlanCoordinator(DataUpdateCoordinator):
+    def __init__(self, hass, entry, parent=None):
+        super().__init__(hass, _LOGGER, name=entry.title, config_entry=parent or entry,
+                         update_interval=timedelta(minutes=1))
+        self.config = {**entry.data, **entry.options}
+        self.identifier = entry.entry_id
+        self._store = Store(hass, 1, f"{DOMAIN}.thermal_plan.{self.identifier}")
+        self._loaded = False
+        self._plan = None
+        self._fingerprint = None
+        self._failure_notified = False
+        # Changes to the storage/demand model explicitly restart its estimate.
+        self._model_key = model_key(self.config)
+
+    async def _async_update_data(self):
+        try:
+            result = await self._calculate()
+        except (ValueError, TypeError, KeyError, IndexError, OverflowError, OSError) as err:
+            if not self._failure_notified:
+                from homeassistant.components import persistent_notification
+
+                persistent_notification.async_create(self.hass,
+                    f"Thermal operation planner {self.name}: {err}. Check inputs and constraints; no valid new recommendation is available.",
+                    title="BEMS thermal planning needs attention", notification_id=f"{DOMAIN}_thermal_{self.identifier}")
+                self._failure_notified = True
+            raise UpdateFailed(str(err)) from err
+        if self._failure_notified:
+            from homeassistant.components import persistent_notification
+
+            persistent_notification.async_dismiss(self.hass, f"{DOMAIN}_thermal_{self.identifier}")
+            self._failure_notified = False
+        return result
+
+    async def _calculate(self):
+        now = dt_util.now().astimezone(UTC)
+        validate_plan_settings(self.config)
+        validate_hierarchy(self.hass, self.identifier, self.config)
+        if upstream := constraint_dependency(self.hass, self.config):
+            coordinator = planners(self.hass).get(upstream)
+            if coordinator is None:
+                raise ValueError("The upstream thermal planner is not loaded")
+            await coordinator.async_request_refresh()
+            if not coordinator.last_update_success:
+                raise ValueError("The upstream thermal planner has no valid plan")
+        if reference := self.config.get("constraint_entry_id"):
+            coordinator = coordinators(self.hass).get(reference)
+            if coordinator is None:
+                raise ValueError("The selected operation constraint import is not loaded")
+            await coordinator.async_request_refresh()
+        rows, runtimes, allowed, info = await read_plan_inputs(self.hass, self.config, now)
+        if not self._loaded:
+            saved = await self._store.async_load()
+            if saved and saved.get("model_key") == self._model_key:
+                self._plan = saved["plan"]
+            self._loaded = True
+        fingerprint = json.dumps([rows, runtimes, allowed, self.config], sort_keys=True)
+        low, high = self.config.get("storage_min_h", 0), self.config["storage_duration_h"]
+        if self._plan:
+            level, previous, elapsed, fixed = projected_state(self._plan, now)
+            if not low - 1e-7 <= level <= high + 1e-7:
+                raise ValueError("Projected storage level is outside its limits")
+            terminal = self._plan["terminal_storage_min_h"]
+        else:
+            level = self.config.get("initial_storage_h")
+            if level is None:
+                level = low + (high - low) / 2
+            previous, elapsed, fixed = 0, 72, None
+            terminal = level
+        if fingerprint == self._fingerprint and self._plan:
+            return {**self._plan, "value": level}
+        durations = [(parse_timestamp(row["end"]) - max(now, parse_timestamp(row["start"]))).total_seconds() / 3600 for row in rows]
+        result = await self.hass.async_add_executor_job(solve_plan,
+            [row["cost_eur_per_timestep"] for row in rows], runtimes, durations, level, self.config,
+            previous, elapsed, allowed, fixed, terminal)
+        if dt_util.now() >= parse_timestamp(rows[0]["end"]):
+            raise ValueError("A timestep elapsed during optimization; waiting for refreshed forecasts")
+        forecast = [{"start": row["start"], "end": row["end"],
+            "effective_start": max(now, parse_timestamp(row["start"])).isoformat(),
+            "operation": operation, "storage_start_h": result["storage"][i],
+            "storage_end_h": result["storage"][i + 1], "runtime_h_per_24h": runtimes[i], "allowed": allowed[i]}
+            for i, (row, operation) in enumerate(zip(rows, result["operations"]))]
+        plan = {"value": level, "forecast": forecast, "schema_version": 1, "interval_minutes": 15,
+            "planner_item_id": self.identifier, "module": "thermal_storage_milp",
+            "generated_at": now.isoformat(), "source_updated_at": now.isoformat(),
+            "state_basis": "feed_forward_assuming_plan_is_followed", "feedback_used": False,
+            "initial_previous_operation": previous, "initial_previous_elapsed_h": elapsed,
+            "terminal_storage_min_h": terminal, "storage_min_h": low, "storage_max_h": high,
+            "cost_entity": self.config["cost_entity"], "constraint_entry_id": self.config.get("constraint_entry_id"),
+            "runtime_model": self.config["runtime_model"], "input_source_updated_at": info["source_updated_at"],
+            **{key: value for key, value in result.items() if key not in ("storage", "operations")}}
+        await self._store.async_save({"model_key": self._model_key, "plan": plan})
+        self._plan, self._fingerprint = plan, fingerprint
+        return plan

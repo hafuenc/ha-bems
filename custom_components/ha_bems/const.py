@@ -23,12 +23,15 @@ MODULE_IMPORT_PRICE = "electricity_import_price_forecast"
 MODULE_EXPORT_PRICE = "electricity_export_price_forecast"
 MODULE_OUTDOOR_TEMP = "outdoor_temperature_forecast"
 MODULE_THERMAL_COST = "thermal_runtime_cost"
+MODULE_THERMAL_PLAN = "thermal_storage_milp"
+MODULE_OPERATION_IMPORT = "operation_constraint_import"
 CONF_IMPORT_PRICE = "import_price_entry_id"
 CONF_EXPORT_PRICE = "export_price_entry_id"
 CONF_TEMPERATURE = "temperature_entry_id"
 FORECAST_IMPORT_MODULES = (
     MODULE_PV_IMPORT, MODULE_LOAD_IMPORT, MODULE_IMPORT_PRICE,
     MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
+    MODULE_OPERATION_IMPORT,
 )
 CONF_PV_POWER_TYPE = "pv_power_type"
 CONF_PV_IMPORT = "pv_import_entry_id"
@@ -53,7 +56,7 @@ GROUP_MODULES = {
     GROUP_CREATOR: (MODULE_SOC, MODULE_LOAD, MODULE_THERMAL_COST),
     GROUP_IMPORTER: FORECAST_IMPORT_MODULES,
     GROUP_ELECTRICAL: (MODULE_FBC,),
-    GROUP_THERMAL: (),
+    GROUP_THERMAL: (MODULE_THERMAL_PLAN,),
 }
 
 # Values are the subdivision codes used by the holidays library and saved entries.

@@ -65,6 +65,7 @@ class Selector:
 class Coordinator:
     def __init__(self, hass, logger, **kwargs):
         self.hass = hass
+        self.name = kwargs.get('name')
         self.data = None
         self.last_update_success = True
         self.last_exception = None

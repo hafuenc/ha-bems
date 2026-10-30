@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.0
+
+- Add independently named thermal storage MILP planners under Add operation
+  planner, using existing EUR/timestep forecast entities and HiGHS via SciPy.
+- Support constant or outdoor-temperature-dependent runtime demand in h/24h,
+  a lookup table with runtime limits and optional heating cutoff, storage
+  duration bounds, optional initial level, and minimum on/off times.
+- Publish native on/off operation-plan entities and estimated storage-duration
+  entities, both with 72-hour forecast attributes. Persist the feed-forward
+  model and carry operating commitments across replanning without feedback.
+- Add operation-constraint forecast imports with direct or inverted binary
+  semantics. Support a one-way DHW → UFH hierarchy, reject cycles, and enforce
+  imported zero permissions as hard operating blocks.
+- Validate solver results, report infeasibility and missing inputs explicitly,
+  and provide an explicit model restart after expired saved plans.
+
 ## 0.8.1
 
 - Remove imported-forecast entity links, the custom forecast overview and its

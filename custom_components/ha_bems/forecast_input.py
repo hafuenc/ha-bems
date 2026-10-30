@@ -31,7 +31,38 @@ async def async_read_power_forecast(hass, config, label="PV"):
 
 
 async def async_read_forecast(hass, config):
+    from .const import MODULE_OPERATION_IMPORT
+
+    if config.get("module") == MODULE_OPERATION_IMPORT:
+        return await _async_read_operation(hass, config)
     return await _async_read_forecast(hass, config, *forecast_type(config))
+
+
+async def _async_read_operation(hass, config):
+    from .operation_constraints import permission_rows, upstream_planner
+    from .import_registry import planners
+
+    now = dt_util.now()
+    state = hass.states.get(config["forecast_entity"])
+    identifier = upstream_planner(hass, config["forecast_entity"])
+    if identifier:
+        coordinator = planners(hass).get(identifier)
+        if not coordinator or not coordinator.last_update_success or not coordinator.data:
+            raise ForecastUnavailable("The upstream operation plan is unavailable")
+        attributes = coordinator.data
+    else:
+        if state is None or state.state in ("unknown", "unavailable"):
+            raise ForecastUnavailable("Operation forecast entity is unavailable")
+        attributes = state.attributes
+    if type(attributes.get("schema_version")) is not int or attributes["schema_version"] != 1:
+        raise ValueError("Operation forecast requires numeric schema_version: 1")
+    age, updated = source_age(attributes.get("source_updated_at"), now)
+    rows = permission_rows(attributes.get("forecast"), config, now)
+    return rows, {"source_entity": config["forecast_entity"], "source_updated_at": updated,
+        "source_age_minutes": age, "forecast_schema_version": 1,
+        "input_forecast_start": rows[0]["start"], "input_forecast_end": rows[-1]["end"],
+        "input_forecast_intervals": len(rows), "forecast_unit": "", "forecast_value_key": "allowed",
+        "operation_meaning": config.get("operation_meaning", "running"), "upstream_planner_id": identifier}
 
 
 async def _async_read_forecast(hass, config, label, unit, value_key, nonnegative):

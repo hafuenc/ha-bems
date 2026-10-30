@@ -46,7 +46,7 @@ async def async_migrate_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bo
 async def async_setup_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool:
     from homeassistant.const import Platform
 
-    from .const import DOMAIN, MODULE_FBC
+    from .const import DOMAIN, MODULE_FBC, MODULE_THERMAL_PLAN
     from .entries import enabled_module_entries, module_type
 
     if entry.data.get("migrated_to"):
@@ -60,11 +60,14 @@ async def async_setup_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool
     for item in items:
         await _async_setup_module(hass, item, entry)
     platforms = [Platform.SENSOR]
+    if any(module_type(item) == MODULE_THERMAL_PLAN for item in items):
+        platforms.append(Platform.BINARY_SENSOR)
+    sensor_platforms = list(platforms)
     if any(module_type(item) == MODULE_FBC for item in items):
         # Restore every battery's bypass switch before publishing its first plan.
         await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
         platforms.append(Platform.SWITCH)
-    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR])
+    await hass.config_entries.async_forward_entry_setups(entry, sensor_platforms)
     hass.data.setdefault(DOMAIN, {}).setdefault("platforms", {})[entry.entry_id] = platforms
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
@@ -75,7 +78,7 @@ async def _async_setup_module(hass, entry, parent):
     from homeassistant.helpers.dispatcher import async_dispatcher_send
     from homeassistant.helpers.event import async_track_state_change_event
 
-    from .const import CONF_MODULE, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_THERMAL_COST, FORECAST_IMPORT_MODULES
+    from .const import CONF_MODULE, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, FORECAST_IMPORT_MODULES
     from .import_registry import coordinators, import_signal, planners
 
     config = {**entry.data, **entry.options}
@@ -95,6 +98,11 @@ async def _async_setup_module(hass, entry, parent):
         from .thermal_coordinator import ThermalCostCoordinator
 
         coordinator = ThermalCostCoordinator(hass, entry, parent)
+        registry = planners(hass)
+    elif module == MODULE_THERMAL_PLAN:
+        from .thermal_plan_coordinator import ThermalPlanCoordinator
+
+        coordinator = ThermalPlanCoordinator(hass, entry, parent)
         registry = planners(hass)
     if registry is not None:
         registry[entry.entry_id] = coordinator

@@ -112,7 +112,7 @@ class TypedImportTests(unittest.IsolatedAsyncioTestCase):
         menu = await child.async_step_user()
         self.assertEqual(set(menu['menu_options']), {
             'import_pv_ac', 'import_pv_dc', 'import_load', 'import_price',
-            'export_price', 'import_temperature'})
+            'export_price', 'import_temperature', 'import_operation'})
         for basis in ('ac', 'dc'):
             result = await getattr(flow, 'async_step_import_pv_' + basis)({
                 'name': 'PV ' + basis, 'forecast_entity': 'sensor.pv'})

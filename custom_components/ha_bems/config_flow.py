@@ -17,7 +17,7 @@ from .const import (
     HOLIDAY_REGIONS, MONTHS, SOURCE_ENTITY, SOURCE_MONTHLY,
     CONF_PV_POWER_TYPE, MODULE_IMPORT_PRICE, MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
     CONF_GROUP, CONF_ITEM_ID, CONF_ENABLED, GROUP_TITLES, GROUP_MODULES,
-    MODULE_THERMAL_COST, CONF_IMPORT_PRICE, CONF_EXPORT_PRICE, CONF_TEMPERATURE,
+    MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, MODULE_OPERATION_IMPORT, CONF_IMPORT_PRICE, CONF_EXPORT_PRICE, CONF_TEMPERATURE,
     CONF_ITEMS, CONF_LAYOUT, LAYOUT_FLAT,
 )
 from .entries import group_for_module, is_flat
@@ -29,6 +29,7 @@ from .forecast import daily_forecast, surplus_forecast
 from .import_registry import input_entries, load_inputs, pv_imports, read_load_input, read_pv_import
 from .thermal_cost import validate_settings
 from .cop_table import default_table_text, parse_table_text
+from .thermal_plan_flow import ThermalPlanSteps
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -52,7 +53,7 @@ def _percentage_entity():
     }]})
 
 
-class _ModuleSteps:
+class _ModuleSteps(ThermalPlanSteps):
     """Share configuration steps between initial setup and later options."""
 
     def _values(self):
@@ -91,6 +92,16 @@ class _ModuleSteps:
             retired = (CONF_TEMPERATURE, "cop_points", "cop_point_count", "fallback_cop") if values["cop_model"] == "constant" else ("constant_cop",)
             for key in retired:
                 values.pop(key, None)
+        if module == MODULE_THERMAL_PLAN:
+            values.pop("runtime_table_text", None)
+            if values.pop("restart_storage_model", False):
+                values["storage_model_revision"] = uuid4().hex
+            if values["runtime_model"] == "constant":
+                for key in ("runtime_points", "runtime_point_count", "runtime_temperature_entry_id",
+                            "runtime_min_h", "runtime_max_h", "heating_cutoff_enabled", "heating_cutoff_c"):
+                    values.pop(key, None)
+            else:
+                values.pop("runtime_h_per_24h", None)
         if getattr(self, "_flat_mode", None):
             name = values.pop("name", "HA-BEMS").strip() or "HA-BEMS"
             identifier = getattr(self, "_flat_item_id", None) or uuid4().hex
@@ -301,11 +312,16 @@ class _ModuleSteps:
         self._import_type = MODULE_OUTDOOR_TEMP
         return await self._async_step_import(user_input)
 
+    async def async_step_import_operation(self, user_input=None):
+        self._import_type = MODULE_OPERATION_IMPORT
+        return await self._async_step_import(user_input)
+
     def _import_step(self):
         return {
             MODULE_PV_IMPORT: "import_pv", MODULE_LOAD_IMPORT: "import_load",
             MODULE_IMPORT_PRICE: "import_price", MODULE_EXPORT_PRICE: "export_price",
             MODULE_OUTDOOR_TEMP: "import_temperature",
+            MODULE_OPERATION_IMPORT: "import_operation",
         }[self._import_type]
 
     async def _async_read_import(self):
@@ -314,6 +330,7 @@ class _ModuleSteps:
     async def _async_step_import(self, user_input=None):
         is_load = self._import_type == MODULE_LOAD_IMPORT
         is_pv = self._import_type == MODULE_PV_IMPORT
+        is_operation = self._import_type == MODULE_OPERATION_IMPORT
         label, unit, value_key, _nonnegative = forecast_type({**self._values(), CONF_MODULE: self._import_type})
         errors, placeholders = {}, {
             "reason": "",
@@ -354,8 +371,13 @@ class _ModuleSteps:
             basis_field = vol.Required(CONF_PV_POWER_TYPE, default=basis) if basis in ("ac", "dc") else vol.Required(CONF_PV_POWER_TYPE)
             fields[basis_field] = _choice([{"value": "ac", "label": "AC"}, {"value": "dc", "label": "DC"}])
         fields.update({
-                field: selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": unit}]}),
+                field: selector.EntitySelector({"domain": ["sensor", "binary_sensor"]}) if is_operation else
+                    selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": unit}]}),
             })
+        if is_operation:
+            fields[vol.Required("operation_meaning", default=values.get("operation_meaning", "running"))] = _choice([
+                {"value": "running", "label": "1 = another system running — invert to block this planner"},
+                {"value": "allowed", "label": "1 = operation allowed — use directly"}])
         return self.async_show_form(step_id=self._import_step(), errors=errors,
             description_placeholders=placeholders, data_schema=vol.Schema(fields))
 
@@ -665,6 +687,10 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
             return await self.async_step_import_temperature()
         if module == MODULE_THERMAL_COST:
             return await self.async_step_thermal_cost()
+        if module == MODULE_THERMAL_PLAN:
+            return await self.async_step_thermal_plan()
+        if module == MODULE_OPERATION_IMPORT:
+            return await self.async_step_import_operation()
         return await self.async_step_soc()
 
     def _start_flat_add(self):
@@ -675,7 +701,7 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
     async def async_step_add_import(self, user_input=None):
         self._start_flat_add()
         return self.async_show_menu(step_id="add_import", menu_options=[
-            "import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature"])
+            "import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature", "import_operation"])
 
     async def async_step_add_helper(self, user_input=None):
         self._start_flat_add()
@@ -683,7 +709,7 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
 
     async def async_step_add_planner(self, user_input=None):
         self._start_flat_add()
-        return self.async_show_menu(step_id="add_planner", menu_options=["fbc"])
+        return self.async_show_menu(step_id="add_planner", menu_options=["fbc", "thermal_plan"])
 
     async def _select_flat_item(self, step, user_input):
         items = self.config_entry.data.get(CONF_ITEMS, {})
@@ -739,8 +765,9 @@ class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):
         group = self._get_entry().data[CONF_GROUP]
         options = {
             "entity_creator": ["soc", "load_profile", "thermal_cost"],
-            "entity_importer": ["import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature"],
+            "entity_importer": ["import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature", "import_operation"],
             "electrical_storage": ["fbc"],
+            "thermal_storage": ["thermal_plan"],
         }
         if group not in options:
             return self.async_abort(reason="not_implemented")
@@ -766,5 +793,6 @@ class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):
             MODULE_LOAD_IMPORT: self.async_step_import_load, MODULE_IMPORT_PRICE: self.async_step_import_price,
             MODULE_EXPORT_PRICE: self.async_step_export_price, MODULE_OUTDOOR_TEMP: self.async_step_import_temperature,
             MODULE_THERMAL_COST: self.async_step_thermal_cost,
+            MODULE_THERMAL_PLAN: self.async_step_thermal_plan, MODULE_OPERATION_IMPORT: self.async_step_import_operation,
         }[self._values()[CONF_MODULE]]
         return await method()
