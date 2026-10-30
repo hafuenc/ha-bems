@@ -142,6 +142,11 @@ async def async_group_legacy_entries(hass):
 async def async_flatten_entries(hass):
     """Upgrade older entry layouts, then consolidate the resulting categories."""
     from .flat_migration import async_consolidate_entries
+    from .entries import is_split
+    from .split_migration import async_schedule_entry_split
 
-    await async_group_legacy_entries(hass)
-    await async_consolidate_entries(hass)
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not any(is_split(entry) or entry.data.get("entry_split_pending") for entry in entries):
+        await async_group_legacy_entries(hass)
+        await async_consolidate_entries(hass)
+    async_schedule_entry_split(hass)

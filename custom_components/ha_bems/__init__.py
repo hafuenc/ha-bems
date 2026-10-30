@@ -49,12 +49,12 @@ async def async_setup_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool
     from .const import DOMAIN, MODULE_FBC, MODULE_THERMAL_PLAN
     from .entries import enabled_module_entries, module_type
 
-    if entry.data.get("migrated_to"):
+    if entry.data.get("migrated_to") or "entry_split_pending" in entry.data or entry.data.get("entry_split_staging"):
         return True
     from .devices import ensure_service_devices
-    from .entries import is_flat
+    from .entries import is_flat, is_split
 
-    if is_flat(entry):
+    if is_flat(entry) and not is_split(entry):
         ensure_service_devices(hass, entry)
     items = enabled_module_entries(entry)
     for item in items:
@@ -166,6 +166,8 @@ async def _async_setup_module(hass, entry, parent):
 
 
 async def _async_options_updated(hass: "HomeAssistant", entry: "ConfigEntry") -> None:
+    if "entry_split_pending" in entry.data or entry.data.get("entry_split_staging"):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
 
 

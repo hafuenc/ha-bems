@@ -51,8 +51,10 @@ class FlatHarness(MigrationHarness):
 
     async def flatten(self):
         with patch.dict('sys.modules', self.injected):
-            from custom_components.ha_bems.migration import async_flatten_entries
-            await async_flatten_entries(self.hass)
+            from custom_components.ha_bems.migration import async_group_legacy_entries
+            from custom_components.ha_bems.flat_migration import async_consolidate_entries
+            await async_group_legacy_entries(self.hass)
+            await async_consolidate_entries(self.hass)
 
 
 class FlatMigrationTests(unittest.IsolatedAsyncioTestCase):

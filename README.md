@@ -7,9 +7,9 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.9.3**
-uses one HA-BEMS configuration entry with shared forecast-importer and
-entity-creator service devices. Named runtime-cost forecasts, load helpers and
+Modular planning for flexible devices and energy storage. Version **0.10.0**
+uses separate BEMS forecast importer and BEMS entity creator integration entries,
+plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
 them to your equipment.** Direct device control is outside the scope of every
@@ -17,10 +17,9 @@ HA-BEMS module and future version.
 
 Thermal runtime-cost setup uses an editable COP lookup table. The importer
 shows diagnostic input-status entities; imported sources remain with their
-original integrations. The **Visit** link opens the HA-BEMS integration page.
-The **BEMS forecast importer** supports PV AC/DC, import/export prices and outdoor
-air temperature. FBC users choose their PV source. Imported-input statuses share
-one importer device, and generated helpers share one creator device. Existing
+original integrations. The **BEMS forecast importer** supports PV AC/DC, import/export prices and outdoor
+air temperature. FBC users choose their PV source. Each imported forecast and generated helper has its own service-device row
+under its respective integration entry. Existing
 standalone or grouped entries migrate at startup. Thermal operating costs and a feed-forward thermal MILP operation planner are implemented. Runtime-cost
 forecasts are created under BEMS entity creator.
 Thermal MILP planners calculate on the fixed HH:00/15/30/45 clock; startup and
@@ -34,12 +33,12 @@ reloads can calculate immediately.
 2. Add `https://github.com/hafuenc/ha-bems` with type **Integration**.
 3. Download HA-BEMS and restart Home Assistant.
 4. Open **Settings → Devices & services → Add integration → HA-BEMS**.
-5. Create the single HA-BEMS installation, then open its **Configure** menu.
-6. Choose **BEMS forecast importer**, **BEMS entity creator** or **Add operation
-   planner**. Use **Configure an item** or **Remove an item** for existing items.
+5. Choose **BEMS forecast importer**, **BEMS entity creator** or **Add operation planner**.
+6. Use **Configure** on a service entry to add/edit/remove its items. Repeat
+   **Add entry → Add operation planner** for each independently named planner.
 
 The repository is a HACS custom repository; it is not included in the default
-HACS catalogue. Version 0.7.0 requires Home Assistant 2026.10 or newer.
+HACS catalogue. Version 0.10.0 requires Home Assistant 2026.10 or newer.
 
 ## Updates
 
@@ -52,7 +51,7 @@ repositories may otherwise take up to the next scheduled refresh (normally
 not treated as a new release. Install the offered version and restart Home
 Assistant when ready; HA-BEMS never installs updates automatically itself.
 
-For 0.7.0, existing FBC entries migrate into the single HA-BEMS installation while
+For 0.10.0, existing installations migrate into separate service and planner entries while
 retaining their entity IDs and selections. Entries stay PV-only unless a building load is explicitly
 selected in **Configure**. Each battery gets an **FBC charging limitation enabled**
 switch, initially on. Turning it off publishes maximum charging power; no device
@@ -62,26 +61,26 @@ need to delete and recreate existing entries.
 ## Setup structure in this version
 
 ```text
-HA-BEMS
-├── BEMS forecast importer [shared service device]
-│   ├── PV AC / DC input-status entities
-│   ├── Building-load input-status entities
-│   ├── Import / export price input-status entities
-│   ├── Outdoor-temperature input-status entities
-│   └── Operation-constraint input-status entities
-├── BEMS entity creator [shared service device]
-│   ├── Seasonal SOC threshold entities
-│   ├── Non-flexible load forecast entities
-│   └── Thermal runtime-cost forecast entities
-└── Individually named operation-planner devices
-    ├── FBC battery devices
-    └── Thermal storage MILP planner devices
+HA-BEMS integration
+├── BEMS forecast importer [integration entry]
+│   ├── PV AC / DC forecast [service row, input-status entity]
+│   ├── Import / export prices [individual service rows]
+│   └── Outdoor temperature / load / operation constraints [individual rows]
+├── BEMS entity creator [integration entry]
+│   ├── Seasonal SOC threshold [service row]
+│   ├── Non-flexible load forecast [service row]
+│   └── Thermal runtime-cost forecast [service row]
+├── FBC Battery 1 [integration entry]
+│   └── Battery planner device and entities
+└── Thermal MILP – DHW [integration entry]
+    └── Thermal planner device and entities
 ```
 
 Create a seasonal threshold first, or select an existing percentage entity in
 FBC setup. The load-profile helper is independently optional; select it in FBC
 to consider expected building consumption, or leave load empty for PV-only behaviour.
-Each helper/module is a named item managed through **HA-BEMS → Configure**.
+Each helper is managed through **Configure** on its category entry; each planner
+has its own **Configure** action.
 Multiple instances are supported, including batteries with separate settings.
 BEMS entity creator supports multiple runtime-cost setups using the same procedure,
 with independent COP, thermal power and forecast selections.
@@ -270,7 +269,7 @@ plans and battery energy budgets inside HA-BEMS; a user-defined automation is
 the final authority applying them to each device. Thermal MILP uses HiGHS via
 SciPy with a bounded solve time; FBC retains its independent calculation engine.
 
-The current code implements one installation with shared service devices,
+The current code implements separate service and planner entries,
 individually configurable items, reusable entity selection,
 the common timestamped forecast shape, background calculation and hierarchical
 thermal MILP planning. Joint PV/battery reservations and battery MILP remain

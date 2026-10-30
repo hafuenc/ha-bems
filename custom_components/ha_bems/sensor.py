@@ -17,7 +17,7 @@ from .const import (
 )
 from .import_registry import coordinators, import_signal, planners
 from .seasonal_soc import resolve_threshold
-from .entries import add_item_entities, enabled_module_entries, module_type
+from .entries import add_item_entities, enabled_module_entries, module_type, is_split
 from .devices import shared_device_info
 from .thermal_plan_entity import ThermalPlanEntity
 
@@ -64,7 +64,7 @@ class SeasonalSOCSensor(SensorEntity):
         )
         if info := shared_device_info(entry):
             self._attr_device_info = info
-            self._attr_name = f"{entry.title} SOC min threshold"
+            self._attr_name = "SOC min threshold" if is_split(entry.parent) else f"{entry.title} SOC min threshold"
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -133,7 +133,7 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
         )
         if info := shared_device_info(entry):
             self._attr_device_info = info
-            self._attr_name = f"{entry.title} runtime cost" if module == MODULE_THERMAL_COST else entry.title
+            self._attr_name = ("Runtime cost" if module == MODULE_THERMAL_COST else "Non-flexible load profile") if is_split(entry.parent) else (f"{entry.title} runtime cost" if module == MODULE_THERMAL_COST else entry.title)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -238,7 +238,7 @@ class ImportedForecastStatusSensor(CoordinatorEntity, SensorEntity):
         )
         if info := shared_device_info(entry):
             self._attr_device_info = info
-            self._attr_name = f"{entry.title} input status"
+            self._attr_name = "Input status" if is_split(entry.parent) else f"{entry.title} input status"
 
     @property
     def available(self):
