@@ -1,6 +1,6 @@
 """Persistent, feed-forward storage state and hierarchical thermal planning."""
 
-from datetime import UTC, timedelta
+from datetime import UTC
 import json
 import logging
 
@@ -16,6 +16,11 @@ from .operation_constraints import constraint_dependency, validate_hierarchy
 from .thermal_milp import required_runtimes, solve_plan, validate_plan_settings
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def quarter_slot(now):
+    """Use UTC slot IDs so repeated local hours at DST remain distinct."""
+    return int(now.timestamp()) // 900
 
 
 def model_key(config):
@@ -79,21 +84,32 @@ async def read_plan_inputs(hass, config, now):
 class ThermalPlanCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry, parent=None):
         super().__init__(hass, _LOGGER, name=entry.title, config_entry=parent or entry,
-                         update_interval=timedelta(minutes=1))
+                         update_interval=None)
         self.config = {**entry.data, **entry.options}
         self.identifier = entry.entry_id
         self._store = Store(hass, 1, f"{DOMAIN}.thermal_plan.{self.identifier}")
         self._loaded = False
         self._plan = None
-        self._fingerprint = None
+        self._last_solve_slot = None
+        self._slot_error = None
+        self.awaiting_inputs = True
         self._failure_notified = False
         # Changes to the storage/demand model explicitly restart its estimate.
         self._model_key = model_key(self.config)
 
     async def _async_update_data(self):
+        now = dt_util.now().astimezone(UTC)
+        if self._last_solve_slot == quarter_slot(now):
+            if self._slot_error:
+                raise UpdateFailed(self._slot_error)
+            # Parent requests, duplicate startup callbacks and input updates
+            # must not launch a second solve in an already calculated slot.
+            return {**self._plan, "value": projected_state(self._plan, now)[0]}
         try:
             result = await self._calculate()
         except (ValueError, TypeError, KeyError, IndexError, OverflowError, OSError) as err:
+            if self._last_solve_slot == quarter_slot(now):
+                self._slot_error = str(err)
             if not self._failure_notified:
                 from homeassistant.components import persistent_notification
 
@@ -111,8 +127,12 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
 
     async def _calculate(self):
         now = dt_util.now().astimezone(UTC)
+        self.awaiting_inputs = False
         validate_plan_settings(self.config)
         validate_hierarchy(self.hass, self.identifier, self.config)
+        # Readiness retries may finish a startup/scheduled run whose inputs
+        # were still updating. They cannot repeat an actual solver attempt.
+        self.awaiting_inputs = True
         if upstream := constraint_dependency(self.hass, self.config):
             coordinator = planners(self.hass).get(upstream)
             if coordinator is None:
@@ -126,15 +146,21 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
                 raise ValueError("The selected operation constraint import is not loaded")
             await coordinator.async_request_refresh()
         rows, runtimes, allowed, info = await read_plan_inputs(self.hass, self.config, now)
+        self.awaiting_inputs = False
+        # Regular runs model the complete clock-aligned quarter-hour, even
+        # though input validation/solver dispatch happens milliseconds later.
+        # Only an initial startup/reload solve uses a partial first interval.
+        planning_at = now
+        if self._last_solve_slot is not None:
+            planning_at = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
         if not self._loaded:
             saved = await self._store.async_load()
             if saved and saved.get("model_key") == self._model_key:
                 self._plan = saved["plan"]
             self._loaded = True
-        fingerprint = json.dumps([rows, runtimes, allowed, self.config], sort_keys=True)
         low, high = self.config.get("storage_min_h", 0), self.config["storage_duration_h"]
         if self._plan:
-            level, previous, elapsed, fixed = projected_state(self._plan, now)
+            level, previous, elapsed, fixed = projected_state(self._plan, planning_at)
             if not low - 1e-7 <= level <= high + 1e-7:
                 raise ValueError("Projected storage level is outside its limits")
             terminal = self._plan["terminal_storage_min_h"]
@@ -144,22 +170,23 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
                 level = low + (high - low) / 2
             previous, elapsed, fixed = 0, 72, None
             terminal = level
-        if fingerprint == self._fingerprint and self._plan:
-            return {**self._plan, "value": level}
-        durations = [(parse_timestamp(row["end"]) - max(now, parse_timestamp(row["start"]))).total_seconds() / 3600 for row in rows]
+        durations = [(parse_timestamp(row["end"]) - max(planning_at, parse_timestamp(row["start"]))).total_seconds() / 3600 for row in rows]
+        self._last_solve_slot = quarter_slot(now)
+        self._slot_error = None
         result = await self.hass.async_add_executor_job(solve_plan,
             [row["cost_eur_per_timestep"] for row in rows], runtimes, durations, level, self.config,
             previous, elapsed, allowed, fixed, terminal)
         if dt_util.now() >= parse_timestamp(rows[0]["end"]):
             raise ValueError("A timestep elapsed during optimization; waiting for refreshed forecasts")
         forecast = [{"start": row["start"], "end": row["end"],
-            "effective_start": max(now, parse_timestamp(row["start"])).isoformat(),
+            "effective_start": max(planning_at, parse_timestamp(row["start"])).isoformat(),
             "operation": operation, "storage_start_h": result["storage"][i],
             "storage_end_h": result["storage"][i + 1], "runtime_h_per_24h": runtimes[i], "allowed": allowed[i]}
             for i, (row, operation) in enumerate(zip(rows, result["operations"]))]
         plan = {"value": level, "forecast": forecast, "schema_version": 1, "interval_minutes": 15,
             "planner_item_id": self.identifier, "module": "thermal_storage_milp",
             "generated_at": now.isoformat(), "source_updated_at": now.isoformat(),
+            "calculation_interval_minutes": 15, "calculation_schedule": "quarter_hour_clock",
             "state_basis": "feed_forward_assuming_plan_is_followed", "feedback_used": False,
             "initial_previous_operation": previous, "initial_previous_elapsed_h": elapsed,
             "terminal_storage_min_h": terminal, "storage_min_h": low, "storage_max_h": high,
@@ -167,5 +194,5 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             "runtime_model": self.config["runtime_model"], "input_source_updated_at": info["source_updated_at"],
             **{key: value for key, value in result.items() if key not in ("storage", "operations")}}
         await self._store.async_save({"model_key": self._model_key, "plan": plan})
-        self._plan, self._fingerprint = plan, fingerprint
+        self._plan = plan
         return plan

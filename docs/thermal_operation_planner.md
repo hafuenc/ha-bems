@@ -48,6 +48,14 @@ The heating cutoff sets demand to zero; it does not itself forbid operation.
 
 ## Feed-forward state and restarts
 
+Optimization starts on the quarter-hour clock: **HH:00, HH:15, HH:30 and HH:45**.
+Each planner solves at most once per slot, using the latest available inputs.
+Forecast updates between those times are used at the next scheduled run.
+Startup, reloads and configuration changes can calculate immediately. If inputs
+are temporarily missing, their arrival can complete the pending run. A failed
+solver attempt waits until the next quarter-hour instead of repeatedly solving.
+The clock remains active even if an output entity is disabled.
+
 There is **no equipment feedback**. The estimated storage level advances only
 along the previously published operation plan, assuming that plan was followed.
 Storage and prior on/off commitments are restored across reloads and restarts
@@ -55,9 +63,10 @@ while the saved plan covers the current time. An already-started quarter-hour
 remains committed when forecasts change; minimum on/off obligations continue
 across replanning, including commitments originating near a forecast's end.
 
-The first interval may be partly elapsed. Only its remaining duration is used
+On startup or reload, the first interval may be partly elapsed. Only its remaining duration is used
 for storage and cost, and `effective_start` identifies the time represented.
 `start`/`end` retain the standard quarter-hour interval boundaries.
+Regular scheduled runs use complete 15-minute intervals.
 
 Changing the storage/demand model restarts its estimate. The explicit **Restart
 feed-forward model** setting resets it using the initial value (or the halfway
