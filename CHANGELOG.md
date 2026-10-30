@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+- Fix selecting No operation constraint in thermal planner setup. Use an explicit
+  nonempty dropdown value and normalize it to no constraint when saving. Existing
+  empty or omitted selections remain supported.
+
 ## 0.9.0
 
 - Add independently named thermal storage MILP planners under Add operation

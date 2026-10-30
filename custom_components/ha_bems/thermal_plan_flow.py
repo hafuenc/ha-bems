@@ -113,7 +113,9 @@ class ThermalPlanSteps:
     async def async_step_thermal_storage(self, user_input=None):
         errors, placeholders = {}, {"reason": ""}
         if user_input is not None:
-            self._remember({**user_input, "initial_storage_h": user_input.get("initial_storage_h")})
+            reference = user_input.get("constraint_entry_id")
+            self._remember({**user_input, "initial_storage_h": user_input.get("initial_storage_h"),
+                            "constraint_entry_id": None if reference in (None, "", "none") else reference})
             try:
                 validate_plan_settings(self._values())
                 self._plan_preview = await self._async_plan_preview()
@@ -130,8 +132,8 @@ class ThermalPlanSteps:
         initial = values.get("initial_storage_h")
         fields[vol.Optional("initial_storage_h", default=initial) if initial is not None else vol.Optional("initial_storage_h")] = number_selector(0, 1000, "h")
         fields[vol.Required("restart_storage_model", default=False)] = bool
-        fields[vol.Required("constraint_entry_id", default=values.get("constraint_entry_id", ""))] = selector.SelectSelector({"mode": "dropdown", "options": [
-            {"value": "", "label": "No operation constraint"}, *self._thermal_choices(MODULE_OPERATION_IMPORT, "constraint_entry_id")]})
+        fields[vol.Required("constraint_entry_id", default=values.get("constraint_entry_id") or "none")] = selector.SelectSelector({"mode": "dropdown", "options": [
+            {"value": "none", "label": "No operation constraint"}, *self._thermal_choices(MODULE_OPERATION_IMPORT, "constraint_entry_id")]})
         fields[vol.Required("solver_time_limit_s", default=values.get("solver_time_limit_s", 20))] = number_selector(1, 120, "s")
         return self.async_show_form(step_id="thermal_storage", errors=errors, description_placeholders=placeholders, data_schema=vol.Schema(fields))
 
