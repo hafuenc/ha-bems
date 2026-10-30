@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.9.2**
+Modular planning for flexible devices and energy storage. Version **0.9.3**
 uses one HA-BEMS configuration entry with shared forecast-importer and
 entity-creator service devices. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.

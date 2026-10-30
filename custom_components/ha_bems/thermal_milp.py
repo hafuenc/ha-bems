@@ -6,6 +6,10 @@ from time import monotonic
 from .thermal_cost import cop_points, interpolate_cop, number
 
 
+class InfeasiblePlanError(ValueError):
+    """The solver proved that no plan satisfies the configured constraints."""
+
+
 def validate_plan_settings(config):
     low = number(config.get("storage_min_h", 0), "Minimum storage duration", nonnegative=True)
     high = number(config.get("storage_duration_h"), "Storage duration", positive=True)
@@ -140,6 +144,8 @@ def solve_plan(costs, runtimes, durations, initial, config, previous_operation=0
         previous_elapsed_h, allowed, fixed_first, terminal_min)
     result = milp(objective, integrality=np.ones(len(objective)), bounds=bounds,
                   constraints=constraints, options={"time_limit": config.get("solver_time_limit_s", 20), "mip_rel_gap": .01})
+    if result.status == 2:
+        raise InfeasiblePlanError("No feasible thermal operating plan: " + result.message)
     if result.status not in (0, 1) or result.x is None:
         raise ValueError("No feasible thermal operating plan: " + result.message)
     candidate = np.rint(result.x)

@@ -1,4 +1,4 @@
-"""Shared availability and output metadata for the two planner entities."""
+"""Shared availability and output metadata for thermal planner entities."""
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util

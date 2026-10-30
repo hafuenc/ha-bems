@@ -128,6 +128,32 @@ the final forecast boundary. Both entities expose solver status, cost, solve
 time and optimality gap; their forecast lists remain live attributes and are
 excluded from recorder to keep history compact.
 
+**Storage level** publishes the same estimated storage as a percentage: 0% at
+the configured minimum duration, 100% at the maximum. Its forecast follows the
+standard format, with `storage_level_percent` at `effective_start` and
+`storage_level_end_percent` at the interval end. This is a feed-forward estimate,
+not a measured tank or building state.
+
+**Next start** and **Next stop** are timestamp sensors showing the next future
+off-to-on and on-to-off transitions in the plan. An already ongoing operation
+is not a future start. If no matching transition exists within the forecast,
+the sensor is unknown and its status is `no_transition_in_forecast`; no transition
+at the horizon boundary is assumed. Invalid plans make these sensors unavailable.
+
+The device also provides three diagnostic entities:
+
+- **Planner status:** `optimal`, `feasible_time_limit`, `waiting_for_inputs`,
+  `infeasible`, `error` or `expired`. It stays readable when planning fails;
+  attributes include the reason, plan availability, last successful plan time,
+  calculation schedule and configured solver time/gap limits.
+- **Solver time:** elapsed calculation time in seconds.
+- **Solver optimality gap:** the solver's remaining relative gap, in percent;
+  unknown if the solver did not report one. These two values are unavailable
+  when the current plan is invalid rather than displaying an old successful run.
+
+All additional entities reuse the same quarter-hourly plan and launch no extra
+optimization runs.
+
 ## Solver and failures
 
 The planner uses **HiGHS via SciPy** in a background executor. An optimal result
