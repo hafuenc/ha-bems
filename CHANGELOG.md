@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.1
+
+- Move constraint interpretation from the forecast importer into each MILP
+  planner. Imports always preserve 1 = allowed and 0 = blocked.
+- Select imported constraint forecasts or existing MILP operation plans directly;
+  each consumer chooses direct or inverted interpretation. DHW-to-UFH planning
+  no longer requires an intermediate importer. Retain hierarchy/cycle checks.
+- Preserve effective permissions when upgrading legacy importer/planner pairs
+  by moving their inversion choice into each consuming planner's settings.
+- Simplify thermal storage setup to one Storage duration field. The lower
+  storage bound is always zero, and an omitted initial value starts at 50%.
+  Retired minimum-duration settings are ignored and removed on settings save.
+
 ## 0.10.0
 
 - Split the integration overview into BEMS entity creator, BEMS forecast

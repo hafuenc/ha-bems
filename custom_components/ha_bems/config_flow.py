@@ -93,6 +93,11 @@ class _ModuleSteps(ThermalPlanSteps):
             for key in retired:
                 values.pop(key, None)
         if module == MODULE_THERMAL_PLAN:
+            values.pop("storage_min_h", None)
+            from .operation_constraints import constraint_selection
+
+            values["constraint_source"], values["constraint_mode"] = constraint_selection(self.hass, values)
+            values.pop("constraint_entry_id", None)
             values.pop("runtime_table_text", None)
             if values.pop("restart_storage_model", False):
                 values["storage_model_revision"] = uuid4().hex
@@ -102,6 +107,8 @@ class _ModuleSteps(ThermalPlanSteps):
                     values.pop(key, None)
             else:
                 values.pop("runtime_h_per_24h", None)
+        if module == MODULE_OPERATION_IMPORT:
+            values.pop("operation_meaning", None)
         if getattr(self, "_flat_mode", None):
             if is_split(self.config_entry) and (group := self.config_entry.data.get(CONF_GROUP)):
                 if group_for_module(module) != group:
@@ -383,10 +390,6 @@ class _ModuleSteps(ThermalPlanSteps):
                 field: selector.EntitySelector({"domain": ["sensor", "binary_sensor"]}) if is_operation else
                     selector.EntitySelector({"filter": [{"domain": "sensor", "unit_of_measurement": unit}]}),
             })
-        if is_operation:
-            fields[vol.Required("operation_meaning", default=values.get("operation_meaning", "running"))] = _choice([
-                {"value": "running", "label": "1 = another system running — invert to block this planner"},
-                {"value": "allowed", "label": "1 = operation allowed — use directly"}])
         return self.async_show_form(step_id=self._import_step(), errors=errors,
             description_placeholders=placeholders, data_schema=vol.Schema(fields))
 

@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.10.0**
+Modular planning for flexible devices and energy storage. Version **0.10.1**
 uses separate BEMS forecast importer and BEMS entity creator integration entries,
 plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -233,8 +233,10 @@ Under **Add operation planner → Thermal storage management (MILP)**, select a
 [runtime-cost forecast](docs/thermal_runtime_cost.md), define constant or outdoor
 temperature dependent demand in h/24h, storage duration and minimum on/off times.
 HiGHS calculates a 72-hour feed-forward plan with native on/off history and an
-estimated storage-duration forecast. Optional imported operation permissions
-support a DHW → UFH hierarchy. There are no equipment-feedback inputs or device
+estimated storage-duration forecast. Optional constraints can use another MILP's
+operation plan directly or an imported external forecast. Choose direct/inverted
+interpretation in each MILP, for example inverted DHW operation as UFH permission.
+There are no equipment-feedback inputs or device
 commands. [Setup, output and hierarchy](docs/thermal_operation_planner.md).
 
 ### Electric vehicle

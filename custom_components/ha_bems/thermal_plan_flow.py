@@ -5,7 +5,8 @@ import voluptuous as vol
 from homeassistant.helpers import selector
 from homeassistant.util import dt as dt_util
 
-from .const import MODULE_OPERATION_IMPORT, MODULE_OUTDOOR_TEMP, MODULE_THERMAL_PLAN
+from .const import MODULE_OUTDOOR_TEMP, MODULE_THERMAL_PLAN
+from .operation_constraints import constraint_choices, constraint_selection
 from .thermal_milp import solve_plan, validate_plan_settings
 
 
@@ -113,9 +114,13 @@ class ThermalPlanSteps:
     async def async_step_thermal_storage(self, user_input=None):
         errors, placeholders = {}, {"reason": ""}
         if user_input is not None:
-            reference = user_input.get("constraint_entry_id")
+            reference = user_input.get("constraint_source", user_input.get("constraint_entry_id"))
+            if reference and reference != "none" and ":" not in reference:
+                reference = f"imported:{reference}"
             self._remember({**user_input, "initial_storage_h": user_input.get("initial_storage_h"),
-                            "constraint_entry_id": None if reference in (None, "", "none") else reference})
+                            "storage_min_h": 0,
+                            "constraint_source": None if reference in (None, "", "none") else reference,
+                            "constraint_mode": user_input.get("constraint_mode", "direct")})
             try:
                 validate_plan_settings(self._values())
                 self._plan_preview = await self._async_plan_preview()
@@ -126,14 +131,19 @@ class ThermalPlanSteps:
                 return await self.async_step_thermal_plan_preview()
         values = self._values()
         fields = {}
-        for key, default, low, high in (("storage_duration_h", 6.4, .01, 1000), ("storage_min_h", 0, 0, 1000),
+        for key, default, low, high in (("storage_duration_h", 6.4, .01, 1000),
                 ("min_on_h", .75, 0, 72), ("min_off_h", .25, 0, 72)):
             fields[vol.Required(key, default=values.get(key, default))] = number_selector(low, high, "h")
         initial = values.get("initial_storage_h")
         fields[vol.Optional("initial_storage_h", default=initial) if initial is not None else vol.Optional("initial_storage_h")] = number_selector(0, 1000, "h")
         fields[vol.Required("restart_storage_model", default=False)] = bool
-        fields[vol.Required("constraint_entry_id", default=values.get("constraint_entry_id") or "none")] = selector.SelectSelector({"mode": "dropdown", "options": [
-            {"value": "none", "label": "No operation constraint"}, *self._thermal_choices(MODULE_OPERATION_IMPORT, "constraint_entry_id")]})
+        source, mode = constraint_selection(self.hass, values)
+        identifier = getattr(self, "_flat_item_id", None) or values.get("item_id", "new_planner")
+        fields[vol.Required("constraint_source", default=source or "none")] = selector.SelectSelector({
+            "mode": "dropdown", "options": constraint_choices(self.hass, identifier, values)})
+        fields[vol.Required("constraint_mode", default=mode)] = selector.SelectSelector({"mode": "dropdown", "options": [
+            {"value": "direct", "label": "Direct: 1 allows operation, 0 blocks operation"},
+            {"value": "inverted", "label": "Inverted: 1 blocks operation, 0 allows operation"}]})
         fields[vol.Required("solver_time_limit_s", default=values.get("solver_time_limit_s", 20))] = number_selector(1, 120, "s")
         return self.async_show_form(step_id="thermal_storage", errors=errors, description_placeholders=placeholders, data_schema=vol.Schema(fields))
 
@@ -148,7 +158,7 @@ class ThermalPlanSteps:
         validate_hierarchy(self.hass, identifier, config)
         now = dt_util.now()
         rows, runtimes, allowed, _ = await read_plan_inputs(self.hass, config, now)
-        low, high = config.get("storage_min_h", 0), config["storage_duration_h"]
+        low, high = 0, config["storage_duration_h"]
         initial = config.get("initial_storage_h")
         if initial is None:
             initial = low + (high - low) / 2

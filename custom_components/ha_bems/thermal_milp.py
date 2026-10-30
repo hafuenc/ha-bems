@@ -11,10 +11,8 @@ class InfeasiblePlanError(ValueError):
 
 
 def validate_plan_settings(config):
-    low = number(config.get("storage_min_h", 0), "Minimum storage duration", nonnegative=True)
+    low = 0
     high = number(config.get("storage_duration_h"), "Storage duration", positive=True)
-    if low >= high:
-        raise ValueError("Maximum storage duration must exceed the minimum")
     initial = config.get("initial_storage_h")
     if initial is not None and not low <= number(initial, "Initial storage duration") <= high:
         raise ValueError("Initial storage duration must lie within the storage limits")
@@ -139,7 +137,7 @@ def solve_plan(costs, runtimes, durations, initial, config, previous_operation=0
 
     start = monotonic()
     objective, bounds, constraints, effective_on, effective_off = build_matrices(
-        costs, runtimes, durations, initial, config.get("storage_min_h", 0), config["storage_duration_h"],
+        costs, runtimes, durations, initial, 0, config["storage_duration_h"],
         config.get("min_on_h", 0), config.get("min_off_h", 0), previous_operation,
         previous_elapsed_h, allowed, fixed_first, terminal_min)
     result = milp(objective, integrality=np.ones(len(objective)), bounds=bounds,
@@ -158,7 +156,7 @@ def solve_plan(costs, runtimes, durations, initial, config, previous_operation=0
     storage = [initial]
     for operation, demand, duration in zip(operations, runtimes, durations):
         level = storage[-1] + (operation - demand / 24) * duration
-        for bound in (config.get("storage_min_h", 0), config["storage_duration_h"]):
+        for bound in (0, config["storage_duration_h"]):
             if abs(level - bound) < 1e-7:
                 level = bound
         storage.append(level)

@@ -42,7 +42,9 @@ immediate startup/reload calculations. FBC switches retain their state on restar
 
 Runtime-cost forecasts belong to BEMS entity creator, separately from the MILP
 planners consuming them. Both support independently named systems with a generic
-procedure for DHW, UFH or other uses. Imported permissions form one-way hierarchies.
+procedure for DHW, UFH or other uses. Select an existing MILP plan directly, or
+an imported external constraint forecast, and choose direct/inverted interpretation
+in the consuming planner to form a one-way hierarchy.
 
 ## Existing installations
 
