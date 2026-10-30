@@ -2,13 +2,8 @@
 
 from .const import DOMAIN, GROUP_CREATOR, GROUP_IMPORTER, GROUP_TITLES
 from .entries import ModuleEntry, group_for_module, is_flat, module_type
-from .navigation import OVERVIEW_URL
 
 SERVICE_GROUPS = (GROUP_IMPORTER, GROUP_CREATOR)
-
-
-def service_configuration_url(group):
-    return OVERVIEW_URL if group == GROUP_IMPORTER else "homeassistant://config/integrations/integration/ha_bems"
 
 
 def service_identifier(group):
@@ -31,7 +26,7 @@ def shared_device_info(item):
     return {"identifiers": {service_identifier(group)}, "name": GROUP_TITLES[group],
             "manufacturer": "HA-BEMS", "model": GROUP_TITLES[group],
             "entry_type": DeviceEntryType.SERVICE,
-            "configuration_url": service_configuration_url(group)}
+            "configuration_url": "homeassistant://config/integrations/integration/ha_bems"}
 
 
 def ensure_service_devices(hass, entry):
@@ -42,5 +37,5 @@ def ensure_service_devices(hass, entry):
                 config_subentry_id=None, identifiers={service_identifier(group)},
                 name=GROUP_TITLES[group], manufacturer="HA-BEMS", model=GROUP_TITLES[group],
                 entry_type=dr.DeviceEntryType.SERVICE,
-                configuration_url=service_configuration_url(group))
+                configuration_url="homeassistant://config/integrations/integration/ha_bems")
             for group in SERVICE_GROUPS}

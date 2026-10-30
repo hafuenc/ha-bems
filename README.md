@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.8.0**
+Modular planning for flexible devices and energy storage. Version **0.8.1**
 uses one HA-BEMS configuration entry with shared forecast-importer and
 entity-creator service devices. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -15,8 +15,9 @@ battery planners remain independently configurable.
 them to your equipment.** Direct device control is outside the scope of every
 HA-BEMS module and future version.
 
-This release simplifies thermal runtime-cost setup with an editable COP lookup
-table and adds a forecast-source overview through the importer's **Visit** link.
+Thermal runtime-cost setup uses an editable COP lookup table. The importer
+shows diagnostic input-status entities; imported sources remain with their
+original integrations. The **Visit** link opens the HA-BEMS integration page.
 The **BEMS forecast importer** supports PV AC/DC, import/export prices and outdoor
 air temperature. FBC users choose their PV source. Imported-input statuses share
 one importer device, and generated helpers share one creator device. Existing
@@ -129,12 +130,6 @@ custom-template and field-mapping options are removed.
 [Helper format and Open-Meteo example](docs/pv_forecast_helper.md).
 Then select the named imported input in FBC. Several modules can share it. The
 importer exposes an input-status sensor without duplicating the forecast.
-The importer device's **Visit** link opens a forecast overview showing source
-values, BEMS validation status and validated coverage. Click a source or status
-to open its entity details. Status attributes also contain `source_entity_url`
-(using HA's configured external/cloud URL when available, otherwise internal)
-and the same-origin `source_entity_path`. Without a configured HA URL, use the
-overview's source links. The overview requires administrator access.
 Existing FBC entries must be configured to select a registered PV input after
 upgrading; battery settings and entity IDs are retained.
 [Shared input strategy and module dependency matrix](docs/shared_inputs.md).
