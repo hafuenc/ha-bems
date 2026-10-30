@@ -2,8 +2,9 @@
 
 HA-BEMS separates shared input preparation from device strategies.
 
-- **BEMS entity creator** generates a missing input: seasonal SOC minimum or
-  non-flexible building load. Existing seasonal percentage entities remain usable.
+- **BEMS entity creator** groups generated inputs: seasonal SOC minimum,
+  non-flexible building load and thermal runtime-cost forecasts.
+  Existing seasonal percentage entities remain usable.
 - **BEMS forecast importer** registers an existing, prepared forecast entity,
   validates it and shares its snapshot with consuming modules. Supported types
   are PV AC, PV DC, non-flexible building load, import/export electricity prices
@@ -11,8 +12,8 @@ HA-BEMS separates shared input preparation from device strategies.
 - **Device modules** select the registered inputs they need. FBC no longer has
   provider options, a template editor, field mappings or its own source-age setting.
 
-[Category cards and migration](grouped_setup.md) keep each input and module
-individually configurable inside its group.
+[Shared service devices and migration](grouped_setup.md) keep each input and
+module independently configurable through the single HA-BEMS Configure menu.
 
 ## Configure a PV input and FBC
 
@@ -20,10 +21,10 @@ individually configurable inside its group.
    An Open-Meteo example is included; any provider can supply that same contract.
    [Copy-and-paste AI prompts](helper_prompts.md) help build a compatible helper
    from your provider's actual entities and attributes.
-2. Create the **BEMS forecast importer** category if it does not exist. Inside its
-   card, choose **Add forecast → PV AC generation forecast or PV DC generation forecast**.
+2. Open **HA-BEMS → Configure → Add forecast import → PV AC generation forecast
+   or PV DC generation forecast**.
 3. Name the shared input and select the prepared sensor. Submit to test, review the 72-hour preview, then submit to register.
-4. Inside the **Electrical storage management** card, add or configure **FBC** and select that named
+4. In **HA-BEMS → Configure**, add an **FBC** operation planner or configure an existing item and select that named
    imported PV input. Several batteries can select the same registration.
 
 The importer exposes an **Input status** sensor on a virtual **BEMS forecast

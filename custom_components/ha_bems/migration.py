@@ -10,7 +10,7 @@ from .const import (
     CONF_ENABLED, CONF_GROUP, CONF_ITEM_ID, CONF_MODULE, DOMAIN,
     GROUP_TITLES, GROUP_CREATOR, GROUP_THERMAL, MODULE_FBC, MODULE_SOC, MODULE_THERMAL_COST,
 )
-from .entries import group_for_module
+from .entries import group_for_module, is_flat
 
 
 def _move_registrations(hass, old_id, parent, subentry, source_subentry_id=None):
@@ -83,7 +83,7 @@ async def async_group_legacy_entries(hass):
     manager = hass.config_entries
     entries = list(manager.async_entries(DOMAIN))
     legacy = [entry for entry in entries
-              if CONF_GROUP not in entry.data and not entry.data.get("migrated_to")]
+              if CONF_GROUP not in entry.data and not is_flat(entry) and not entry.data.get("migrated_to")]
     if any(entry.version != 1 for entry in legacy):
         raise ValueError("Unsupported HA-BEMS configuration version; grouping was not started")
     # Validate every module before changing anything, including forward-version
@@ -137,3 +137,11 @@ async def async_group_legacy_entries(hass):
 
     if any(entry.data.get("migrated_to") for entry in manager.async_entries(DOMAIN)):
         async_at_started(hass, remove_retired)
+
+
+async def async_flatten_entries(hass):
+    """Upgrade older entry layouts, then consolidate the resulting categories."""
+    from .flat_migration import async_consolidate_entries
+
+    await async_group_legacy_entries(hass)
+    await async_consolidate_entries(hass)

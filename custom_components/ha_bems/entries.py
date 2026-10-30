@@ -1,8 +1,10 @@
 """Flatten grouped subentries into stable module identities for planning."""
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
-from .const import CONF_ENABLED, CONF_GROUP, CONF_ITEM_ID, CONF_MODULE, DOMAIN, GROUP_MODULES, MODULE_SOC
+from .const import (CONF_ENABLED, CONF_GROUP, CONF_ITEM_ID, CONF_MODULE, DOMAIN, GROUP_MODULES,
+                    MODULE_SOC, CONF_LAYOUT, CONF_ITEMS, LAYOUT_FLAT)
 
 
 def group_for_module(module):
@@ -43,7 +45,7 @@ class ModuleEntry:
 
     @property
     def config_subentry_id(self):
-        return self.subentry.subentry_id
+        return None if is_flat(self.parent) else self.subentry.subentry_id
 
     def async_on_unload(self, callback):
         return self.parent.async_on_unload(callback)
@@ -53,6 +55,10 @@ def module_entries(entry):
     """Include a legacy entry only for upgrade compatibility."""
     if entry.data.get("migrated_to"):
         return []
+    if is_flat(entry):
+        return [ModuleEntry(entry, SimpleNamespace(data={**record["data"], CONF_ITEM_ID: identifier},
+                    title=record["title"], subentry_id=identifier))
+                for identifier, record in entry.data.get(CONF_ITEMS, {}).items()]
     if CONF_GROUP not in entry.data:
         return [entry]
     allowed = GROUP_MODULES[entry.data[CONF_GROUP]]
@@ -82,7 +88,11 @@ def module_type(entry):
 
 def add_item_entities(async_add_entities, entities, item):
     """Associate entities/devices with their actual HA subentry."""
-    if isinstance(item, ModuleEntry):
+    if isinstance(item, ModuleEntry) and not is_flat(item.parent):
         async_add_entities(entities, config_subentry_id=item.config_subentry_id)
     else:
         async_add_entities(entities)
+
+
+def is_flat(entry):
+    return entry.data.get(CONF_LAYOUT) == LAYOUT_FLAT

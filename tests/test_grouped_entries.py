@@ -28,24 +28,20 @@ def child(group, module, identifier, **values):
 
 
 class GroupFlowTests(unittest.IsolatedAsyncioTestCase):
-    async def test_four_group_cards_and_duplicate_prevention(self):
+    async def test_single_installation_and_duplicate_prevention(self):
         hass = Hass()
         hass.entries = []
         flow = HABEMSConfigFlow()
         flow.hass = hass
-        menu = await flow.async_step_user()
-        self.assertEqual(set(menu['menu_options']), set(GROUP_TITLES))
-        for group, title in GROUP_TITLES.items():
-            result = await getattr(flow, 'async_step_' + group)()
-            self.assertEqual(result['title'], title)
-            self.assertEqual(result['data'], {'group': group})
-            grouped = parent(group)
-            hass.entries.append(grouped)
-            result = await getattr(flow, 'async_step_' + group)()
-            self.assertEqual(result['reason'], 'already_configured')
-            supported = flow.async_get_supported_subentry_types(grouped)
-            self.assertEqual(set(supported), set() if group == 'thermal_storage' else {group})
-            self.assertFalse(flow.async_supports_options_flow(grouped))
+        self.assertEqual((await flow.async_step_user())['type'], 'form')
+        result = await flow.async_step_user({})
+        self.assertEqual(result['title'], 'HA-BEMS')
+        self.assertEqual(result['data'], {'layout': 'flat_devices', 'items': {}})
+        installation = entry('installation', **result['data'])
+        hass.entries.append(installation)
+        self.assertEqual((await flow.async_step_user())['reason'], 'already_configured')
+        self.assertEqual(flow.async_get_supported_subentry_types(installation), {})
+        self.assertTrue(flow.async_supports_options_flow(installation))
 
     async def test_add_multiple_helpers_then_rename_and_disable_one(self):
         hass = Hass()

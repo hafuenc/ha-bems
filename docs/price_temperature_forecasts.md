@@ -1,6 +1,6 @@
 # Electricity price and outdoor air temperature imports
 
-Register prepared sensors under **HA-BEMS → BEMS forecast importer**, choosing
+Register prepared sensors under **HA-BEMS → Configure → Add forecast import**, choosing
 **Electricity import price forecast**, **Electricity export price forecast** or
 **Outdoor air temperature forecast**. Each is an independent reusable input.
 These imports prepare data for future thermal/battery optimization; FBC itself

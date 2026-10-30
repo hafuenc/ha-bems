@@ -7,21 +7,22 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.6.0**
-adds reusable, independently configurable thermal runtime-cost forecasts,
-alongside forecast-based battery charging and shared forecast imports.
+Modular planning for flexible devices and energy storage. Version **0.7.0**
+uses one HA-BEMS configuration entry with shared forecast-importer and
+entity-creator service devices. Named runtime-cost forecasts, load helpers and
+battery planners remain independently configurable.
 **HA-BEMS always provides plans only. Your own Home Assistant automations apply
 them to your equipment.** Direct device control is outside the scope of every
 HA-BEMS module and future version.
 
 This release expands the **BEMS forecast importer** with
 separate PV AC/DC choices, import/export prices and outdoor air temperature.
-FBC users choose their PV source. Four category cards group the individual
-forecasts, helpers and storage modules as native subentries. Existing standalone
-entries migrate at startup. Thermal operating costs are implemented; thermal
+FBC users choose their PV source. Imported-input statuses share one importer
+device, and generated helpers share one creator device. Existing standalone or
+grouped entries migrate at startup. Thermal operating costs are implemented; thermal
 operation planning remains open for a future generic planner. Runtime-cost
 forecasts are created under BEMS entity creator.
-[Grouped setup and migration](docs/grouped_setup.md).
+[Service-device setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
 
 ## Install for the first manual check
@@ -30,12 +31,12 @@ forecasts are created under BEMS entity creator.
 2. Add `https://github.com/hafuenc/ha-bems` with type **Integration**.
 3. Download HA-BEMS and restart Home Assistant.
 4. Open **Settings → Devices & services → Add integration → HA-BEMS**.
-5. Choose a category to create its integration card. Use **Add forecast**,
-   **Add helper** or **Add storage module** inside that card for individual items.
-   Add HA-BEMS again only to create a different category.
+5. Create the single HA-BEMS installation, then open its **Configure** menu.
+6. Choose **Add forecast import**, **Create helper entity** or **Add operation
+   planner**. Use **Configure an item** or **Remove an item** for existing items.
 
 The repository is a HACS custom repository; it is not included in the default
-HACS catalogue. Version 0.6.0 requires Home Assistant 2026.10 or newer.
+HACS catalogue. Version 0.7.0 requires Home Assistant 2026.10 or newer.
 
 ## Updates
 
@@ -48,7 +49,7 @@ repositories may otherwise take up to the next scheduled refresh (normally
 not treated as a new release. Install the offered version and restart Home
 Assistant when ready; HA-BEMS never installs updates automatically itself.
 
-For 0.6.0, existing FBC entries migrate into Electrical storage management while
+For 0.7.0, existing FBC entries migrate into the single HA-BEMS installation while
 retaining their entity IDs and selections. Entries stay PV-only unless a building load is explicitly
 selected in **Configure**. Each battery gets an **FBC charging limitation enabled**
 switch, initially on. Turning it off publishes maximum charging power; no device
@@ -59,36 +60,27 @@ need to delete and recreate existing entries.
 
 ```text
 HA-BEMS
-├── BEMS entity creator
-│   ├── Battery seasonal SOC min threshold
-│   │   └── Editable monthly schedule
-│   ├── Non-flexible load profile
-│   │   ├── H0
-│   │   ├── H25
-│   │   └── Constant throughout the year
-│   └── Thermal runtime cost (repeatable, user-defined names)
-├── BEMS forecast importer
-│   ├── PV AC generation forecast
-│   ├── PV DC generation forecast
-│   ├── Non-flexible building load forecast
-│   ├── Electricity import price forecast
-│   ├── Electricity export price forecast
-│   └── Outdoor air temperature forecast
-├── Electrical storage management
-│   └── Forecast-based battery charging (FBC)
-└── Thermal storage management
-    └── Future generic operation planner (details open)
+├── BEMS forecast importer [shared service device]
+│   ├── PV AC / DC input-status entities
+│   ├── Building-load input-status entities
+│   ├── Import / export price input-status entities
+│   └── Outdoor-temperature input-status entities
+├── BEMS entity creator [shared service device]
+│   ├── Seasonal SOC threshold entities
+│   ├── Non-flexible load forecast entities
+│   └── Thermal runtime-cost forecast entities
+└── Individually named operation-planner devices
+    └── FBC battery devices (thermal planner design remains open)
 ```
 
 Create a seasonal threshold first, or select an existing percentage entity in
 FBC setup. The load-profile helper is independently optional; select it in FBC
 to consider expected building consumption, or leave load empty for PV-only behaviour.
-Each helper/module is a named subentry inside its category and can be edited
-individually using **Configure**. Multiple instances are supported, for example
-two batteries inside Electrical storage management with separate settings.
+Each helper/module is a named item managed through **HA-BEMS → Configure**.
+Multiple instances are supported, including batteries with separate settings.
 BEMS entity creator supports multiple runtime-cost setups using the same procedure,
 with independent COP, thermal power, auxiliary consumption and forecast selections.
-Older entries migrate into these groups while retaining entity IDs and selections.
+Older entries migrate into this layout while retaining entity IDs and selections.
 
 ### BEMS entity creator
 
@@ -274,8 +266,8 @@ the final authority applying them to each device. Future solver selection and ru
 actual local-hardware measurements; no solver package is needed for this FBC
 release. HiGHS is a candidate for the later open-source MILP implementation.
 
-The current code implements grouped category entries with individually configurable
-module subentries, reusable entity selection,
+The current code implements one installation with shared service devices,
+individually configurable items, reusable entity selection,
 the common timestamped forecast shape and background calculation. The future
 thermal orchestration, reservations and battery MILP described above are design
 requirements, not implemented features.

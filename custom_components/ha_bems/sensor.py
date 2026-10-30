@@ -18,6 +18,7 @@ from .const import (
 from .import_registry import coordinators, import_signal, planners
 from .seasonal_soc import resolve_threshold
 from .entries import add_item_entities, enabled_module_entries, module_type
+from .devices import shared_device_info
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -54,6 +55,9 @@ class SeasonalSOCSensor(SensorEntity):
             identifiers={(DOMAIN, entry.entry_id)}, name=entry.title,
             manufacturer="HA-BEMS", model="Battery settings",
         )
+        if info := shared_device_info(entry):
+            self._attr_device_info = info
+            self._attr_name = f"{entry.title} SOC min threshold"
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -120,6 +124,9 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
             manufacturer="HA-BEMS", model=("Battery control strategy" if module == MODULE_FBC
                 else "Thermal runtime cost" if module == MODULE_THERMAL_COST else "BEMS entity creator"),
         )
+        if info := shared_device_info(entry):
+            self._attr_device_info = info
+            self._attr_name = f"{entry.title} runtime cost" if module == MODULE_THERMAL_COST else entry.title
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -193,6 +200,9 @@ class ImportedForecastStatusSensor(CoordinatorEntity, SensorEntity):
             identifiers={(DOMAIN, entry.entry_id)}, name=entry.title,
             manufacturer="HA-BEMS", model="BEMS forecast importer",
         )
+        if info := shared_device_info(entry):
+            self._attr_device_info = info
+            self._attr_name = f"{entry.title} input status"
 
     @property
     def available(self):

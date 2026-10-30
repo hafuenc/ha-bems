@@ -4,13 +4,7 @@
     "step": {
       "user": {
         "title": "HA-BEMS",
-        "description": "Create a category once, then add and configure individual forecasts, helpers or storage modules inside its integration card. Each category groups its items together.",
-        "menu_options": {
-          "entity_creator": "BEMS entity creator",
-          "electrical_storage": "Electrical storage management",
-          "thermal_storage": "Thermal storage management",
-          "entity_importer": "BEMS forecast importer"
-        }
+        "description": "Create one HA-BEMS installation. BEMS forecast importer and BEMS entity creator are shared service devices containing their related entities. Use Configure on the HA-BEMS integration to add, configure or remove individual forecasts, helpers and operation planners. Thermal operation planning remains reserved for future development."
       },
       "entity_creator": {
         "title": "BEMS entity creator",
@@ -438,6 +432,148 @@
       "import_value_preview": {
         "title": "Forecast input test passed",
         "description": "Format, finite numeric values, 15-minute continuity and full next-72-hour coverage passed.\n\nIntervals: {count}\nStart: {start}\nEnd: {end}\nMinimum: {minimum} {unit}\nMaximum: {maximum} {unit}\nSource age (information only): {age} minutes\n\nTimestamps use UTC. Submit to register. The source is checked again before saving, on source changes and at least once a minute."
+      },
+      "thermal_cost": {
+        "title": "Thermal runtime cost — system",
+        "description": "Create a user-named runtime-cost forecast. The same procedure is used for every instance; each has its own COP, thermal output, auxiliary consumption and forecast inputs. It publishes the current and next-72-hour costs of full 15-minute activations. A future thermal operation planner can consume these entities. No device commands are sent.",
+        "data": {
+          "name": "System name",
+          "thermal_power_kw": "Nominal thermal output",
+          "auxiliary_power_w": "Additional electrical power while running",
+          "cop_model": "COP model"
+        },
+        "data_description": {
+          "thermal_power_kw": "Constant delivered heat output in kW. Heat-pump electrical power is this output divided by COP.",
+          "auxiliary_power_w": "Sum of electrical loads running with this task, such as circulation pumps. Enter only consumption not already included in your COP.",
+          "cop_model": "Use a constant COP or 2–10 freely defined temperature/COP anchor points. Supply temperature is not modelled."
+        }
+      },
+      "thermal_cop_constant": {
+        "title": "Constant COP",
+        "description": "A positive constant COP is used for every interval. No temperature forecast is required.",
+        "data": {
+          "constant_cop": "COP"
+        }
+      },
+      "thermal_cop_table": {
+        "title": "Temperature-dependent COP",
+        "description": "Select a registered outdoor temperature forecast and define 2–10 anchors in the next step. COP is interpolated linearly; outside the anchor range the nearest end segment is extrapolated linearly. Missing/invalid temperatures or non-positive extrapolated COPs use your fallback COP and are flagged in output attributes. Register a temperature source under BEMS forecast importer first.",
+        "data": {
+          "temperature_entry_id": "Outdoor temperature forecast",
+          "cop_point_count": "Number of anchor points",
+          "fallback_cop": "Fallback COP"
+        }
+      },
+      "thermal_cop_points": {
+        "title": "Temperature / COP anchor points",
+        "description": "Enter each temperature and its positive COP. Temperatures must be unique; points are sorted automatically. Linear interpolation/extrapolation follows your MATLAB lookup approach.",
+        "data": {
+          "temperature_1": "Point 1: temperature",
+          "cop_1": "Point 1: COP",
+          "temperature_2": "Point 2: temperature",
+          "cop_2": "Point 2: COP",
+          "temperature_3": "Point 3: temperature",
+          "cop_3": "Point 3: COP",
+          "temperature_4": "Point 4: temperature",
+          "cop_4": "Point 4: COP",
+          "temperature_5": "Point 5: temperature",
+          "cop_5": "Point 5: COP",
+          "temperature_6": "Point 6: temperature",
+          "cop_6": "Point 6: COP",
+          "temperature_7": "Point 7: temperature",
+          "cop_7": "Point 7: COP",
+          "temperature_8": "Point 8: temperature",
+          "cop_8": "Point 8: COP",
+          "temperature_9": "Point 9: temperature",
+          "cop_9": "Point 9: COP",
+          "temperature_10": "Point 10: temperature",
+          "cop_10": "Point 10: COP"
+        }
+      },
+      "thermal_cost_inputs": {
+        "title": "Thermal runtime cost — electricity inputs",
+        "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
+        "data": {
+          "pv_import_entry_id": "PV AC forecast",
+          "import_price_entry_id": "Electricity import prices",
+          "export_price_entry_id": "Electricity export prices",
+          "load_forecast_input": "Non-flexible building load (optional)",
+          "feed_in_limit_enabled": "Consider an export power limit",
+          "feed_in_limit_w": "Maximum export power",
+          "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
+        },
+        "data_description": {
+          "curtailed_price_eur_per_kwh": "Opportunity cost of otherwise curtailed PV; zero matches the MATLAB default. Negative prices are supported."
+        }
+      },
+      "thermal_cost_preview": {
+        "title": "Thermal runtime cost — preview",
+        "description": "Current cost: {current} EUR/timestep\nRange: {minimum} to {maximum} EUR/timestep\nCurrent COP: {cop}\nCOP fallback intervals: {fallback}\nFallback reason: {reason}\nIntervals: {count}\nUTC coverage: {start} to {end}\n\nEach value is the cost of one complete 15-minute activation, including any additional electrical power. The current state equals the first forecast value. This is an independent cost estimate, not a heating schedule. Submit to save; inputs are checked again."
+      },
+      "init": {
+        "title": "Configure HA-BEMS",
+        "description": "Manage independently named items. Forecasts and helpers share their two service devices; planners have individual devices. Changes retain existing entity IDs. Applying an item change reloads HA-BEMS briefly.",
+        "menu_options": {
+          "add_import": "Add forecast import",
+          "add_helper": "Create helper entity",
+          "add_planner": "Add operation planner",
+          "edit_item": "Configure an item",
+          "remove_item": "Remove an item"
+        }
+      },
+      "add_import": {
+        "title": "Add forecast import",
+        "description": "Choose the type of item to add.",
+        "menu_options": {
+          "import_pv_ac": "PV AC generation forecast",
+          "import_pv_dc": "PV DC generation forecast",
+          "import_load": "Non-flexible building load forecast",
+          "import_price": "Electricity import price forecast",
+          "export_price": "Electricity export price forecast",
+          "import_temperature": "Outdoor air temperature forecast"
+        }
+      },
+      "add_helper": {
+        "title": "Create helper entity",
+        "description": "Choose the type of item to add.",
+        "menu_options": {
+          "soc": "Battery seasonal SOC min threshold",
+          "load_profile": "Non-flexible load profile",
+          "thermal_cost": "Thermal runtime cost (EUR/timestep)"
+        }
+      },
+      "add_planner": {
+        "title": "Add operation planner",
+        "description": "Choose the type of item to add.",
+        "menu_options": {
+          "fbc": "Forecast-based battery charging (FBC)"
+        }
+      },
+      "edit_item": {
+        "title": "Configure an item",
+        "description": "Select the named item.",
+        "data": {
+          "item_id": "Item"
+        }
+      },
+      "remove_item": {
+        "title": "Remove an item",
+        "description": "Select the named item.",
+        "data": {
+          "item_id": "Item"
+        }
+      },
+      "item_settings": {
+        "title": "Item settings",
+        "description": "Change the name or enable/disable this item. Enabled items continue to their settings. Disabling saves immediately, even when sources are unavailable.",
+        "data": {
+          "name": "Item name",
+          "enabled": "Enabled"
+        }
+      },
+      "remove_confirm": {
+        "title": "Confirm item removal",
+        "description": "Remove the configuration and BEMS entities for {name}? Its external source entities remain untouched. Other items and the shared service devices remain configured. Any planner using this input will report it unavailable until another input is selected."
       }
     },
     "error": {
@@ -446,7 +582,13 @@
       "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
       "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
       "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
-      "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+      "no_pv_import": "No PV input is registered yet. In HA-BEMS Configure, choose Add forecast import → PV AC generation forecast or PV DC generation forecast.",
+      "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
+      "invalid_cop_points": "Define 2–10 finite temperature/COP pairs with unique temperatures and positive COPs.",
+      "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
+    },
+    "abort": {
+      "already_configured": "This category already exists. Use Add inside its integration card to add another item."
     }
   },
   "config_subentries": {
