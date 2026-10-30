@@ -7,6 +7,18 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 
+def _config_schema(config):
+    """Declare UI-only setup while keeping pure calculation imports independent."""
+    from homeassistant.helpers import config_validation as cv
+
+    from .const import DOMAIN
+
+    return cv.config_entry_only_config_schema(DOMAIN)(config)
+
+
+CONFIG_SCHEMA = _config_schema
+
+
 async def async_setup(hass, config):
     """Consolidate old standalone entries before any module platforms load."""
     from .migration import async_flatten_entries

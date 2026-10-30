@@ -6,7 +6,9 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "panel_custom"
+    "http",
+    "panel_custom",
+    "websocket_api"
   ],
   "documentation": "https://github.com/hafuenc/ha-bems",
   "iot_class": "calculated",
