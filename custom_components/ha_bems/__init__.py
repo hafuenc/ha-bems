@@ -134,6 +134,26 @@ async def _async_setup_module(hass, entry, parent):
         def refresh(_event):
             hass.async_create_task(coordinator.async_request_refresh())
 
+        if module == MODULE_THERMAL_PLAN:
+            from homeassistant.helpers.dispatcher import async_dispatcher_connect
+            from homeassistant.helpers.event import async_track_time_change
+
+            @callback
+            def input_ready(_event=None):
+                if coordinator.awaiting_inputs:
+                    refresh(None)
+
+            # The planner owns its clock, independent of whether either
+            # output entity is enabled in the entity registry.
+            entry.async_on_unload(async_track_time_change(
+                hass, refresh, minute=[0, 15, 30, 45], second=0))
+            entry.async_on_unload(async_track_state_change_event(
+                hass, [config["cost_entity"]], input_ready))
+            for key in ("constraint_entry_id", "runtime_temperature_entry_id"):
+                if reference := config.get(key):
+                    entry.async_on_unload(async_dispatcher_connect(
+                        hass, import_signal(reference), input_ready))
+
         entry.async_on_unload(cleanup)
         if module != MODULE_FBC:
             entry.async_on_unload(coordinator.async_add_listener(notify))

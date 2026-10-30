@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.9.1**
+Modular planning for flexible devices and energy storage. Version **0.9.2**
 uses one HA-BEMS configuration entry with shared forecast-importer and
 entity-creator service devices. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -23,6 +23,8 @@ air temperature. FBC users choose their PV source. Imported-input statuses share
 one importer device, and generated helpers share one creator device. Existing
 standalone or grouped entries migrate at startup. Thermal operating costs and a feed-forward thermal MILP operation planner are implemented. Runtime-cost
 forecasts are created under BEMS entity creator.
+Thermal MILP planners calculate on the fixed HH:00/15/30/45 clock; startup and
+reloads can calculate immediately.
 [Service-device setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
 

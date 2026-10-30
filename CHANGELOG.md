@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.2
+
+- Run thermal MILP planners on the fixed HH:00/15/30/45 clock, once per slot.
+  Forecast changes between slots no longer trigger extra solves. Startup,
+  reloads and configuration changes still allow an immediate calculation.
+- Keep readiness retries for missing inputs, reuse upstream plans within a
+  slot, and attach scheduling to the planner rather than its output sensors.
+- Use full 15-minute intervals for scheduled runs and expose the calculation
+  schedule in forecast attributes.
+
 ## 0.9.1
 
 - Fix selecting No operation constraint in thermal planner setup. Use an explicit

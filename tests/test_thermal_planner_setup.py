@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from types import ModuleType, SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import scipy.optimize  # Load compiled dependencies outside temporary sys.modules mocks.
 
 from tests.ha_stubs import modules
@@ -130,10 +130,51 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         # An invalid upstream cost input cannot become unrestricted permission.
         self.states['sensor.cost'].state='unavailable'
         await ufh.async_refresh()
+        self.assertTrue(ufh.last_update_success)  # Existing slot stays committed.
+        from custom_components.ha_bems.thermal_plan_coordinator import dt_util
+        with patch.object(dt_util,'now',lambda:NOW+timedelta(minutes=15)):
+            await ufh.async_refresh()
         self.assertFalse(ufh.last_update_success)
         self.root.data['items']['dhw']['data']['constraint_entry_id']='permissions'
         with self.assertRaisesRegex(ValueError,'Circular'):
             validate_hierarchy(self.hass,'ufh',ufh.config)
+
+    async def test_only_one_solve_per_clock_slot_and_full_intervals_on_scheduled_run(self):
+        from custom_components.ha_bems.thermal_plan_coordinator import dt_util, solve_plan
+        planner=self.add('dhw',{**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'})
+        with patch('custom_components.ha_bems.thermal_plan_coordinator.solve_plan',wraps=solve_plan) as solver:
+            await planner.async_refresh()
+            first_generated=planner.data['generated_at']
+            self.states['sensor.cost'].attributes['forecast']=rows(.4,'cost_eur_per_timestep')
+            await planner.async_refresh()
+            await planner.async_request_refresh()  # e.g. an upstream dependency request
+            self.assertEqual(solver.call_count,1)
+            self.assertEqual(planner.data['generated_at'],first_generated)
+            boundary=NOW.replace(minute=30,second=0,microsecond=0)
+            future=boundary+timedelta(milliseconds=100)
+            self.states['sensor.cost'].attributes['forecast']=rows(.4,'cost_eur_per_timestep',future)
+            with patch.object(dt_util,'now',lambda:future):
+                await planner.async_refresh()
+                await planner.async_refresh()
+            self.assertTrue(planner.last_update_success,planner.last_exception)
+            self.assertEqual(solver.call_count,2)
+            self.assertEqual(planner.data['forecast'][0]['effective_start'],boundary.isoformat())
+            self.assertEqual(solver.call_args.args[2][0],.25)
+            self.assertIsNone(solver.call_args.args[-2])  # No old-plan lock on new slot.
+
+    async def test_startup_waits_for_inputs_but_does_not_repeat_a_failed_solver_attempt(self):
+        from custom_components.ha_bems.thermal_plan_coordinator import solve_plan
+        planner=self.add('dhw',{**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'})
+        self.states['sensor.cost'].state='unavailable'
+        await planner.async_refresh()
+        self.assertTrue(planner.awaiting_inputs)
+        self.states['sensor.cost'].state='.2'
+        with patch('custom_components.ha_bems.thermal_plan_coordinator.solve_plan',side_effect=ValueError('Infeasible')) as solver:
+            await planner.async_refresh()
+            self.assertFalse(planner.awaiting_inputs)
+            await planner.async_refresh()
+            self.assertEqual(solver.call_count,1)
+            self.assertFalse(planner.last_update_success)
 
     async def test_import_permission_values_are_strict_and_can_be_used_directly(self):
         source = rows(1,'operation')
@@ -188,8 +229,10 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         dispatcher.async_dispatcher_send=lambda *a:None
         dispatcher.async_dispatcher_connect=lambda *a:(lambda:None)
         events=ModuleType('homeassistant.helpers.event')
-        events.async_track_time_change=lambda *a,**k:(lambda:None)
-        events.async_track_state_change_event=lambda *a,**k:(lambda:None)
+        clock=Mock(return_value=lambda:None)
+        source=Mock(return_value=lambda:None)
+        events.async_track_time_change=clock
+        events.async_track_state_change_event=source
         self.injected['homeassistant.helpers.update_coordinator'].CoordinatorEntity=CoordinatorEntity
         injected={module.__name__:module for module in (sensor,binary,entity,platform,dispatcher,events)}
         # Device registry boundary for the flat installation's shared services.
@@ -220,5 +263,16 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(operation.extra_state_attributes['forecast_value_key'],'operation')
             self.assertEqual(duration.native_value,.5)
             self.assertEqual(duration.extra_state_attributes['forecast'][0]['duration_end_h'],.5)
+            clock.assert_called_once()
+            self.assertEqual(clock.call_args.kwargs,{'minute':[0,15,30,45],'second':0})
+            self.assertEqual(source.call_args.args[1],['sensor.cost'])
+            coordinator=self.planners(self.hass)['dhw']
+            with patch.object(self.hass,'async_create_task',create=True) as schedule:
+                source.call_args.args[2](None)
+                schedule.assert_not_called()
+                coordinator.awaiting_inputs=True
+                with patch.object(coordinator,'async_request_refresh',new=Mock(return_value=None)):
+                    source.call_args.args[2](None)
+                    schedule.assert_called_once()
             self.assertTrue(await async_unload_entry(self.hass,self.root))
         self.assertNotIn('dhw',self.planners(self.hass))
