@@ -6,10 +6,10 @@ number of systems. There are no separate DHW/UFH modes. Each item has its own
 parameters, input selections, Configure action, enabled setting and Runtime cost
 sensor. Renaming/configuring an item retains its entity identity.
 
-This helper calculates the **cost of operation** as a reusable entity. A future
-generic thermal operation planner can consume these forecasts; its detailed
-setup remains open. No solver, heat-pump commands, operating schedule or storage
-model is included here.
+This helper calculates the **cost of operation** as a reusable entity.
+Select it in the [thermal operation planner](thermal_operation_planner.md) under
+**Add operation planner → Thermal storage management (MILP)**. Cost generation
+and operation planning remain separate, independently configurable items.
 
 Existing runtime-cost setups move onto the shared BEMS entity creator service
 device at startup. Their settings, user-defined item names, module IDs and

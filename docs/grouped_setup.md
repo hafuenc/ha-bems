@@ -10,12 +10,14 @@ HA-BEMS
     User-named building-load input statuses
     User-named import/export price input statuses
     User-named outdoor-temperature input statuses
+    User-named operation-constraint input statuses
   BEMS entity creator [service device]
     User-named seasonal SOC thresholds
     User-named non-flexible load forecasts
     User-named thermal runtime-cost forecasts
   Individual operation-planner devices
     User-named FBC batteries
+    User-named thermal MILP planners
 ```
 
 External forecast sensors stay with their supplying integrations. The shared
@@ -25,8 +27,9 @@ device owns the entities calculated by BEMS. Each item retains independent
 parameters and can be created multiple times.
 
 Thermal runtime costs use one generic procedure with configurable COP and other
-system parameters. A future thermal operation planner remains open; no separate
-DHW/UFH setup modes or extra planner layers are introduced.
+system parameters. Thermal operation planners use the same generic procedure
+for any named system, including DHW and UFH. Optional imported permissions form
+a one-way hierarchy between planners.
 
 ## Create and configure
 

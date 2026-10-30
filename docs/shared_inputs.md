@@ -8,7 +8,7 @@ HA-BEMS separates shared input preparation from device strategies.
 - **BEMS forecast importer** registers an existing, prepared forecast entity,
   validates it and shares its snapshot with consuming modules. Supported types
   are PV AC, PV DC, non-flexible building load, import/export electricity prices
-  and outdoor air temperature.
+  outdoor air temperature, and operation constraints with binary permissions.
 - **Device modules** select the registered inputs they need. FBC no longer has
   provider options, a template editor, field mappings or its own source-age setting.
 
@@ -72,7 +72,20 @@ notify FBC when their forecast or health changes, and on removal/reload.
 | Electricity import price forecast | Registered forecast sensor | Not used |
 | Electricity export price forecast | Registered forecast sensor | Not used |
 | Outdoor temperature forecast | Registered forecast sensor | Not used |
-| Upstream thermal operating plans | Future module outputs | Not used |
+| Upstream thermal operating plans | Registered operation-constraint forecasts | Not used |
+
+The [thermal operation planner](thermal_operation_planner.md) uses these inputs:
+
+| Input | How it is supplied | Thermal MILP |
+| --- | --- | --- |
+| Runtime costs in EUR/timestep | Existing BEMS runtime-cost entity or compatible forecast entity | Required |
+| Outdoor temperature | Registered forecast | Required for the runtime lookup model |
+| Operation permissions | Registered operation-constraint forecast | Optional; zero forces operation off |
+
+Choose whether the constraint source's `operation: 1` means **running** (invert
+to block the downstream system) or **allowed** (use directly). This supports
+a sequential DHW → UFH hierarchy without equipment feedback or shared runtime
+subtraction. Invalid upstream plans invalidate downstream planning.
 
 Battery capacity, efficiency, target SOC and power limits are module parameters,
 not shared forecast entities. The generated load and seasonal SOC helpers are

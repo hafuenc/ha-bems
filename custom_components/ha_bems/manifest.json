@@ -5,11 +5,15 @@
     "@hafuenc"
   ],
   "config_flow": true,
+  "dependencies": [
+    "persistent_notification"
+  ],
   "documentation": "https://github.com/hafuenc/ha-bems",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/hafuenc/ha-bems/issues",
   "requirements": [
-    "holidays>=0.106"
+    "holidays>=0.106",
+    "scipy==1.17.1"
   ],
-  "version": "0.8.1"
+  "version": "0.9.0"
 }

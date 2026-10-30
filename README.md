@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.8.1**
+Modular planning for flexible devices and energy storage. Version **0.9.0**
 uses one HA-BEMS configuration entry with shared forecast-importer and
 entity-creator service devices. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -21,8 +21,7 @@ original integrations. The **Visit** link opens the HA-BEMS integration page.
 The **BEMS forecast importer** supports PV AC/DC, import/export prices and outdoor
 air temperature. FBC users choose their PV source. Imported-input statuses share
 one importer device, and generated helpers share one creator device. Existing
-standalone or grouped entries migrate at startup. Thermal operating costs are implemented; thermal
-operation planning remains open for a future generic planner. Runtime-cost
+standalone or grouped entries migrate at startup. Thermal operating costs and a feed-forward thermal MILP operation planner are implemented. Runtime-cost
 forecasts are created under BEMS entity creator.
 [Service-device setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
@@ -66,13 +65,15 @@ HA-BEMS
 │   ├── PV AC / DC input-status entities
 │   ├── Building-load input-status entities
 │   ├── Import / export price input-status entities
-│   └── Outdoor-temperature input-status entities
+│   ├── Outdoor-temperature input-status entities
+│   └── Operation-constraint input-status entities
 ├── BEMS entity creator [shared service device]
 │   ├── Seasonal SOC threshold entities
 │   ├── Non-flexible load forecast entities
 │   └── Thermal runtime-cost forecast entities
 └── Individually named operation-planner devices
-    └── FBC battery devices (thermal planner design remains open)
+    ├── FBC battery devices
+    └── Thermal storage MILP planner devices
 ```
 
 Create a seasonal threshold first, or select an existing percentage entity in
@@ -227,11 +228,13 @@ must not independently issue competing setpoints.
 
 ### Heat pump / thermal storage energy management
 
-A future generic thermal operation planner may use the reusable
-[runtime-cost forecasts](docs/thermal_runtime_cost.md) created under BEMS entity
-creator. There are no separate DHW and UFH procedures. Demand, thermal storage,
-shared-equipment constraints and solver configuration belong to the future
-planner's design; its detailed setup remains open.
+Under **Add operation planner → Thermal storage management (MILP)**, select a
+[runtime-cost forecast](docs/thermal_runtime_cost.md), define constant or outdoor
+temperature dependent demand in h/24h, storage duration and minimum on/off times.
+HiGHS calculates a 72-hour feed-forward plan with native on/off history and an
+estimated storage-duration forecast. Optional imported operation permissions
+support a DHW → UFH hierarchy. There are no equipment-feedback inputs or device
+commands. [Setup, output and hierarchy](docs/thermal_operation_planner.md).
 
 ### Electric vehicle
 
@@ -247,7 +250,7 @@ Shared actual values, forecasts, prices and helper entities
     ↓
 BEMS entity creator: reusable runtime-cost forecasts
     ↓
-Future generic thermal operation planner (design open)
+Thermal MILP operation planner + optional upstream operation permissions
     ↓
 Operating recommendations applied by user automations
 ```
@@ -262,15 +265,14 @@ remains a future design task.
 
 Keep calculations independent from the HA UI and source adapters. Coordinate
 plans and battery energy budgets inside HA-BEMS; a user-defined automation is
-the final authority applying them to each device. Future solver selection and runtime limits will be based on
-actual local-hardware measurements; no solver package is needed for this FBC
-release. HiGHS is a candidate for the later open-source MILP implementation.
+the final authority applying them to each device. Thermal MILP uses HiGHS via
+SciPy with a bounded solve time; FBC retains its independent calculation engine.
 
 The current code implements one installation with shared service devices,
 individually configurable items, reusable entity selection,
-the common timestamped forecast shape and background calculation. The future
-thermal orchestration, reservations and battery MILP described above are design
-requirements, not implemented features.
+the common timestamped forecast shape, background calculation and hierarchical
+thermal MILP planning. Joint PV/battery reservations and battery MILP remain
+future design tasks.
 
 ## Development and reference status
 

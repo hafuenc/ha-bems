@@ -86,7 +86,7 @@ class CostRegroupingTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(module_entries(creator)[0].enabled)
         self.assertEqual(source.subentries, {})
 
-    async def test_generic_menu_and_translations_leave_future_planner_open(self):
+    async def test_generic_cost_creator_and_separate_thermal_planner_translations(self):
         self.assertEqual(group_for_module(MODULE_THERMAL_COST), 'entity_creator')
         root = Path(__file__).resolve().parents[1] / 'custom_components/ha_bems'
         strings = json.loads((root / 'strings.json').read_text(encoding='utf-8'))
@@ -94,6 +94,6 @@ class CostRegroupingTests(unittest.IsolatedAsyncioTestCase):
         creator = strings['config_subentries']['entity_creator']['step']
         self.assertIn('thermal_cost', creator['user']['menu_options'])
         self.assertIn('thermal_cop_points', creator)
-        self.assertNotIn('thermal_storage', strings['config_subentries'])
+        self.assertIn('thermal_plan', strings['config_subentries']['thermal_storage']['step']['user']['menu_options'])
         self.assertNotIn('DHW', creator['thermal_cost']['description'])
         self.assertNotIn('UFH', creator['thermal_cost']['description'])

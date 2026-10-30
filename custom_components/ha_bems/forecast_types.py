@@ -2,13 +2,15 @@
 
 from .const import (
     CONF_MODULE, CONF_PV_POWER_TYPE, MODULE_LOAD_IMPORT, MODULE_IMPORT_PRICE,
-    MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP, MODULE_THERMAL_COST,
+    MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP, MODULE_THERMAL_COST, MODULE_OPERATION_IMPORT,
 )
 
 
 def forecast_type(config):
     """Return label, unit, record field and whether values must be nonnegative."""
     module = config.get(CONF_MODULE)
+    if module == MODULE_OPERATION_IMPORT:
+        return "Operation permission", "", "allowed", True
     if module == MODULE_LOAD_IMPORT:
         return "Non-flexible building load", "W", "power_w", True
     if module == MODULE_IMPORT_PRICE:

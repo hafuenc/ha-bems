@@ -1,0 +1,220 @@
+"""Planner setup, restart projection and hard one-way forecast permissions."""
+
+from copy import deepcopy
+from datetime import datetime, timedelta
+from types import ModuleType, SimpleNamespace
+import unittest
+from unittest.mock import patch
+import scipy.optimize  # Load compiled dependencies outside temporary sys.modules mocks.
+
+from tests.ha_stubs import modules
+from tests.test_importer import Hass, entry, HABEMSOptionsFlow
+from tests.test_thermal_cost import rows
+from tests.test_forecast_input import NOW
+from custom_components.ha_bems.const import MODULE_OPERATION_IMPORT, MODULE_THERMAL_PLAN
+from custom_components.ha_bems.operation_constraints import permission_rows, validate_hierarchy
+from tests.test_thermal_milp import CONFIG
+
+
+class MemoryStore:
+    saved = {}
+
+    def __init__(self, hass, version, key): self.key = key
+    async def async_load(self): return deepcopy(self.saved.get(self.key))
+    async def async_save(self, value): self.saved[self.key] = deepcopy(value)
+
+
+class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        MemoryStore.saved = {}
+        self.injected = modules()
+        storage = ModuleType('homeassistant.helpers.storage')
+        storage.Store = MemoryStore
+        self.injected[storage.__name__] = storage
+        components = ModuleType('homeassistant.components')
+        components.persistent_notification = SimpleNamespace(async_create=lambda *a, **k: None, async_dismiss=lambda *a, **k: None)
+        self.injected[components.__name__] = components
+        self.injected['homeassistant.helpers'].entity_registry.async_get = lambda hass: SimpleNamespace(async_get=lambda entity: None)
+        self.context = patch.dict('sys.modules', self.injected)
+        self.context.start()
+        self.addCleanup(self.context.stop)
+        from custom_components.ha_bems.thermal_plan_coordinator import ThermalPlanCoordinator
+        from custom_components.ha_bems.import_registry import planners, coordinators
+        self.Coordinator, self.planners, self.imports = ThermalPlanCoordinator, planners, coordinators
+        self.hass = Hass()
+        self.root = entry('root', layout='flat_devices', items={})
+        self.root.disabled_by = None
+        self.hass.entries = [self.root]
+        self.states = {'sensor.cost': SimpleNamespace(entity_id='sensor.cost', state='.2', attributes={
+            'unit_of_measurement':'EUR/timestep','schema_version':1,'source_updated_at':NOW.isoformat(),
+            'forecast':rows(.2,'cost_eur_per_timestep')})}
+        self.hass.states = SimpleNamespace(get=self.states.get)
+
+    def add(self, identifier, config):
+        self.root.data['items'][identifier] = {'title':identifier, 'data':{'module':MODULE_THERMAL_PLAN, **config}}
+        from custom_components.ha_bems.entries import module_entries
+        item = next(item for item in module_entries(self.root) if item.entry_id == identifier)
+        coordinator = self.Coordinator(self.hass, item, self.root)
+        coordinator.name = identifier
+        self.planners(self.hass)[identifier] = coordinator
+        return coordinator
+
+    async def test_constant_runtime_setup_saves_two_output_planner_without_feedback(self):
+        self.hass.config_entries.async_update_entry = lambda target, **values: setattr(target,'data',values['data'])
+        flow = HABEMSOptionsFlow()
+        flow.hass, flow.config_entry = self.hass, self.root
+        self.assertIn('thermal_plan', (await flow.async_step_add_planner())['menu_options'])
+        self.assertEqual((await flow.async_step_thermal_plan({'name':'DHW','cost_entity':'sensor.cost','runtime_model':'constant'}))['step_id'], 'runtime_constant')
+        await flow.async_step_runtime_constant({'runtime_h_per_24h':0})
+        result = await flow.async_step_thermal_storage({**CONFIG,'runtime_h_per_24h':0,'constraint_entry_id':'','initial_storage_h':None})
+        self.assertEqual(result['step_id'],'thermal_plan_preview',result)
+        await flow.async_step_thermal_plan_preview({})
+        saved = next(iter(self.root.data['items'].values()))['data']
+        self.assertEqual(saved['module'], MODULE_THERMAL_PLAN)
+        self.assertNotIn('soc_entity', saved)
+        self.assertNotIn('runtime_table_text', saved)
+
+    async def test_restart_preserves_feedforward_storage_and_current_operation(self):
+        config = {**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'}
+        original = self.add('dhw', config)
+        await original.async_refresh()
+        self.assertTrue(original.last_update_success, original.last_exception)
+        self.assertEqual(original.data['value'], .5)
+        self.assertEqual(len(original.data['forecast']),289)
+        self.assertFalse(original.data['feedback_used'])
+        stored = deepcopy(MemoryStore.saved)
+        from custom_components.ha_bems.thermal_plan_coordinator import projected_state
+        self.assertAlmostEqual(projected_state(original.data,NOW+timedelta(minutes=1))[0],.5)
+        restarted = self.add('dhw', config)
+        await restarted.async_refresh()
+        self.assertTrue(restarted.last_update_success, restarted.last_exception)
+        self.assertEqual(restarted.data['value'], .5)
+        self.assertTrue(stored)
+
+    async def test_restart_advances_nonconstant_storage_along_the_previous_plan(self):
+        config={**CONFIG,'runtime_h_per_24h':12,'cost_entity':'sensor.cost'}
+        original=self.add('dhw',config)
+        await original.async_refresh()
+        self.assertTrue(original.last_update_success,original.last_exception)
+        from custom_components.ha_bems.thermal_plan_coordinator import dt_util, projected_state
+        future=NOW+timedelta(seconds=30)
+        expected=projected_state(original.data,future)[0]
+        self.assertNotAlmostEqual(expected,.5)
+        restarted=self.add('dhw',config)
+        with patch.object(dt_util,'now',lambda:future):
+            await restarted.async_refresh()
+        self.assertTrue(restarted.last_update_success,restarted.last_exception)
+        self.assertAlmostEqual(restarted.data['value'],expected)
+
+    async def test_native_binary_source_is_inverted_and_cycle_is_rejected(self):
+        dhw = self.add('dhw', {**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'})
+        await dhw.async_refresh()
+        self.states['binary_sensor.dhw_plan'] = SimpleNamespace(entity_id='binary_sensor.dhw_plan',state='off',attributes={'planner_item_id':'dhw'})
+        self.root.data['items']['permissions'] = {'title':'DHW blocks UFH','data':{'module':MODULE_OPERATION_IMPORT,
+            'forecast_entity':'binary_sensor.dhw_plan','operation_meaning':'running'}}
+        from custom_components.ha_bems.entries import module_entries
+        from custom_components.ha_bems.input_coordinator import ForecastImportCoordinator
+        item = next(item for item in module_entries(self.root) if item.entry_id=='permissions')
+        importer = ForecastImportCoordinator(self.hass,item,self.root)
+        self.imports(self.hass)['permissions'] = importer
+        await importer.async_refresh()
+        self.assertTrue(importer.last_update_success, importer.last_exception)
+        self.assertEqual(importer.data['forecast'][0]['allowed'],1)
+        ufh = self.add('ufh', {**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost','constraint_entry_id':'permissions'})
+        await ufh.async_refresh()
+        self.assertTrue(ufh.last_update_success, ufh.last_exception)
+        # An invalid upstream cost input cannot become unrestricted permission.
+        self.states['sensor.cost'].state='unavailable'
+        await ufh.async_refresh()
+        self.assertFalse(ufh.last_update_success)
+        self.root.data['items']['dhw']['data']['constraint_entry_id']='permissions'
+        with self.assertRaisesRegex(ValueError,'Circular'):
+            validate_hierarchy(self.hass,'ufh',ufh.config)
+
+    async def test_import_permission_values_are_strict_and_can_be_used_directly(self):
+        source = rows(1,'operation')
+        self.assertEqual(permission_rows(source, {'operation_meaning':'running'},NOW)[0]['allowed'],0)
+        self.assertEqual(permission_rows(source, {'operation_meaning':'allowed'},NOW)[0]['allowed'],1)
+        source[0]['operation']=.5
+        with self.assertRaises(ValueError): permission_rows(source,{},NOW)
+
+    async def test_partial_plan_projection_and_expiry_never_reset_storage_silently(self):
+        from custom_components.ha_bems.thermal_plan_coordinator import projected_state
+        row = rows(1,'operation')[0]
+        start = datetime.fromisoformat(row['start'])
+        plan = {'initial_previous_operation':0,'initial_previous_elapsed_h':72,'forecast':[
+            {**row, 'effective_start':start.isoformat(), 'storage_start_h':1,'storage_end_h':1.125,'runtime_h_per_24h':12}]}
+        value, previous, elapsed, fixed = projected_state(plan,start+timedelta(minutes=6))
+        self.assertAlmostEqual(value,1.05)
+        self.assertEqual((previous,fixed),(1,1))
+        self.assertAlmostEqual(elapsed,.1)
+        with self.assertRaisesRegex(ValueError,'expired'):
+            projected_state(plan,start+timedelta(minutes=16))
+
+    async def test_runtime_lookup_form_accepts_zero_and_keeps_selected_count(self):
+        from custom_components.ha_bems.import_registry import coordinators
+        self.root.data['items']['temperature']={'title':'Outdoor','data':{'module':'outdoor_temperature_forecast','forecast_entity':'sensor.outdoor'}}
+        coordinators(self.hass)['temperature']=SimpleNamespace(last_update_success=True,data={
+            'source_updated_at':NOW.isoformat(),'forecast':rows(12,'temperature_c')})
+        flow=HABEMSOptionsFlow();flow.hass,flow.config_entry=self.hass,self.root
+        await flow.async_step_add_planner()
+        await flow.async_step_thermal_plan({'name':'UFH','cost_entity':'sensor.cost','runtime_model':'lookup'})
+        result=await flow.async_step_runtime_table({'runtime_temperature_entry_id':'temperature','runtime_point_count':2,
+            'runtime_min_h':0,'runtime_max_h':24,'heating_cutoff_enabled':True,'heating_cutoff_c':20})
+        self.assertEqual(len(result['data_schema']({})['runtime_table_text'].splitlines()),2)
+        result=await flow.async_step_runtime_points({'runtime_table_text':'-12,1;18\n12;0'})
+        self.assertEqual(result['step_id'],'thermal_storage')
+        self.assertEqual(flow._values()['runtime_points'][-1]['runtime_h_per_24h'],0)
+        result=await flow.async_step_thermal_storage({**CONFIG,'runtime_model':'lookup','constraint_entry_id':''})
+        self.assertEqual(result['step_id'],'thermal_plan_preview',result)
+
+    async def test_platform_lifecycle_publishes_native_binary_and_duration_forecasts(self):
+        import importlib
+        from tests.test_fbc_notifications import Entity, CoordinatorEntity
+        from custom_components.ha_bems import async_setup_entry, async_unload_entry
+        self.add('dhw',{**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'})
+        sensor=ModuleType('homeassistant.components.sensor');sensor.SensorEntity=Entity
+        binary=ModuleType('homeassistant.components.binary_sensor');binary.BinarySensorEntity=Entity
+        entity=ModuleType('homeassistant.helpers.entity')
+        entity.DeviceInfo=lambda **kwargs:kwargs
+        entity.EntityCategory=SimpleNamespace(DIAGNOSTIC='diagnostic')
+        platform=ModuleType('homeassistant.const')
+        platform.Platform=SimpleNamespace(SENSOR='sensor',BINARY_SENSOR='binary_sensor',SWITCH='switch')
+        dispatcher=ModuleType('homeassistant.helpers.dispatcher')
+        dispatcher.async_dispatcher_send=lambda *a:None
+        dispatcher.async_dispatcher_connect=lambda *a:(lambda:None)
+        events=ModuleType('homeassistant.helpers.event')
+        events.async_track_time_change=lambda *a,**k:(lambda:None)
+        events.async_track_state_change_event=lambda *a,**k:(lambda:None)
+        self.injected['homeassistant.helpers.update_coordinator'].CoordinatorEntity=CoordinatorEntity
+        injected={module.__name__:module for module in (sensor,binary,entity,platform,dispatcher,events)}
+        # Device registry boundary for the flat installation's shared services.
+        devices=ModuleType('homeassistant.helpers.device_registry')
+        devices.DeviceEntryType=SimpleNamespace(SERVICE='service')
+        devices.async_get=lambda _:SimpleNamespace(async_get_or_create=lambda **kw:None)
+        injected[devices.__name__]=devices
+        self.injected['homeassistant.helpers'].device_registry=devices
+        added=[]
+        async def forward(root, platforms):
+            self.assertEqual(platforms,['sensor','binary_sensor'])
+            for name in platforms:
+                module=importlib.import_module('custom_components.ha_bems.'+name)
+                await module.async_setup_entry(self.hass,root,added.extend)
+        async def unload(root,platforms):return True
+        self.hass.config_entries.async_forward_entry_setups=forward
+        self.hass.config_entries.async_unload_platforms=unload
+        self.root.callbacks=[]
+        self.root.async_on_unload=self.root.callbacks.append
+        self.root.add_update_listener=lambda _:lambda:None
+        with patch.dict('sys.modules',injected):
+            self.assertTrue(await async_setup_entry(self.hass,self.root))
+            self.assertEqual(len(added),2)
+            operation=next(item for item in added if hasattr(item,'is_on'))
+            duration=next(item for item in added if hasattr(item,'native_value'))
+            self.assertFalse(operation.is_on)
+            self.assertTrue(operation.available)
+            self.assertEqual(operation.extra_state_attributes['forecast_value_key'],'operation')
+            self.assertEqual(duration.native_value,.5)
+            self.assertEqual(duration.extra_state_attributes['forecast'][0]['duration_end_h'],.5)
+            self.assertTrue(await async_unload_entry(self.hass,self.root))
+        self.assertNotIn('dhw',self.planners(self.hass))

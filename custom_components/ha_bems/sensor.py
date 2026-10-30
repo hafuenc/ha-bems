@@ -12,13 +12,14 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_ENTITY, CONF_LOAD_INPUT, CONF_MODULE, CONF_SOURCE, DOMAIN, MODULE_FBC, MODULE_LOAD,
     MODULE_LOAD_IMPORT, MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT,
-    FORECAST_IMPORT_MODULES, CONF_PV_POWER_TYPE, MODULE_THERMAL_COST,
+    FORECAST_IMPORT_MODULES, CONF_PV_POWER_TYPE, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN,
     SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
 )
 from .import_registry import coordinators, import_signal, planners
 from .seasonal_soc import resolve_threshold
 from .entries import add_item_entities, enabled_module_entries, module_type
 from .devices import shared_device_info
+from .thermal_plan_entity import ThermalPlanEntity
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -38,6 +39,9 @@ async def _async_setup_item(hass, entry, async_add_entities):
     # Keep the entry configurable and its sensor visible even if a source is
     # initially missing or the forecast helper needs correction.
     await coordinator.async_refresh()
+    if module == MODULE_THERMAL_PLAN:
+        add_item_entities(async_add_entities, [ThermalStorageSensor(coordinator, entry)], entry)
+        return
     add_item_entities(async_add_entities, [BEMSForecastSensor(coordinator, entry, module)], entry)
 
 
@@ -182,6 +186,50 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
             attributes.pop("forecast", None)
             attributes["status"] = "unavailable"
             attributes["reason"] = str(self.coordinator.last_exception)
+        return attributes
+
+
+class ThermalStorageSensor(ThermalPlanEntity, SensorEntity):
+    _attr_name = "Storage duration"
+    _attr_native_unit_of_measurement = "h"
+    _attr_suggested_display_precision = 3
+    _attr_icon = "mdi:storage-tank"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_storage_duration"
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+
+        @callback
+        def refresh(_event=None):
+            self.hass.async_create_task(self.coordinator.async_request_refresh())
+
+        config = self.coordinator.config
+        self.async_on_remove(async_track_state_change_event(self.hass, [config["cost_entity"]], refresh))
+        self.async_on_remove(async_track_time_change(self.hass, refresh, minute=[0, 15, 30, 45], second=0))
+        for key in ("constraint_entry_id", "runtime_temperature_entry_id"):
+            if reference := config.get(key):
+                self.async_on_remove(async_dispatcher_connect(self.hass, import_signal(reference), refresh))
+        refresh()
+
+    @property
+    def native_value(self):
+        if not self.available:
+            return None
+        from .thermal_plan_coordinator import projected_state
+
+        return projected_state(self.coordinator.data, dt_util.now())[0]
+
+    @property
+    def extra_state_attributes(self):
+        attributes = self.plan_attributes
+        attributes.update({"forecast_value_key": "duration_h", "forecast_unit": "h"})
+        if "forecast" in attributes:
+            attributes["forecast"] = [{"start": row["start"], "end": row["end"],
+                "effective_start": row["effective_start"], "duration_h": row["storage_start_h"],
+                "duration_end_h": row["storage_end_h"]} for row in attributes["forecast"]]
         return attributes
 
 

@@ -19,12 +19,23 @@
         "title": "Electrical storage management",
         "description": "Choose a battery control strategy.",
         "menu_options": {
-          "fbc": "Forecast-based battery charging (FBC)"
+          "fbc": "Forecast-based battery charging (FBC)",
+          "thermal_plan": "Thermal storage management (MILP)"
         }
       },
       "thermal_storage": {
-        "title": "Thermal storage management",
-        "description": "Reserved for a future generic thermal operation planner; its detailed setup remains open. Create reusable thermal runtime-cost forecasts under BEMS entity creator."
+        "title": "Storage duration & operation constraints",
+        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. Leave the initial value empty to start halfway between the minimum and maximum storage levels. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an optional imported operation constraint for a one-way hierarchy. {reason}",
+        "data": {
+          "storage_duration_h": "Maximum storage duration",
+          "storage_min_h": "Minimum storage duration",
+          "initial_storage_h": "Initial storage duration (optional)",
+          "min_on_h": "Minimum on-time",
+          "min_off_h": "Minimum off-time",
+          "constraint_entry_id": "Operation constraint forecast",
+          "solver_time_limit_s": "Maximum solver time",
+          "restart_storage_model": "Restart feed-forward model from the initial storage value"
+        }
       },
       "soc": {
         "title": "Battery seasonal SOC min threshold",
@@ -122,7 +133,8 @@
           "import_load": "Non-flexible building load forecast",
           "import_price": "Electricity import price forecast",
           "export_price": "Electricity export price forecast",
-          "import_temperature": "Outdoor air temperature forecast"
+          "import_temperature": "Outdoor air temperature forecast",
+          "import_operation": "Operation constraint forecast"
         }
       },
       "import_pv": {
@@ -243,6 +255,54 @@
       "thermal_cost_preview": {
         "title": "Thermal runtime cost — preview",
         "description": "Current cost: {current} EUR/timestep\nRange: {minimum} to {maximum} EUR/timestep\nCurrent COP: {cop}\nCOP fallback intervals: {fallback}\nFallback reason: {reason}\nIntervals: {count}\nUTC coverage: {start} to {end}\n\nEach value is the cost of one complete 15-minute activation, using electrical power calculated as nominal thermal output divided by COP. The current state equals the first forecast value. This is an independent cost estimate, not a heating schedule. Submit to save; inputs are checked again."
+      },
+      "import_operation": {
+        "title": "Operation constraint forecast",
+        "description": "Select a 72-hour operation forecast. For a DHW → UFH hierarchy, select the DHW operation-plan entity and choose “1 = another system running”. The importer inverts its values: DHW on (1) blocks UFH (permission 0); DHW off (0) allows UFH (permission 1). Alternatively use 1 = operation allowed directly. Permission 1 permits operation; it does not force it. Forecast records require start, end and operation: 0 or 1. {reason}",
+        "data": {
+          "name": "Input name",
+          "forecast_entity": "Operation forecast entity",
+          "operation_meaning": "Meaning of forecast value 1"
+        }
+      },
+      "thermal_plan": {
+        "title": "Thermal storage management — MILP",
+        "description": "Create a named feed-forward thermal operation planner, e.g. DHW or UFH. Select an existing EUR/timestep cost forecast. The planner publishes an on/off recommendation and estimated storage duration for the next 72 hours. It assumes its plan is followed; no equipment feedback or device commands are used.",
+        "data": {
+          "name": "System name",
+          "cost_entity": "Runtime cost forecast",
+          "runtime_model": "Runtime requirement model"
+        }
+      },
+      "runtime_constant": {
+        "title": "Constant runtime requirement",
+        "description": "Enter the operating hours needed per 24 hours to cover thermal demand: 24 h/24h means always on; 12 h/24h means running half the time on average. Storage allows this runtime to shift between timesteps.",
+        "data": {
+          "runtime_h_per_24h": "Required runtime"
+        }
+      },
+      "runtime_table": {
+        "title": "Outdoor temperature dependent runtime",
+        "description": "Define the required runtime from outdoor temperature using 2–10 reference points. Runtime is interpolated/extrapolated linearly, then limited to the selected minimum and maximum (0–24 h/24h). An enabled heating cutoff sets demand to zero above its temperature, overriding the minimum runtime. 24 h/24h means always on; 12 h/24h means running half the time on average.",
+        "data": {
+          "runtime_temperature_entry_id": "Outdoor temperature forecast",
+          "runtime_point_count": "Number of reference points",
+          "runtime_min_h": "Minimum required runtime",
+          "runtime_max_h": "Maximum required runtime",
+          "heating_cutoff_enabled": "Use outdoor temperature heating cutoff",
+          "heating_cutoff_c": "Heating cutoff temperature"
+        }
+      },
+      "runtime_points": {
+        "title": "Outdoor temperature / runtime lookup table",
+        "description": "Enter the selected number of reference points, one per line: outdoor temperature in °C;required runtime in h/24h. Decimal dots and commas are accepted. Defaults: -12.1;18 and 12;0. Runtime values must be between 0 and 24. Use your own system characteristics; minimum/maximum runtime and the optional cutoff are applied afterward.",
+        "data": {
+          "runtime_table_text": "Outdoor temperature / required runtime"
+        }
+      },
+      "thermal_plan_preview": {
+        "title": "Thermal operating plan — preview",
+        "description": "Solver: {status}\nIntervals: {count}\nInitial estimated storage: {initial} h\nPlanned operating cost: {cost} EUR\n\nThe plan is feed-forward and assumes its recommendation is followed. It does not control equipment. Save to create an operation-plan binary sensor and a storage-duration sensor, each with forecast attributes. Inputs are checked again before saving."
       }
     },
     "error": {
@@ -254,7 +314,9 @@
       "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test.",
       "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
       "invalid_cop_points": "Enter exactly the selected number of reference points, one outdoor temperature;COP pair per line. Use finite numbers, unique outdoor temperatures and positive COPs. Decimal dots and commas are accepted.",
-      "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
+      "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below.",
+      "invalid_thermal_plan": "Check the runtime model, storage settings and forecast inputs.",
+      "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
     },
     "abort": {
       "already_configured": "This category already exists. Use Add inside its integration card to add another item."
@@ -488,7 +550,8 @@
           "import_load": "Non-flexible building load forecast",
           "import_price": "Electricity import price forecast",
           "export_price": "Electricity export price forecast",
-          "import_temperature": "Outdoor air temperature forecast"
+          "import_temperature": "Outdoor air temperature forecast",
+          "import_operation": "Operation constraint forecast"
         }
       },
       "add_helper": {
@@ -504,7 +567,8 @@
         "title": "Add operation planner",
         "description": "Choose the type of item to add.",
         "menu_options": {
-          "fbc": "Forecast-based battery charging (FBC)"
+          "fbc": "Forecast-based battery charging (FBC)",
+          "thermal_plan": "Thermal storage management (MILP)"
         }
       },
       "edit_item": {
@@ -532,6 +596,68 @@
       "remove_confirm": {
         "title": "Confirm item removal",
         "description": "Remove the configuration and BEMS entities for {name}? Its external source entities remain untouched. Other items and the shared service devices remain configured. Any planner using this input will report it unavailable until another input is selected."
+      },
+      "import_operation": {
+        "title": "Operation constraint forecast",
+        "description": "Select a 72-hour operation forecast. For a DHW → UFH hierarchy, select the DHW operation-plan entity and choose “1 = another system running”. The importer inverts its values: DHW on (1) blocks UFH (permission 0); DHW off (0) allows UFH (permission 1). Alternatively use 1 = operation allowed directly. Permission 1 permits operation; it does not force it. Forecast records require start, end and operation: 0 or 1. {reason}",
+        "data": {
+          "name": "Input name",
+          "forecast_entity": "Operation forecast entity",
+          "operation_meaning": "Meaning of forecast value 1"
+        }
+      },
+      "thermal_plan": {
+        "title": "Thermal storage management — MILP",
+        "description": "Create a named feed-forward thermal operation planner, e.g. DHW or UFH. Select an existing EUR/timestep cost forecast. The planner publishes an on/off recommendation and estimated storage duration for the next 72 hours. It assumes its plan is followed; no equipment feedback or device commands are used.",
+        "data": {
+          "name": "System name",
+          "cost_entity": "Runtime cost forecast",
+          "runtime_model": "Runtime requirement model"
+        }
+      },
+      "runtime_constant": {
+        "title": "Constant runtime requirement",
+        "description": "Enter the operating hours needed per 24 hours to cover thermal demand: 24 h/24h means always on; 12 h/24h means running half the time on average. Storage allows this runtime to shift between timesteps.",
+        "data": {
+          "runtime_h_per_24h": "Required runtime"
+        }
+      },
+      "runtime_table": {
+        "title": "Outdoor temperature dependent runtime",
+        "description": "Define the required runtime from outdoor temperature using 2–10 reference points. Runtime is interpolated/extrapolated linearly, then limited to the selected minimum and maximum (0–24 h/24h). An enabled heating cutoff sets demand to zero above its temperature, overriding the minimum runtime. 24 h/24h means always on; 12 h/24h means running half the time on average.",
+        "data": {
+          "runtime_temperature_entry_id": "Outdoor temperature forecast",
+          "runtime_point_count": "Number of reference points",
+          "runtime_min_h": "Minimum required runtime",
+          "runtime_max_h": "Maximum required runtime",
+          "heating_cutoff_enabled": "Use outdoor temperature heating cutoff",
+          "heating_cutoff_c": "Heating cutoff temperature"
+        }
+      },
+      "runtime_points": {
+        "title": "Outdoor temperature / runtime lookup table",
+        "description": "Enter the selected number of reference points, one per line: outdoor temperature in °C;required runtime in h/24h. Decimal dots and commas are accepted. Defaults: -12.1;18 and 12;0. Runtime values must be between 0 and 24. Use your own system characteristics; minimum/maximum runtime and the optional cutoff are applied afterward.",
+        "data": {
+          "runtime_table_text": "Outdoor temperature / required runtime"
+        }
+      },
+      "thermal_storage": {
+        "title": "Storage duration & operation constraints",
+        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. Leave the initial value empty to start halfway between the minimum and maximum storage levels. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an optional imported operation constraint for a one-way hierarchy. {reason}",
+        "data": {
+          "storage_duration_h": "Maximum storage duration",
+          "storage_min_h": "Minimum storage duration",
+          "initial_storage_h": "Initial storage duration (optional)",
+          "min_on_h": "Minimum on-time",
+          "min_off_h": "Minimum off-time",
+          "constraint_entry_id": "Operation constraint forecast",
+          "solver_time_limit_s": "Maximum solver time",
+          "restart_storage_model": "Restart feed-forward model from the initial storage value"
+        }
+      },
+      "thermal_plan_preview": {
+        "title": "Thermal operating plan — preview",
+        "description": "Solver: {status}\nIntervals: {count}\nInitial estimated storage: {initial} h\nPlanned operating cost: {cost} EUR\n\nThe plan is feed-forward and assumes its recommendation is followed. It does not control equipment. Save to create an operation-plan binary sensor and a storage-duration sensor, each with forecast attributes. Inputs are checked again before saving."
       }
     },
     "error": {
@@ -543,7 +669,9 @@
       "no_pv_import": "No PV input is registered yet. In HA-BEMS Configure, choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast.",
       "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
       "invalid_cop_points": "Enter exactly the selected number of reference points, one outdoor temperature;COP pair per line. Use finite numbers, unique outdoor temperatures and positive COPs. Decimal dots and commas are accepted.",
-      "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
+      "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below.",
+      "invalid_thermal_plan": "Check the runtime model, storage settings and forecast inputs.",
+      "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
     },
     "abort": {
       "already_configured": "This category already exists. Use Add inside its integration card to add another item."
@@ -768,7 +896,8 @@
             "import_load": "Non-flexible building load forecast",
             "import_price": "Electricity import price forecast",
             "export_price": "Electricity export price forecast",
-            "import_temperature": "Outdoor air temperature forecast"
+            "import_temperature": "Outdoor air temperature forecast",
+            "import_operation": "Operation constraint forecast"
           }
         },
         "reconfigure": {
@@ -778,6 +907,15 @@
             "name": "Item name",
             "enabled": "Enabled"
           }
+        },
+        "import_operation": {
+          "title": "Operation constraint forecast",
+          "description": "Select a 72-hour operation forecast. For a DHW → UFH hierarchy, select the DHW operation-plan entity and choose “1 = another system running”. The importer inverts its values: DHW on (1) blocks UFH (permission 0); DHW off (0) allows UFH (permission 1). Alternatively use 1 = operation allowed directly. Permission 1 permits operation; it does not force it. Forecast records require start, end and operation: 0 or 1. {reason}",
+          "data": {
+            "name": "Input name",
+            "forecast_entity": "Operation forecast entity",
+            "operation_meaning": "Meaning of forecast value 1"
+          }
         }
       },
       "error": {
@@ -786,7 +924,9 @@
         "self_reference": "Choose an external entity; this entry cannot use its own output as its input.",
         "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
         "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
-        "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+        "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test.",
+        "invalid_thermal_plan": "Check the runtime model, storage settings and forecast inputs.",
+        "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
       },
       "abort": {
         "wrong_group": "This item does not belong to this category.",
@@ -868,6 +1008,91 @@
         "invalid_load_profile": "Check the annual consumption and the holiday country/region combination.",
         "invalid_forecast": "Forecast test failed. Correct the imported input or its source using the detailed message below; setup cannot continue until the test passes.",
         "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test."
+      },
+      "abort": {
+        "wrong_group": "This item does not belong to this category.",
+        "not_implemented": "No modules are available in this category yet."
+      }
+    },
+    "thermal_storage": {
+      "entry_type": "Thermal operation planner",
+      "initiate_flow": {
+        "user": "Add thermal operation planner",
+        "reconfigure": "Configure thermal operation planner"
+      },
+      "step": {
+        "thermal_plan": {
+          "title": "Thermal storage management — MILP",
+          "description": "Create a named feed-forward thermal operation planner, e.g. DHW or UFH. Select an existing EUR/timestep cost forecast. The planner publishes an on/off recommendation and estimated storage duration for the next 72 hours. It assumes its plan is followed; no equipment feedback or device commands are used.",
+          "data": {
+            "name": "System name",
+            "cost_entity": "Runtime cost forecast",
+            "runtime_model": "Runtime requirement model"
+          }
+        },
+        "runtime_constant": {
+          "title": "Constant runtime requirement",
+          "description": "Enter the operating hours needed per 24 hours to cover thermal demand: 24 h/24h means always on; 12 h/24h means running half the time on average. Storage allows this runtime to shift between timesteps.",
+          "data": {
+            "runtime_h_per_24h": "Required runtime"
+          }
+        },
+        "runtime_table": {
+          "title": "Outdoor temperature dependent runtime",
+          "description": "Define the required runtime from outdoor temperature using 2–10 reference points. Runtime is interpolated/extrapolated linearly, then limited to the selected minimum and maximum (0–24 h/24h). An enabled heating cutoff sets demand to zero above its temperature, overriding the minimum runtime. 24 h/24h means always on; 12 h/24h means running half the time on average.",
+          "data": {
+            "runtime_temperature_entry_id": "Outdoor temperature forecast",
+            "runtime_point_count": "Number of reference points",
+            "runtime_min_h": "Minimum required runtime",
+            "runtime_max_h": "Maximum required runtime",
+            "heating_cutoff_enabled": "Use outdoor temperature heating cutoff",
+            "heating_cutoff_c": "Heating cutoff temperature"
+          }
+        },
+        "runtime_points": {
+          "title": "Outdoor temperature / runtime lookup table",
+          "description": "Enter the selected number of reference points, one per line: outdoor temperature in °C;required runtime in h/24h. Decimal dots and commas are accepted. Defaults: -12.1;18 and 12;0. Runtime values must be between 0 and 24. Use your own system characteristics; minimum/maximum runtime and the optional cutoff are applied afterward.",
+          "data": {
+            "runtime_table_text": "Outdoor temperature / required runtime"
+          }
+        },
+        "thermal_storage": {
+          "title": "Storage duration & operation constraints",
+          "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. Leave the initial value empty to start halfway between the minimum and maximum storage levels. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. The terminal storage level must remain at least the model’s initial level. Select an optional imported operation constraint for a one-way hierarchy. {reason}",
+          "data": {
+            "storage_duration_h": "Maximum storage duration",
+            "storage_min_h": "Minimum storage duration",
+            "initial_storage_h": "Initial storage duration (optional)",
+            "min_on_h": "Minimum on-time",
+            "min_off_h": "Minimum off-time",
+            "constraint_entry_id": "Operation constraint forecast",
+            "solver_time_limit_s": "Maximum solver time",
+            "restart_storage_model": "Restart feed-forward model from the initial storage value"
+          }
+        },
+        "thermal_plan_preview": {
+          "title": "Thermal operating plan — preview",
+          "description": "Solver: {status}\nIntervals: {count}\nInitial estimated storage: {initial} h\nPlanned operating cost: {cost} EUR\n\nThe plan is feed-forward and assumes its recommendation is followed. It does not control equipment. Save to create an operation-plan binary sensor and a storage-duration sensor, each with forecast attributes. Inputs are checked again before saving."
+        },
+        "user": {
+          "title": "Thermal storage management",
+          "description": "Choose the operation planner to add. Each named system has its own settings.",
+          "menu_options": {
+            "thermal_plan": "Thermal storage management (MILP)"
+          }
+        },
+        "reconfigure": {
+          "title": "Configure storage module",
+          "description": "Change the item name or enable/disable it. Enabled items continue to their settings; disabling saves immediately, even if a source is unavailable. Disabled items keep their configuration and entity registrations but stop planning/input updates. Dependent plans cannot use a disabled input.",
+          "data": {
+            "name": "Item name",
+            "enabled": "Enabled"
+          }
+        }
+      },
+      "error": {
+        "invalid_thermal_plan": "Check the runtime model, storage settings and forecast inputs.",
+        "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
       },
       "abort": {
         "wrong_group": "This item does not belong to this category.",
