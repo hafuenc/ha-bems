@@ -9,9 +9,9 @@ if TYPE_CHECKING:
 
 async def async_setup(hass, config):
     """Consolidate old standalone entries before any module platforms load."""
-    from .migration import async_group_legacy_entries
+    from .migration import async_flatten_entries
 
-    await async_group_legacy_entries(hass)
+    await async_flatten_entries(hass)
     return True
 
 
@@ -39,6 +39,11 @@ async def async_setup_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool
 
     if entry.data.get("migrated_to"):
         return True
+    from .devices import ensure_service_devices
+    from .entries import is_flat
+
+    if is_flat(entry):
+        ensure_service_devices(hass, entry)
     items = enabled_module_entries(entry)
     for item in items:
         await _async_setup_module(hass, item, entry)

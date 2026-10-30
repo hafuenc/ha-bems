@@ -2,6 +2,7 @@
 
 from zoneinfo import ZoneInfo
 from uuid import uuid4
+from types import SimpleNamespace
 
 import voluptuous as vol
 
@@ -17,8 +18,9 @@ from .const import (
     CONF_PV_POWER_TYPE, MODULE_IMPORT_PRICE, MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
     CONF_GROUP, CONF_ITEM_ID, CONF_ENABLED, GROUP_TITLES, GROUP_MODULES,
     MODULE_THERMAL_COST, CONF_IMPORT_PRICE, CONF_EXPORT_PRICE, CONF_TEMPERATURE,
+    CONF_ITEMS, CONF_LAYOUT, LAYOUT_FLAT,
 )
-from .entries import group_for_module
+from .entries import group_for_module, is_flat
 from .seasonal_soc import resolve_threshold
 from .seasonal_soc import validate_threshold
 from .forecast_input import async_read_forecast
@@ -55,6 +57,8 @@ class _ModuleSteps:
     def _values(self):
         if subentry := getattr(self, "_subentry", None):
             return {**subentry.data, "name": subentry.title, **getattr(self, "_draft", {})}
+        if getattr(self, "_flat_mode", None):
+            return getattr(self, "_draft", {})
         if isinstance(self, config_entries.OptionsFlow):
             return {**self.config_entry.data, **self.config_entry.options, **getattr(self, "_draft", {})}
         return getattr(self, "_draft", {})
@@ -63,7 +67,7 @@ class _ModuleSteps:
         self._draft = {**self._values(), **values}
 
     def _name_fields(self, default):
-        if isinstance(self, config_entries.OptionsFlow):
+        if isinstance(self, config_entries.OptionsFlow) and getattr(self, "_flat_mode", None) != "add":
             return {}
         return {vol.Required("name", default=self._values().get("name", default)): str}
 
@@ -84,6 +88,15 @@ class _ModuleSteps:
             retired = (CONF_TEMPERATURE, "cop_points", "cop_point_count", "fallback_cop") if values["cop_model"] == "constant" else ("constant_cop",)
             for key in retired:
                 values.pop(key, None)
+        if getattr(self, "_flat_mode", None):
+            name = values.pop("name", "HA-BEMS").strip() or "HA-BEMS"
+            identifier = getattr(self, "_flat_item_id", None) or uuid4().hex
+            values.update({CONF_ITEM_ID: identifier, CONF_ENABLED: values.get(CONF_ENABLED, True)})
+            items = dict(self.config_entry.data.get(CONF_ITEMS, {}))
+            items[identifier] = {"title": name, "data": values}
+            self.hass.config_entries.async_update_entry(self.config_entry,
+                data={CONF_LAYOUT: LAYOUT_FLAT, CONF_ITEMS: items}, options={})
+            return self.async_create_entry(title="", data={})
         if isinstance(self, config_entries.ConfigSubentryFlow):
             parent = self._get_entry()
             if group_for_module(module) != parent.data[CONF_GROUP]:
@@ -103,7 +116,7 @@ class _ModuleSteps:
         return self.async_create_entry(title=name or "HA-BEMS", data=values)
 
     async def async_step_soc(self, user_input=None):
-        if isinstance(self, config_entries.OptionsFlow) or getattr(self, "_subentry", None):
+        if (isinstance(self, config_entries.OptionsFlow) and getattr(self, "_flat_mode", None) != "add") or getattr(self, "_subentry", None):
             # Existing wrappers remain editable, but are no longer offered
             # when creating a new seasonal SOC helper.
             if self._values().get(CONF_SOURCE) == SOURCE_ENTITY:
@@ -140,8 +153,11 @@ class _ModuleSteps:
             registered = er.async_get(self.hass).async_get(entity_id)
             own_entry = self.config_entry if isinstance(self, config_entries.OptionsFlow) else None
             own_subentry = getattr(self, "_subentry", None)
-            if registered and ((own_entry and registered.config_entry_id == own_entry.entry_id)
-                               or (own_subentry and registered.config_subentry_id == own_subentry.subentry_id)):
+            flat_self = getattr(self, "_flat_item_id", None)
+            if registered and ((flat_self and registered.unique_id.startswith(f"{flat_self}_"))
+                               or (own_entry and not is_flat(own_entry) and registered.config_entry_id == own_entry.entry_id)
+                               or (own_subentry and not getattr(self, "_flat_mode", None)
+                                   and registered.config_subentry_id == own_subentry.subentry_id)):
                 errors[CONF_ENTITY] = "self_reference"
             else:
                 try:
@@ -595,36 +611,25 @@ class _ModuleSteps:
 
 
 class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
-    """Create one native category card; named modules live in its subentries."""
+    """Create one installation; manage individual items in its options menu."""
 
     VERSION = 1
-    MINOR_VERSION = 3
+    MINOR_VERSION = 4
 
     async def async_step_user(self, user_input=None):
-        return self.async_show_menu(step_id="user", menu_options=["entity_creator", "entity_importer", "electrical_storage", "thermal_storage"])
-
-    async def async_step_entity_creator(self, user_input=None):
-        return await self._async_create_group("entity_creator")
-
-    async def async_step_entity_importer(self, user_input=None):
-        return await self._async_create_group("entity_importer")
-
-    async def async_step_electrical_storage(self, user_input=None):
-        return await self._async_create_group("electrical_storage")
-
-    async def async_step_thermal_storage(self, user_input=None):
-        return await self._async_create_group("thermal_storage")
-
-    async def _async_create_group(self, group):
-        await self.async_set_unique_id(f"group:{group}")
-        self._abort_if_unique_id_configured()
-        if any(entry.data.get(CONF_GROUP) == group for entry in self.hass.config_entries.async_entries(DOMAIN)):
+        if any(not entry.data.get("migrated_to") for entry in self.hass.config_entries.async_entries(DOMAIN)):
             return self.async_abort(reason="already_configured")
-        return self.async_create_entry(title=GROUP_TITLES[group], data={CONF_GROUP: group})
+        await self.async_set_unique_id("ha_bems_installation")
+        self._abort_if_unique_id_configured()
+        if user_input is not None:
+            return self.async_create_entry(title="HA-BEMS", data={CONF_LAYOUT: LAYOUT_FLAT, CONF_ITEMS: {}})
+        return self.async_show_form(step_id="user", data_schema=vol.Schema({}))
 
     @classmethod
     @callback
     def async_get_supported_subentry_types(cls, config_entry):
+        if is_flat(config_entry):
+            return {}
         group = config_entry.data.get(CONF_GROUP)
         if group in GROUP_MODULES and GROUP_MODULES[group]:
             return {group: HABEMSItemFlow}
@@ -638,11 +643,16 @@ class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
     @classmethod
     @callback
     def async_supports_options_flow(cls, config_entry):
-        return CONF_GROUP not in config_entry.data and not config_entry.data.get("migrated_to")
+        return not config_entry.data.get("migrated_to") and (is_flat(config_entry) or CONF_GROUP not in config_entry.data)
 
 
 class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
+        if is_flat(self.config_entry):
+            options = ["add_import", "add_helper", "add_planner"]
+            if self.config_entry.data.get(CONF_ITEMS):
+                options += ["edit_item", "remove_item"]
+            return self.async_show_menu(step_id="init", menu_options=options)
         module = self._values().get(CONF_MODULE, MODULE_SOC)
         if module == MODULE_LOAD:
             return await self.async_step_load_profile()
@@ -661,6 +671,70 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
         if module == MODULE_THERMAL_COST:
             return await self.async_step_thermal_cost()
         return await self.async_step_soc()
+
+    def _start_flat_add(self):
+        self._flat_mode, self._flat_item_id = "add", None
+        self._draft = {}
+        self._subentry = None
+
+    async def async_step_add_import(self, user_input=None):
+        self._start_flat_add()
+        return self.async_show_menu(step_id="add_import", menu_options=[
+            "import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature"])
+
+    async def async_step_add_helper(self, user_input=None):
+        self._start_flat_add()
+        return self.async_show_menu(step_id="add_helper", menu_options=["soc", "load_profile", "thermal_cost"])
+
+    async def async_step_add_planner(self, user_input=None):
+        self._start_flat_add()
+        return self.async_show_menu(step_id="add_planner", menu_options=["fbc"])
+
+    async def _select_flat_item(self, step, user_input):
+        items = self.config_entry.data.get(CONF_ITEMS, {})
+        if user_input is not None:
+            identifier = user_input.get(CONF_ITEM_ID)
+            if identifier in items:
+                self._flat_item_id = identifier
+                self._subentry = SimpleNamespace(title=items[identifier]["title"], data=items[identifier]["data"])
+                self._draft = {}
+                self._flat_mode = "edit" if step == "edit_item" else "remove"
+                return await (self.async_step_item_settings() if step == "edit_item" else self.async_step_remove_confirm())
+        return self.async_show_form(step_id=step, data_schema=vol.Schema({
+            vol.Required(CONF_ITEM_ID): _choice([{"value": key,
+                "label": f"{record['title']} — {GROUP_TITLES[group_for_module(record['data'][CONF_MODULE])]}"}
+                for key, record in items.items()])}))
+
+    async def async_step_edit_item(self, user_input=None):
+        return await self._select_flat_item("edit_item", user_input)
+
+    async def async_step_remove_item(self, user_input=None):
+        return await self._select_flat_item("remove_item", user_input)
+
+    async def async_step_item_settings(self, user_input=None):
+        if user_input is not None:
+            self._remember(user_input)
+            if not self._values().get(CONF_ENABLED, True):
+                return self._finish(self._values()[CONF_MODULE])
+            return await HABEMSItemFlow._async_edit_module(self)
+        return self.async_show_form(step_id="item_settings", data_schema=vol.Schema({
+            vol.Required("name", default=self._subentry.title): str,
+            vol.Required(CONF_ENABLED, default=self._values().get(CONF_ENABLED, True)): bool,
+        }))
+
+    async def async_step_remove_confirm(self, user_input=None):
+        if user_input is not None:
+            identifier = self._flat_item_id
+            items = dict(self.config_entry.data.get(CONF_ITEMS, {}))
+            items.pop(identifier, None)
+            self.hass.config_entries.async_update_entry(self.config_entry,
+                data={CONF_LAYOUT: LAYOUT_FLAT, CONF_ITEMS: items}, options={})
+            from .flat_migration import remove_item_registrations
+
+            remove_item_registrations(self.hass, self.config_entry, identifier)
+            return self.async_create_entry(title="", data={})
+        return self.async_show_form(step_id="remove_confirm", data_schema=vol.Schema({}),
+            description_placeholders={"name": self._subentry.title})
 
 
 class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):

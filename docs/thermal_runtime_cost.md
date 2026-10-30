@@ -1,6 +1,6 @@
 # Thermal runtime cost forecasts
 
-Under **BEMS entity creator → Add helper → Thermal runtime cost (EUR/timestep)**,
+Under **HA-BEMS → Configure → Create helper entity → Thermal runtime cost (EUR/timestep)**,
 create an independent named system. Repeat the same setup procedure for any
 number of systems. There are no separate DHW/UFH modes. Each item has its own
 parameters, input selections, Configure action, enabled setting and Runtime cost
@@ -11,16 +11,14 @@ generic thermal operation planner can consume these forecasts; its detailed
 setup remains open. No solver, heat-pump commands, operating schedule or storage
 model is included here.
 
-Existing v0.6.0 runtime-cost setups move from Thermal storage management into
-BEMS entity creator on startup. Their settings, user-defined names, module IDs,
-sensor entity IDs and device names/areas are preserved. When no creator category
-exists, the existing cost category becomes the creator card; otherwise cost
-items join the existing creator card. An empty thermal category is left available
-for future planning. No new operating strategy is created by this migration.
+Existing runtime-cost setups move onto the shared BEMS entity creator service
+device at startup. Their settings, user-defined item names, module IDs and
+sensor entity IDs are preserved. Item configuration is managed through the
+single HA-BEMS Configure menu. No new operating strategy is created by migration.
 
 ## Setup
 
-First register the needed forecasts under **BEMS forecast importer**:
+First register the needed forecasts under **HA-BEMS → Configure → Add forecast import**:
 
 - **PV AC** generation. Thermal electrical demand and building load use an AC
   basis. DC registrations remain selectable in FBC, but not in thermal costs.

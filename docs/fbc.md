@@ -1,6 +1,6 @@
 # FBC (Forecast based charging)
 
-Select **Electrical storage management → FBC**. There is no algorithm/version
+Select **HA-BEMS → Configure → Add operation planner → FBC**. There is no algorithm/version
 selector. With no building load selected, the original v1 calculation remains
 unchanged. Selecting a load forecast supplies PV surplus to the same engine.
 Electricity prices do not enter either calculation. Its virtual device defaults to **FBC Battery 1**, of

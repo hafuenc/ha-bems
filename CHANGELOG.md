@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
+
+- Flatten HA-BEMS into one configuration entry with shared BEMS forecast importer
+  and BEMS entity creator service devices. Forecast statuses and generated helper
+  entities no longer create a separate device or category entry for every item.
+- Add a central Configure menu to add, edit, rename, enable/disable and remove
+  individual forecasts, helpers and operation planners. Planners retain their
+  individual devices; thermal operation planning remains open.
+- Migrate standalone and grouped installations while retaining item settings,
+  sensor/switch entity IDs, shared-input references and battery device IDs.
+  Consolidate old importer/helper devices and retain their areas on the entities.
+  Automations targeting a removed per-helper device should use its preserved
+  entity IDs or the new shared device instead.
 
 - Move the generic thermal runtime-cost generator to BEMS entity creator. Use
   the same procedure for every named instance, with independently configured COP
