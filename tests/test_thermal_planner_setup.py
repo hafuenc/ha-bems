@@ -384,6 +384,9 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(level.native_value,50)
             self.assertEqual(level.extra_state_attributes['forecast'][0]['storage_level_percent'],50)
             self.assertEqual(status.native_value,'optimal')
+            coordinator.last_exception=ValueError('Recovered startup failure')
+            self.assertIsNone(status.extra_state_attributes['reason'])
+            coordinator.last_exception=None
             self.assertTrue(status.extra_state_attributes['plan_available'])
             self.assertIsNone(start.native_value)  # All off, no invented transition.
             self.assertIsNone(stop.native_value)

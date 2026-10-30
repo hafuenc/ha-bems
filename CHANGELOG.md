@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.2
+
+- Clear a previous failure reason from planner diagnostics after successful
+  recovery, even when Home Assistant retains the earlier exception internally.
+
 ## 0.10.1
 
 - Move constraint interpretation from the forecast importer into each MILP

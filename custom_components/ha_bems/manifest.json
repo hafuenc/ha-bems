@@ -15,5 +15,5 @@
     "holidays>=0.106",
     "scipy==1.17.1"
   ],
-  "version": "0.10.1"
+  "version": "0.10.2"
 }

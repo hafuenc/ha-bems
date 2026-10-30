@@ -114,7 +114,7 @@ class ThermalPlannerStatusSensor(ThermalPlanEntity, SensorEntity):
         data = self.coordinator.data or {}
         valid = self.coordinator.last_update_success and self.current_row is not None
         return {"plan_available": valid,
-                "reason": str(self.coordinator.last_exception) if self.coordinator.last_exception else
+                "reason": str(self.coordinator.last_exception) if not self.coordinator.last_update_success and self.coordinator.last_exception else
                           "Forecast no longer covers the current time" if self.native_value == "expired" else None,
                 "last_successful_plan_at": data.get("generated_at"),
                 "calculation_interval_minutes": 15, "calculation_schedule": "quarter_hour_clock",

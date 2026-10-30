@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.10.1**
+Modular planning for flexible devices and energy storage. Version **0.10.2**
 uses separate BEMS forecast importer and BEMS entity creator integration entries,
 plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
