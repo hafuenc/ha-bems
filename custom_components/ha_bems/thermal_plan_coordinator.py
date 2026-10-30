@@ -4,6 +4,7 @@ from datetime import UTC
 import json
 import logging
 
+from homeassistant.core import callback
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -13,7 +14,7 @@ from .forecast import parse_timestamp
 from .forecast_input import _async_read_forecast
 from .import_registry import coordinators, planners, read_forecast_import
 from .operation_constraints import constraint_dependency, validate_hierarchy
-from .thermal_milp import required_runtimes, solve_plan, validate_plan_settings
+from .thermal_milp import InfeasiblePlanError, required_runtimes, solve_plan, validate_plan_settings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,9 +94,21 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         self._last_solve_slot = None
         self._slot_error = None
         self.awaiting_inputs = True
+        self.plan_status = "waiting_for_inputs"
+        self._previous_health = None
         self._failure_notified = False
         # Changes to the storage/demand model explicitly restart its estimate.
         self._model_key = model_key(self.config)
+
+    @callback
+    def _async_refresh_finished(self):
+        # Consecutive failed refreshes normally suppress coordinator updates.
+        # Keep changed diagnostic states/reasons visible without extra solves.
+        health = (self.last_update_success, self.plan_status, str(self.last_exception))
+        if (not self.last_update_success and self._previous_health is not None
+                and not self._previous_health[0] and health != self._previous_health):
+            self.async_update_listeners()
+        self._previous_health = health
 
     async def _async_update_data(self):
         now = dt_util.now().astimezone(UTC)
@@ -108,6 +121,8 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         try:
             result = await self._calculate()
         except (ValueError, TypeError, KeyError, IndexError, OverflowError, OSError) as err:
+            self.plan_status = ("infeasible" if isinstance(err, InfeasiblePlanError)
+                                else "waiting_for_inputs" if self.awaiting_inputs else "error")
             if self._last_solve_slot == quarter_slot(now):
                 self._slot_error = str(err)
             if not self._failure_notified:
@@ -118,6 +133,7 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
                     title="BEMS thermal planning needs attention", notification_id=f"{DOMAIN}_thermal_{self.identifier}")
                 self._failure_notified = True
             raise UpdateFailed(str(err)) from err
+        self.plan_status = result["solver_status"]
         if self._failure_notified:
             from homeassistant.components import persistent_notification
 

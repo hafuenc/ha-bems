@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from custom_components.ha_bems.thermal_milp import required_runtimes, solve_plan
+from custom_components.ha_bems.thermal_milp import InfeasiblePlanError, required_runtimes, solve_plan
 
 CONFIG = {"runtime_model": "constant", "runtime_h_per_24h": 12,
           "storage_duration_h": 1, "storage_min_h": 0, "min_on_h": .5, "min_off_h": .25,
@@ -50,7 +50,7 @@ class ThermalMILPTests(unittest.TestCase):
                 self.assertAlmostEqual(result['total_cost_eur'], .2*(7+.1/.25))
 
     def test_infeasibility_is_explicit(self):
-        with self.assertRaisesRegex(ValueError, 'No feasible'):
+        with self.assertRaisesRegex(InfeasiblePlanError, 'No feasible'):
             solve_plan([.2]*8, [24]*8, [.25]*8, 0, CONFIG, allowed=[0]*8, terminal_min=0)
 
     def test_time_limit_accepts_only_verified_feasible_binary_results(self):

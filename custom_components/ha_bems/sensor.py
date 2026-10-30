@@ -40,7 +40,10 @@ async def _async_setup_item(hass, entry, async_add_entities):
     # initially missing or the forecast helper needs correction.
     await coordinator.async_refresh()
     if module == MODULE_THERMAL_PLAN:
-        add_item_entities(async_add_entities, [ThermalStorageSensor(coordinator, entry)], entry)
+        from .thermal_plan_sensors import thermal_plan_sensors
+
+        add_item_entities(async_add_entities,
+            [ThermalStorageSensor(coordinator, entry), *thermal_plan_sensors(coordinator, entry)], entry)
         return
     add_item_entities(async_add_entities, [BEMSForecastSensor(coordinator, entry, module)], entry)
 

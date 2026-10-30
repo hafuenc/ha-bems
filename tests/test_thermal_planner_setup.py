@@ -168,13 +168,19 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.states['sensor.cost'].state='unavailable'
         await planner.async_refresh()
         self.assertTrue(planner.awaiting_inputs)
+        self.assertEqual(planner.plan_status,'waiting_for_inputs')
+        changed=Mock()
+        planner.async_add_listener(changed)
         self.states['sensor.cost'].state='.2'
-        with patch('custom_components.ha_bems.thermal_plan_coordinator.solve_plan',side_effect=ValueError('Infeasible')) as solver:
+        from custom_components.ha_bems.thermal_milp import InfeasiblePlanError
+        with patch('custom_components.ha_bems.thermal_plan_coordinator.solve_plan',side_effect=InfeasiblePlanError('Infeasible')) as solver:
             await planner.async_refresh()
             self.assertFalse(planner.awaiting_inputs)
             await planner.async_refresh()
             self.assertEqual(solver.call_count,1)
             self.assertFalse(planner.last_update_success)
+            self.assertEqual(planner.plan_status,'infeasible')
+            changed.assert_called_once()  # Changed reason survives consecutive failures.
 
     async def test_import_permission_values_are_strict_and_can_be_used_directly(self):
         source = rows(1,'operation')
@@ -255,7 +261,7 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.root.add_update_listener=lambda _:lambda:None
         with patch.dict('sys.modules',injected):
             self.assertTrue(await async_setup_entry(self.hass,self.root))
-            self.assertEqual(len(added),2)
+            self.assertEqual(len(added),8)
             operation=next(item for item in added if hasattr(item,'is_on'))
             duration=next(item for item in added if hasattr(item,'native_value'))
             self.assertFalse(operation.is_on)
@@ -267,6 +273,48 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(clock.call_args.kwargs,{'minute':[0,15,30,45],'second':0})
             self.assertEqual(source.call_args.args[1],['sensor.cost'])
             coordinator=self.planners(self.hass)['dhw']
+            outputs={item._attr_unique_id:item for item in added}
+            level=outputs['dhw_storage_level']
+            status=outputs['dhw_planner_status']
+            start=outputs['dhw_next_start']
+            stop=outputs['dhw_next_stop']
+            self.assertEqual(level.native_value,50)
+            self.assertEqual(level.extra_state_attributes['forecast'][0]['storage_level_percent'],50)
+            self.assertEqual(status.native_value,'optimal')
+            self.assertTrue(status.extra_state_attributes['plan_available'])
+            self.assertIsNone(start.native_value)  # All off, no invented transition.
+            self.assertIsNone(stop.native_value)
+            self.assertGreaterEqual(outputs['dhw_solver_seconds'].native_value,0)
+            coordinator.data['solver_gap']=.012
+            self.assertEqual(outputs['dhw_solver_gap'].native_value,1.2)
+            # Percentages use the usable range, including a nonzero minimum.
+            coordinator.data.update(storage_min_h=1,storage_max_h=3)
+            timeline=[]
+            for i,decision in enumerate([0,1,1,0]):
+                begin=NOW+timedelta(minutes=15*i)
+                timeline.append({'start':begin.isoformat(),'effective_start':begin.isoformat(),
+                    'end':(begin+timedelta(minutes=15)).isoformat(),'operation':decision,
+                    'storage_start_h':2,'storage_end_h':2,'runtime_h_per_24h':0})
+            coordinator.data['forecast']=timeline
+            self.assertEqual(level.native_value,50)
+            self.assertEqual(start.native_value,NOW+timedelta(minutes=15))
+            self.assertEqual(stop.native_value,NOW+timedelta(minutes=45))
+            # Currently on: skip the ongoing start and find the next future one.
+            timeline[0]['operation']=1
+            timeline[1]['operation']=0
+            self.assertEqual(start.native_value,NOW+timedelta(minutes=30))
+            self.assertEqual(stop.native_value,NOW+timedelta(minutes=15))
+            coordinator.last_update_success=False
+            coordinator.last_exception=ValueError('Test missing costs')
+            coordinator.plan_status='waiting_for_inputs'
+            self.assertTrue(status.available)
+            self.assertEqual(status.native_value,'waiting_for_inputs')
+            self.assertIn('missing costs',status.extra_state_attributes['reason'])
+            self.assertFalse(status.extra_state_attributes['plan_available'])
+            self.assertFalse(level.available)
+            self.assertNotIn('forecast',level.extra_state_attributes)
+            self.assertFalse(start.available)
+            self.assertIsNone(outputs['dhw_solver_gap'].native_value)
             with patch.object(self.hass,'async_create_task',create=True) as schedule:
                 source.call_args.args[2](None)
                 schedule.assert_not_called()

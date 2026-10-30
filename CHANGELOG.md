@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.3
+
+- Add storage level in percent with a 72-hour forecast, normalized between the
+  configured minimum (0%) and maximum (100%) storage durations.
+- Add next-start and next-stop timestamp entities. No upcoming transition
+  within the forecast leaves the timestamp empty.
+- Add always-readable planner status diagnostics, including missing inputs,
+  infeasibility and errors, plus solver time and optimality-gap sensors.
+  Diagnostic outputs reuse existing calculations without extra solver runs.
+
 ## 0.9.2
 
 - Run thermal MILP planners on the fixed HH:00/15/30/45 clock, once per slot.
