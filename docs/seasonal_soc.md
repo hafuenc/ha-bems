@@ -34,8 +34,7 @@ monthly schedule or zero. The wrapper cannot select its own output as its source
 
 For FBC, SOC **at or below** this threshold produces a complete plan at the
 configured maximum charging power. This is the FBC meaning of leaving battery
-operation to its standard behavior. It deliberately changes the original MATLAB
-strict `<` comparison to `<=`.
+operation to its standard behavior.
 
 Electricity consumption varies unpredictably, and forecasts inevitably contain
 errors. This threshold acts as a safeguard: it reduces the flexibility available

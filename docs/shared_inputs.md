@@ -21,7 +21,7 @@ module independently configurable through the single HA-BEMS Configure menu.
    An Open-Meteo example is included; any provider can supply that same contract.
    [Copy-and-paste AI prompts](helper_prompts.md) help build a compatible helper
    from your provider's actual entities and attributes.
-2. Open **HA-BEMS → Configure → Add forecast import → PV AC generation forecast
+2. Open **HA-BEMS → Configure → BEMS forecast importer → PV AC generation forecast
    or PV DC generation forecast**.
 3. Name the shared input and select the prepared sensor. Submit to test, review the 72-hour preview, then submit to register.
 4. In **HA-BEMS → Configure**, add an **FBC** operation planner or configure an existing item and select that named

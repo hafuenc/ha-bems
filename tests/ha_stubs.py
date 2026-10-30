@@ -114,7 +114,7 @@ def modules():
     helpers = ModuleType('homeassistant.helpers')
     helpers.entity_registry = SimpleNamespace()
     helpers.selector = SimpleNamespace(**{name: Selector for name in [
-        'NumberSelector', 'SelectSelector', 'EntitySelector']})
+        'NumberSelector', 'SelectSelector', 'EntitySelector', 'TextSelector']})
     util = ModuleType('homeassistant.util')
     util.dt = SimpleNamespace(now=lambda: NOW)
     update = ModuleType('homeassistant.helpers.update_coordinator')

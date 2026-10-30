@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.7.0**
+Modular planning for flexible devices and energy storage. Version **0.8.0**
 uses one HA-BEMS configuration entry with shared forecast-importer and
 entity-creator service devices. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -15,11 +15,12 @@ battery planners remain independently configurable.
 them to your equipment.** Direct device control is outside the scope of every
 HA-BEMS module and future version.
 
-This release expands the **BEMS forecast importer** with
-separate PV AC/DC choices, import/export prices and outdoor air temperature.
-FBC users choose their PV source. Imported-input statuses share one importer
-device, and generated helpers share one creator device. Existing standalone or
-grouped entries migrate at startup. Thermal operating costs are implemented; thermal
+This release simplifies thermal runtime-cost setup with an editable COP lookup
+table and adds a forecast-source overview through the importer's **Visit** link.
+The **BEMS forecast importer** supports PV AC/DC, import/export prices and outdoor
+air temperature. FBC users choose their PV source. Imported-input statuses share
+one importer device, and generated helpers share one creator device. Existing
+standalone or grouped entries migrate at startup. Thermal operating costs are implemented; thermal
 operation planning remains open for a future generic planner. Runtime-cost
 forecasts are created under BEMS entity creator.
 [Service-device setup and migration](docs/grouped_setup.md).
@@ -32,7 +33,7 @@ forecasts are created under BEMS entity creator.
 3. Download HA-BEMS and restart Home Assistant.
 4. Open **Settings → Devices & services → Add integration → HA-BEMS**.
 5. Create the single HA-BEMS installation, then open its **Configure** menu.
-6. Choose **Add forecast import**, **Create helper entity** or **Add operation
+6. Choose **BEMS forecast importer**, **BEMS entity creator** or **Add operation
    planner**. Use **Configure an item** or **Remove an item** for existing items.
 
 The repository is a HACS custom repository; it is not included in the default
@@ -79,7 +80,7 @@ to consider expected building consumption, or leave load empty for PV-only behav
 Each helper/module is a named item managed through **HA-BEMS → Configure**.
 Multiple instances are supported, including batteries with separate settings.
 BEMS entity creator supports multiple runtime-cost setups using the same procedure,
-with independent COP, thermal power, auxiliary consumption and forecast selections.
+with independent COP, thermal power and forecast selections.
 Older entries migrate into this layout while retaining entity IDs and selections.
 
 ### BEMS entity creator
@@ -113,7 +114,6 @@ air temperature forecasts for shared use. [Price and temperature format](docs/pr
 
 ### Electrical storage management: FBC
 
-FBC uses the existing MATLAB calculation engine with no version selector.
 Configure measured SOC in %, the seasonal threshold source, battery parameters
 and a PV AC or DC generation forecast selected by the user. Optionally select a configured HA-BEMS load profile
 or imported building load forecast; FBC then uses `max(0, PV generation - load)`
@@ -129,6 +129,12 @@ custom-template and field-mapping options are removed.
 [Helper format and Open-Meteo example](docs/pv_forecast_helper.md).
 Then select the named imported input in FBC. Several modules can share it. The
 importer exposes an input-status sensor without duplicating the forecast.
+The importer device's **Visit** link opens a forecast overview showing source
+values, BEMS validation status and validated coverage. Click a source or status
+to open its entity details. Status attributes also contain `source_entity_url`
+(using HA's configured external/cloud URL when available, otherwise internal)
+and the same-origin `source_entity_path`. Without a configured HA URL, use the
+overview's source links. The overview requires administrator access.
 Existing FBC entries must be configured to select a registered PV input after
 upgrading; battery settings and entity IDs are retained.
 [Shared input strategy and module dependency matrix](docs/shared_inputs.md).
@@ -138,8 +144,7 @@ forecast-to-battery storage efficiency** converts forecast energy into stored
 battery energy. [FBC details](docs/fbc.md).
 
 When **SOC is at or below the seasonal minimum**, the complete planned charging
-profile equals the configured maximum charging power. This inclusive comparison
-is a deliberate change from the original MATLAB `<` rule. Maximum charging
+profile equals the configured maximum charging power. Maximum charging
 power in W is also the current output limit; no separate output-cap input is
 needed. Target SOC in % should match the battery system's configured SOC limit. The seasonal
 safeguard can produce the maximum-power plan even while forecasts are unavailable.
@@ -274,9 +279,7 @@ requirements, not implemented features.
 
 ## Development and reference status
 
-The original MATLAB references are preserved under `matlab_reference`:
-`fbc_original_excerpt.m` for current FBC and `fcn_solver_gurobi.m` for later thermal
-optimisation work. Attribution and data provenance are documented in
+Attribution and data provenance are documented in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). No general source-code license
 has been selected yet.
 

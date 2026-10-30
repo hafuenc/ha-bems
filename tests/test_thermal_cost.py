@@ -14,7 +14,7 @@ from tests.test_forecast import records_for
 from tests.test_forecast_input import NOW
 
 
-CONFIG = {"thermal_power_kw": 7, "auxiliary_power_w": 0,
+CONFIG = {"thermal_power_kw": 7,
           "cop_model": "constant", "constant_cop": 3.5}
 
 
@@ -29,7 +29,7 @@ def calculate(config=None, pv=0, load=0, import_price=.30, export_price=.10, tem
 
 
 class ThermalArithmeticTests(unittest.TestCase):
-    def test_grid_pv_split_auxiliaries_and_curtailment(self):
+    def test_grid_pv_split_and_curtailment(self):
         self.assertAlmostEqual(calculate()["value"], .15)
         self.assertAlmostEqual(calculate(pv=1000)["value"], .10)
         self.assertAlmostEqual(calculate(pv=3000, load=1000)["value"], .05)
@@ -39,9 +39,16 @@ class ThermalArithmeticTests(unittest.TestCase):
         result = calculate(limited, pv=6000, load=1000)
         self.assertAlmostEqual(result["value"], .025)
         self.assertEqual(result["forecast"][0]["curtailed_pv_power_w"], 1000)
-        self.assertAlmostEqual(calculate({**limited, "auxiliary_power_w": 500}, pv=6000, load=1000)["value"], .0375)
         self.assertAlmostEqual(calculate({**limited, "feed_in_limit_w": 0}, pv=6000)["value"], 0)
-        self.assertAlmostEqual(calculate({**CONFIG, "auxiliary_power_w": 500})["value"], .1875)
+
+    def test_retired_auxiliary_setting_is_ignored_and_cop_one_supports_heating_elements(self):
+        result = calculate({**CONFIG, "auxiliary_power_w": 500})
+        self.assertAlmostEqual(result["value"], .15)
+        self.assertEqual(result['current_electrical_power_w'], 2000)
+        self.assertNotIn('auxiliary_power_w', result)
+        element = calculate({**CONFIG, "constant_cop": 1})
+        self.assertEqual(element['current_electrical_power_w'], 7000)
+        self.assertAlmostEqual(element['value'], .525)
 
     def test_matlab_share_equivalence_over_varied_inputs(self):
         rng = random.Random(2026)
@@ -86,13 +93,13 @@ class ThermalArithmeticTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             calculate_cost_forecast(CONFIG, NOW, rows(0), good, good, rows(-1))
         for key, value in (("constant_cop", 0), ("constant_cop", True),
-                           ("thermal_power_kw", -1), ("auxiliary_power_w", math.inf)):
+                           ("thermal_power_kw", -1)):
             with self.assertRaises(ValueError):
                 validate_settings({**CONFIG, key: value})
 
 
 class COPTests(unittest.TestCase):
-    def test_two_to_ten_anchors_sort_and_linear_extrapolation(self):
+    def test_two_to_ten_reference_points_sort_and_linear_extrapolation(self):
         points = cop_points([{"temperature_c": 12, "cop": 4}, {"temperature_c": -8, "cop": 2}])
         self.assertEqual(points, [(-8, 2), (12, 4)])
         for temperature, expected in ((-18, 1), (-8, 2), (2, 3), (12, 4), (22, 5)):
