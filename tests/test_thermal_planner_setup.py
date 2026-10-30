@@ -65,14 +65,18 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         flow.hass, flow.config_entry = self.hass, self.root
         self.assertIn('thermal_plan', (await flow.async_step_add_planner())['menu_options'])
         self.assertEqual((await flow.async_step_thermal_plan({'name':'DHW','cost_entity':'sensor.cost','runtime_model':'constant'}))['step_id'], 'runtime_constant')
-        await flow.async_step_runtime_constant({'runtime_h_per_24h':0})
-        result = await flow.async_step_thermal_storage({**CONFIG,'runtime_h_per_24h':0,'constraint_entry_id':'','initial_storage_h':None})
+        form = await flow.async_step_runtime_constant({'runtime_h_per_24h':0})
+        self.assertEqual(form['data_schema']({})['constraint_entry_id'],'none')
+        constraint_selector = form['data_schema'].schema['constraint_entry_id']
+        self.assertTrue(all(option['value'] for option in constraint_selector.config['options']))
+        result = await flow.async_step_thermal_storage({**CONFIG,'runtime_h_per_24h':0,'constraint_entry_id':'none','initial_storage_h':None})
         self.assertEqual(result['step_id'],'thermal_plan_preview',result)
         await flow.async_step_thermal_plan_preview({})
         saved = next(iter(self.root.data['items'].values()))['data']
         self.assertEqual(saved['module'], MODULE_THERMAL_PLAN)
         self.assertNotIn('soc_entity', saved)
         self.assertNotIn('runtime_table_text', saved)
+        self.assertIsNone(saved['constraint_entry_id'])
 
     async def test_restart_preserves_feedforward_storage_and_current_operation(self):
         config = {**CONFIG,'runtime_h_per_24h':0,'cost_entity':'sensor.cost'}
