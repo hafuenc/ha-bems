@@ -107,7 +107,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             hass.state.state = 'unavailable'
             await original.async_refresh()
             with self.assertRaises(ValueError):
-                read_import()
+                read_import()  # Snapshot starts in the future relative to this test's NOW.
             self.assertTrue(await async_unload_entry(hass, registered))
             self.assertNotIn('pv-main', coordinators(hass))
             for callback in registered.callbacks:

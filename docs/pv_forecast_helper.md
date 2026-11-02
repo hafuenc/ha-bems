@@ -57,6 +57,11 @@ before that period. Nighttime must be represented explicitly with zero power;
 missing or unavailable data must never be replaced with zero. Extra attributes
 and record fields are allowed. At most 10,000 records are accepted.
 
+Consumers tolerate up to four missing 15-minute intervals in total by copying
+the preceding value, including a short far-future tail. The current interval
+must exist. Filled rows are flagged and remain counted across chained modules;
+larger gaps, invalid values and ordering errors still fail.
+
 A helper updated every 15 minutes should normally publish **289 intervals**
 starting at the current quarter-hour. Exactly 288 intervals starting at the
 quarter-hour will fall short of 72 hours when the quarter is partly elapsed.

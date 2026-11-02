@@ -87,7 +87,7 @@ class ThermalArithmeticTests(unittest.TestCase):
 
     def test_bad_prices_load_and_coverage_are_not_silently_filled(self):
         good = rows(.3, "price_eur_per_kwh")
-        for bad in (good[:-1], good[1:], [good[0], *good], good[:5] + good[6:]):
+        for bad in (good[:-5], good[1:], [good[0], *good], good[:5] + good[10:]):
             with self.assertRaises(ValueError):
                 calculate_cost_forecast(CONFIG, NOW, rows(0), bad, good)
         with self.assertRaises(ValueError):

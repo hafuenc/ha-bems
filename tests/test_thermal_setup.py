@@ -156,14 +156,57 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         await plan.async_refresh()
         self.assertFalse(plan.data['cop_fallback_active'])
         coordinators(self.hass)['temperature'].last_update_success = False
+        temperature_data = coordinators(self.hass)['temperature'].data
+        coordinators(self.hass)['temperature'].data = None
         await plan.async_refresh()
         self.assertTrue(plan.last_update_success)
-        self.assertEqual(plan.data['cop_fallback_intervals'], 289)
-        self.assertEqual(plan.data['current_cop'], 2.5)
-        self.assertTrue(plan.data['temperature_input_error'])
+        self.assertEqual(plan.data['cop_fallback_intervals'], 0)
+        self.assertTrue(plan.data['using_previous_forecast'])
+        self.assertTrue(plan.data['refresh_error'])
+        # After a prolonged temperature failure, fresh mandatory inputs allow
+        # the explicitly configured COP fallback instead of an artificial dip.
+        later = NOW + timedelta(minutes=61)
+        from tests.test_forecast import records_for
+        for identifier, key, value in [('pv-main','power_w',1000),
+                                      ('import','price_eur_per_kwh',.3),
+                                      ('export','price_eur_per_kwh',.1)]:
+            coordinators(self.hass)[identifier].data['forecast'] = [
+                {'start':r['start'],'end':r['end'],key:value} for r in records_for(later)]
+        with patch.object(plan._async_update_data.__globals__['dt_util'], 'now', lambda: later):
+            await plan.async_refresh()
+        self.assertTrue(plan.last_update_success,plan.last_exception)
+        self.assertEqual(plan.data['current_cop'],2.5)
+        self.assertTrue(plan.data['cop_fallback_active'])
+        # Recovery returns to measured-temperature modelling.
+        for identifier, key, value in [('pv-main','power_w',1000),
+                                      ('import','price_eur_per_kwh',.3),
+                                      ('export','price_eur_per_kwh',.1)]:
+            coordinators(self.hass)[identifier].data['forecast'] = rows(value,key)
+        coordinators(self.hass)['temperature'].data = temperature_data
         coordinators(self.hass)['temperature'].last_update_success = True
         await plan.async_refresh()
         self.assertFalse(plan.data['cop_fallback_active'])
+
+    async def test_retained_cost_selects_current_interval_and_expires_without_renewal(self):
+        from unittest.mock import AsyncMock
+        from custom_components.ha_bems.thermal_coordinator import TemperatureRefreshPending
+        plan = ThermalCostCoordinator(self.hass, entry('DHW',module=MODULE_THERMAL_COST,**CONFIG,**INPUTS))
+        await plan.async_refresh()
+        generated = plan.data['generated_at']
+        expected = plan.data['forecast'][1]
+        plan.data['forecast'][1]['cost_eur_per_timestep'] = .123
+        with patch.dict(plan._async_update_data.__globals__,
+                   {'async_calculate_cost':AsyncMock(side_effect=TemperatureRefreshPending('Source refreshing'))}):
+            with patch.object(plan._async_update_data.__globals__['dt_util'],'now',lambda:NOW+timedelta(minutes=15)):
+                await plan.async_refresh()
+            self.assertTrue(plan.last_update_success)
+            self.assertTrue(plan.data['using_previous_forecast'])
+            self.assertEqual(plan.data['value'],.123)
+            self.assertEqual(plan.data['generated_at'],generated)
+            self.assertEqual(plan.data['current_cop'],expected['cop'])
+            with patch.object(plan._async_update_data.__globals__['dt_util'],'now',lambda:NOW+timedelta(minutes=61)):
+                await plan.async_refresh()
+            self.assertFalse(plan.last_update_success)
 
     async def test_optional_load_is_subtracted_and_stale_price_horizon_fails(self):
         self.hass.entries.append(entry('load', module='load_forecast_import'))
@@ -175,7 +218,7 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(plan.last_update_success)
         self.assertAlmostEqual(plan.data['value'], .125)
         self.assertEqual(plan.data['source_updated_at'], (NOW - timedelta(hours=3)).isoformat())
-        with patch.object(plan._async_update_data.__globals__['dt_util'], 'now', lambda: NOW + timedelta(minutes=8)):
+        with patch.object(plan._async_update_data.__globals__['dt_util'], 'now', lambda: NOW + timedelta(minutes=75)):
             await plan.async_refresh()
         self.assertFalse(plan.last_update_success)
 
@@ -250,7 +293,8 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
             coordinators(self.hass)['import'].last_update_success = False
             dispatcher.async_dispatcher_send(self.hass, import_signal('import'))
             await asyncio.gather(*tasks)
-            self.assertTrue(all('forecast' not in item.extra_state_attributes for item in sensors))
+            self.assertTrue(all(item.extra_state_attributes['using_previous_forecast'] for item in sensors))
+            self.assertTrue(all('forecast' in item.extra_state_attributes for item in sensors))
             self.assertTrue(await async_unload_entry(self.hass, self.group))
             for callback in self.group.callbacks:
                 callback()

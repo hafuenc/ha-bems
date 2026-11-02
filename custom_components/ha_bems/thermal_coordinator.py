@@ -8,11 +8,16 @@ from homeassistant.util import dt as dt_util
 
 from .const import (CONF_EXPORT_PRICE, CONF_IMPORT_PRICE, CONF_PV_IMPORT, CONF_TEMPERATURE,
                     CONF_PV_POWER_TYPE, MODULE_EXPORT_PRICE, MODULE_IMPORT_PRICE, MODULE_OUTDOOR_TEMP)
-from .forecast import parse_timestamp
+from .forecast import FILL_MARKER, ForecastCoverageError, parse_timestamp, validate_forecast
+from .forecast_input import ForecastConfigurationError, ForecastExpired
 from .import_registry import read_forecast_import, read_load_input, read_pv_import
 from .thermal_cost import calculate_cost_forecast
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class TemperatureRefreshPending(ValueError):
+    """Allow the previous cost forecast before switching to fallback COP."""
 
 
 def thermal_references(config):
@@ -32,12 +37,16 @@ def read_cost_inputs(hass, config, now):
     exports, export_info = read_forecast_import(hass, config.get(CONF_EXPORT_PRICE), MODULE_EXPORT_PRICE, now)
     load, load_info = read_load_input(hass, config, now)
     temperatures, temperature_info, temperature_error = None, {}, None
+    temperature_major_failure = False
     if config.get("cop_model") == "lookup":
         try:
             temperatures, temperature_info = read_forecast_import(
                 hass, config.get(CONF_TEMPERATURE), MODULE_OUTDOOR_TEMP, now)
         except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
+            if isinstance(err, ForecastConfigurationError):
+                raise
             temperature_error = str(err)
+            temperature_major_failure = isinstance(err, (ForecastCoverageError, ForecastExpired))
     updated = [pv_info["source_updated_at"], import_info["source_updated_at"], export_info["source_updated_at"]]
     if load is not None:
         updated.append(load_info["load_source_updated_at"])
@@ -47,13 +56,16 @@ def read_cost_inputs(hass, config, now):
                 "pv_import_entry_id": config[CONF_PV_IMPORT], "pv_power_type": "ac",
                 CONF_IMPORT_PRICE: config[CONF_IMPORT_PRICE], CONF_EXPORT_PRICE: config[CONF_EXPORT_PRICE],
                 CONF_TEMPERATURE: config.get(CONF_TEMPERATURE) if config.get("cop_model") == "lookup" else None,
-                "temperature_input_error": temperature_error, **load_info}
+                "temperature_input_error": temperature_error,
+                "temperature_major_failure": temperature_major_failure, **load_info}
     return (pv, imports, exports, load, temperatures, temperature_error), metadata
 
 
-async def async_calculate_cost(hass, config):
+async def async_calculate_cost(hass, config, defer_temperature_fallback=False):
     now = dt_util.now()
     inputs, metadata = read_cost_inputs(hass, config, now)
+    if defer_temperature_fallback and inputs[-1] and not metadata["temperature_major_failure"]:
+        raise TemperatureRefreshPending(inputs[-1])
     result = await hass.async_add_executor_job(calculate_cost_forecast, config, now, *inputs)
     return {**result, **metadata}
 
@@ -63,9 +75,37 @@ class ThermalCostCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name=entry.title, config_entry=parent or entry,
                          update_interval=timedelta(minutes=1))
         self.config = {**entry.data, **entry.options}
+        self._temperature_failure_since = None
+        self._last_good_cost = None
 
     async def _async_update_data(self):
+        now = dt_util.now()
         try:
-            return await async_calculate_cost(self.hass, self.config)
+            result = await async_calculate_cost(self.hass, self.config,
+                self._temperature_failure_since is None or
+                now - self._temperature_failure_since < timedelta(hours=1))
+            if not result.get("temperature_input_error"):
+                self._temperature_failure_since = None
+            result["using_previous_forecast"] = False
+            if not result.get("cop_fallback_active"):
+                self._last_good_cost = result
+            return result
         except (ValueError, TypeError, KeyError, IndexError, OverflowError) as err:
+            if isinstance(err, ForecastConfigurationError):
+                raise UpdateFailed(str(err)) from err
+            if isinstance(err, TemperatureRefreshPending) and self._temperature_failure_since is None:
+                self._temperature_failure_since = now
+            cached = self._last_good_cost
+            if cached and now - parse_timestamp(cached["generated_at"]) <= timedelta(hours=1):
+                try:
+                    rows = validate_forecast(cached["forecast"], now, "cost_eur_per_timestep", False)
+                except ValueError:
+                    pass
+                else:
+                    row = rows[0]
+                    return {**cached, "forecast": rows, "value": row["cost_eur_per_timestep"],
+                            "current_cop": row["cop"], "current_electrical_power_w": row["electrical_power_w"],
+                            "filled_previous_intervals": sum(r.get(FILL_MARKER, False) for r in rows),
+                            "status": "using_previous_forecast", "using_previous_forecast": True,
+                            "refresh_error": str(err)}
             raise UpdateFailed(str(err)) from err

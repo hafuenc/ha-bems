@@ -53,19 +53,20 @@ class SharedInputTests(unittest.IsolatedAsyncioTestCase):
         rows_a, details_a = read_pv_import(self.hass, self.config, NOW)
         rows_b, details_b = read_pv_import(self.hass, dict(self.config), NOW)
         self.assertEqual(details_a['pv_import_entry_id'], details_b['pv_import_entry_id'])
-        self.assertIs(rows_a[0], rows_b[0])
+        self.assertEqual(rows_a[0], rows_b[0])
         self.assertEqual(len(rows_a), 289)
 
     async def test_source_age_does_not_reject_cache_but_horizon_still_expires(self):
         self.coordinator.config['forecast_max_age_minutes'] = 60
         self.assertEqual(len(read_pv_import(self.hass, self.config, NOW + timedelta(seconds=1))[0]), 289)
         with self.assertRaisesRegex(ValueError, '72 hours'):
-            read_pv_import(self.hass, self.config, NOW + timedelta(minutes=8))
+            read_pv_import(self.hass, self.config, NOW + timedelta(minutes=75))
 
     async def test_disable_delete_reload_and_invalid_import_never_use_old_data(self):
         self.coordinator.last_update_success = False
         self.coordinator.input_status = 'invalid'
         self.coordinator.last_exception = ValueError('gap')
+        self.coordinator.data['input_validated_at'] = (NOW - timedelta(minutes=61)).isoformat()
         with self.assertRaisesRegex(ValueError, 'invalid'):
             read_pv_import(self.hass, self.config, NOW)
         coordinators(self.hass).clear()
@@ -86,7 +87,7 @@ class SharedInputTests(unittest.IsolatedAsyncioTestCase):
         attributes = deepcopy(self.hass.state.attributes)
         for expected, state, attrs in [
             ('unavailable', 'unavailable', attributes),
-            ('invalid', '0', {**attributes, 'forecast': attributes['forecast'][:288]})]:
+            ('invalid', '0', {**attributes, 'forecast': attributes['forecast'][:284]})]:
             self.hass.state.state = state
             self.hass.state.attributes = attrs
             with self.assertRaises(UpdateFailed):
@@ -104,7 +105,7 @@ class SharedInputTests(unittest.IsolatedAsyncioTestCase):
         self.hass.state.state = 'unavailable'
         await self.coordinator.async_refresh()
         self.hass.state.state = '0'
-        self.hass.state.attributes['forecast'] = attrs['forecast'][:288]
+        self.hass.state.attributes['forecast'] = attrs['forecast'][:284]
         await self.coordinator.async_refresh()
         self.hass.state.attributes = {**attrs, 'source_updated_at': '2020-01-01T00:00:00Z'}
         await self.coordinator.async_refresh()
@@ -130,7 +131,7 @@ class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_source_changed_during_preview_blocks_save(self):
         await self.flow.async_step_import_pv({'name': 'Shared solar', 'pv_power_type': 'dc',
             'forecast_entity': 'sensor.pv', 'forecast_max_age_minutes': 180})
-        self.hass.state.attributes['forecast'] = self.hass.state.attributes['forecast'][:288]
+        self.hass.state.attributes['forecast'] = self.hass.state.attributes['forecast'][:284]
         result = await self.flow.async_step_import_preview({})
         self.assertEqual(result['step_id'], 'import_pv')
         self.assertEqual(result['errors']['base'], 'invalid_forecast')
@@ -139,6 +140,7 @@ class ImporterFlowTests(unittest.IsolatedAsyncioTestCase):
         result = await self.flow.async_step_fbc_forecast({'pv_import_entry_id': 'pv-main'})
         self.assertEqual(result['step_id'], 'fbc_preview')
         coordinators(self.hass)['pv-main'].last_update_success = False
+        coordinators(self.hass)['pv-main'].data = None
         result = await self.flow.async_step_fbc_forecast({'pv_import_entry_id': 'pv-main'})
         self.assertEqual(result['errors']['base'], 'invalid_forecast')
         self.hass.entries.clear()

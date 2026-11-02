@@ -160,7 +160,7 @@ class LoadAwareTests(unittest.IsolatedAsyncioTestCase):
         flow.hass = self.hass
         result = await flow.async_step_import_load({'name': 'Predicted demand', 'forecast_entity': 'sensor.load'})
         self.assertEqual(result['step_id'], 'import_preview')
-        self.hass.state.attributes['forecast'] = self.hass.state.attributes['forecast'][:288]
+        self.hass.state.attributes['forecast'] = self.hass.state.attributes['forecast'][:284]
         result = await flow.async_step_import_preview({})
         self.assertEqual(result['step_id'], 'import_load')
         self.assertEqual(result['errors']['base'], 'invalid_forecast')

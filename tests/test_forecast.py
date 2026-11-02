@@ -24,13 +24,15 @@ class ForecastContractTests(unittest.TestCase):
     def test_full_rolling_forecast_and_explicit_nighttime_zero(self):
         self.assertEqual(validate_forecast(self.rows, self.now), self.rows)
 
-    def test_288_quarters_are_too_short_when_current_quarter_is_partial(self):
-        with self.assertRaisesRegex(ValueError, "72 hours"):
-            validate_forecast(self.rows[:288], self.now)
+    def test_one_missing_tail_interval_uses_previous(self):
+        result = validate_forecast(self.rows[:288], self.now)
+        self.assertEqual(len(result), 289)
+        self.assertTrue(result[-1]["filled_previous"])
+        self.assertEqual(result[-1]["power_w"], self.rows[287]["power_w"])
 
     def test_exact_72_hours_is_accepted_at_quarter_boundary(self):
         now = self.now.replace(minute=15, second=0)
-        self.assertEqual(len(validate_forecast(records_for(now, 288), now)), 288)
+        self.assertEqual(len(validate_forecast(records_for(now, 288), now)), 289)
 
     def test_bad_records_are_rejected(self):
         cases = {}
@@ -46,7 +48,7 @@ class ForecastContractTests(unittest.TestCase):
         rows = deepcopy(self.rows)
         del rows[0]['end']
         cases['missing_end'] = rows
-        cases['gap'] = self.rows[:30] + self.rows[31:]
+        cases['gap'] = self.rows[:30] + self.rows[35:]
         cases['duplicate'] = self.rows[:30] + [self.rows[29]] + self.rows[30:]
         cases['out_of_order'] = [self.rows[1], self.rows[0]] + self.rows[2:]
         cases['missing_current_quarter'] = self.rows[1:]

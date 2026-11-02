@@ -80,8 +80,8 @@ class ForecastEntityTests(unittest.IsolatedAsyncioTestCase):
             await self.read(present=False)
 
     async def test_runtime_rejects_new_gaps_and_short_horizon(self):
-        for rows in [self.attributes['forecast'][:288],
-                     self.attributes['forecast'][:30] + self.attributes['forecast'][31:]]:
+        for rows in [self.attributes['forecast'][:284],
+                     self.attributes['forecast'][:30] + self.attributes['forecast'][35:]]:
             attrs = {**self.attributes, 'forecast': rows}
             with self.assertRaises(ValueError):
                 await self.read(attrs)

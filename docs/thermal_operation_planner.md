@@ -170,8 +170,15 @@ The planner uses **HiGHS via SciPy** in a background executor. An optimal result
 or a feasible result at the time limit is accepted only after verifying the
 binary decisions, operation permissions, storage and commitment constraints.
 The solver's relative optimality-gap target is 1%.
-No feasible solution, missing input coverage or invalid upstream plans make
-the recommendation unavailable and create a persistent notification. Unknown
+During brief refresh or calculation failures, the last valid plan can continue
+for at most one hour while its current interval and bounded forecast coverage
+remain usable. Storage advances along that same feed-forward plan. Diagnostics
+show `using_previous_plan` and `refresh_error`; its generation timestamp is not
+renewed. Input forecasts can hold the previous value for at most four missing
+15-minute slots, with filled-row provenance preserved through dependencies.
+Once no usable retained plan remains, no feasible solution, missing input
+coverage or invalid upstream plans make the recommendation unavailable and
+create a persistent notification. Unknown
 availability is never interpreted as permission to run. The notification is
 dismissed when a valid plan is available again.
 

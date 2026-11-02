@@ -59,8 +59,11 @@ forecasts, document the interpolation and interval averaging used by the helper.
 
 Published day-ahead prices alone generally do not cover a rolling 72-hour
 horizon. If predictions supplement published prices, that forecast method and
-provenance belong in the source helper. HA-BEMS never extends a missing tariff,
-zero-fills a gap or generates temperature/price predictions during import.
+provenance belong in the source helper. As a bounded continuity measure,
+HA-BEMS copies the preceding value for up to four missing 15-minute intervals
+in total, including a short tail. It never zero-fills gaps. Current data and
+valid values/order are required; larger shortages fail. Filled rows are flagged
+and retain that flag through derived forecasts, preventing repeated extensions.
 
 Setup validates the source, then previews interval count, UTC coverage, minimum,
 maximum and source age. It revalidates before saving. Configure can change the

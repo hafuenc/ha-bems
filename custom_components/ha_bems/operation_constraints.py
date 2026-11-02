@@ -2,7 +2,7 @@
 
 from .const import MODULE_OPERATION_IMPORT, MODULE_THERMAL_PLAN
 from .entries import all_module_entries, item_enabled, module_type
-from .forecast import validate_forecast
+from .forecast import FILL_MARKER, validate_forecast
 
 
 def upstream_planner(hass, entity_id):
@@ -78,7 +78,7 @@ def constraint_choices(hass, identifier, config):
 
 
 def read_constraint_forecast(hass, config, now):
-    from .import_registry import planners, read_forecast_import
+    from .import_registry import planners, read_forecast_import, snapshot_usable
 
     source, mode = constraint_selection(hass, config)
     if not source:
@@ -92,7 +92,7 @@ def read_constraint_forecast(hass, config, now):
         if item is None or not item_enabled(item):
             raise ValueError("The selected MILP operation plan no longer exists or is disabled")
         coordinator = planners(hass).get(identifier)
-        if coordinator is None or not coordinator.last_update_success or not coordinator.data:
+        if coordinator is None or not snapshot_usable(coordinator, now):
             raise ValueError("The selected MILP operation plan is unavailable")
         rows = permission_rows(coordinator.data.get("forecast"), {}, now)
     return [{**row, "allowed": 1 - row["allowed"] if mode == "inverted" else row["allowed"]} for row in rows]
@@ -119,4 +119,5 @@ def permission_rows(rows, config, now):
     if any(type(row["operation"]) not in (int, float) or row["operation"] not in (0, 1) for row in rows):
         raise ValueError("Operation forecast values must be exactly 0 or 1")
     return [{"start": row["start"], "end": row["end"],
-             "allowed": int(row["operation"])} for row in rows]
+             "allowed": int(row["operation"]),
+             **({FILL_MARKER: True} if row.get(FILL_MARKER) else {})} for row in rows]

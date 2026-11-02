@@ -4,12 +4,20 @@ from math import isfinite
 
 from homeassistant.util import dt as dt_util
 
-from .forecast import parse_timestamp, validate_forecast
+from .forecast import FILL_MARKER, parse_timestamp, validate_forecast
 from .forecast_types import forecast_type
 
 
 class ForecastUnavailable(ValueError):
     """The source cannot currently be read."""
+
+
+class ForecastConfigurationError(ValueError):
+    """A selected source was removed/disabled, rather than briefly refreshing."""
+
+
+class ForecastExpired(ForecastUnavailable):
+    """The last successful input snapshot is older than its failure grace."""
 
 
 def source_age(updated, now):
@@ -40,14 +48,14 @@ async def async_read_forecast(hass, config):
 
 async def _async_read_operation(hass, config):
     from .operation_constraints import permission_rows, upstream_planner
-    from .import_registry import planners
+    from .import_registry import planners, snapshot_usable
 
     now = dt_util.now()
     state = hass.states.get(config["forecast_entity"])
     identifier = upstream_planner(hass, config["forecast_entity"])
     if identifier:
         coordinator = planners(hass).get(identifier)
-        if not coordinator or not coordinator.last_update_success or not coordinator.data:
+        if not coordinator or not snapshot_usable(coordinator, now):
             raise ForecastUnavailable("The upstream operation plan is unavailable")
         attributes = coordinator.data
     else:
@@ -92,4 +100,5 @@ async def _async_read_forecast(hass, config, label, unit, value_key, nonnegative
         "input_forecast_end": intervals[-1]["end"],
         "input_forecast_intervals": len(intervals),
         "forecast_unit": unit, "forecast_value_key": value_key,
+        "filled_previous_intervals": sum(row.get(FILL_MARKER, False) for row in intervals),
     }
