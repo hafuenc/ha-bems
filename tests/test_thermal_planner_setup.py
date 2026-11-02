@@ -369,7 +369,7 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.root.add_update_listener=lambda _:lambda:None
         with patch.dict('sys.modules',injected):
             self.assertTrue(await async_setup_entry(self.hass,self.root))
-            self.assertEqual(len(added),8)
+            self.assertEqual(len(added),9)
             operation=next(item for item in added if hasattr(item,'is_on'))
             duration=next(item for item in added if hasattr(item,'native_value'))
             self.assertFalse(operation.is_on)
@@ -422,6 +422,11 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(status.native_value,'waiting_for_inputs')
             self.assertIn('missing costs',status.extra_state_attributes['reason'])
             self.assertFalse(status.extra_state_attributes['plan_available'])
+            curve=outputs['dhw_runtime_characteristic']
+            curve.hass=self.hass
+            self.assertTrue(curve.available)
+            self.assertEqual(curve.native_value,0)
+            self.assertGreater(len(curve.extra_state_attributes['curve_points']),100)
             self.assertFalse(level.available)
             self.assertNotIn('forecast',level.extra_state_attributes)
             self.assertFalse(start.available)

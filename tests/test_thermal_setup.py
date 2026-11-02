@@ -279,22 +279,26 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
             await async_setup_entry(self.hass, self.group)
             await asyncio.gather(*tasks)
             tasks.clear()
-            self.assertEqual(len(sensors), 2)
-            self.assertEqual(len({item._attr_unique_id for item in sensors}), 2)
-            self.assertTrue(all(item._attr_native_unit_of_measurement == 'EUR/timestep' for item in sensors))
-            original = sensors[0].native_value
+            self.assertEqual(len(sensors), 4)
+            self.assertEqual(len({item._attr_unique_id for item in sensors}), 4)
+            costs=[item for item in sensors if item._attr_native_unit_of_measurement=='EUR/timestep']
+            curves=[item for item in sensors if hasattr(item,'_curve')]
+            self.assertEqual(len(costs),2)
+            self.assertEqual(len(curves),2)
+            self.assertTrue(all(curve.extra_state_attributes['model']=='constant' for curve in curves))
+            original = costs[0].native_value
             for row in coordinators(self.hass)['import'].data['forecast']:
                 row['price_eur_per_kwh'] = .6
             dispatcher.async_dispatcher_send(self.hass, import_signal('import'))
             await asyncio.gather(*tasks)
             tasks.clear()
-            self.assertGreater(sensors[0].native_value, original)
-            self.assertEqual(sensors[0].native_value, sensors[1].native_value)
+            self.assertGreater(costs[0].native_value, original)
+            self.assertEqual(costs[0].native_value, costs[1].native_value)
             coordinators(self.hass)['import'].last_update_success = False
             dispatcher.async_dispatcher_send(self.hass, import_signal('import'))
             await asyncio.gather(*tasks)
-            self.assertTrue(all(item.extra_state_attributes['using_previous_forecast'] for item in sensors))
-            self.assertTrue(all('forecast' in item.extra_state_attributes for item in sensors))
+            self.assertTrue(all(item.extra_state_attributes['using_previous_forecast'] for item in costs))
+            self.assertTrue(all('forecast' in item.extra_state_attributes for item in costs))
             self.assertTrue(await async_unload_entry(self.hass, self.group))
             for callback in self.group.callbacks:
                 callback()

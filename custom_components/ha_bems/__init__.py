@@ -23,9 +23,11 @@ async def async_setup(hass, config):
     """Consolidate old standalone entries before any module platforms load."""
     from .migration import async_flatten_entries
     from .constraint_migration import migrate_constraint_settings
+    from .frontend import async_register_characteristic_frontend
 
     migrate_constraint_settings(hass)
     await async_flatten_entries(hass)
+    await async_register_characteristic_frontend(hass)
     return True
 
 

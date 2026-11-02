@@ -10,12 +10,15 @@ from .thermal_plan_entity import ThermalPlanEntity
 
 
 def thermal_plan_sensors(coordinator, entry):
+    from .characteristic_sensor import ThermalCharacteristicSensor
+
     return [ThermalStorageLevelSensor(coordinator, entry),
             ThermalTransitionSensor(coordinator, entry, 1),
             ThermalTransitionSensor(coordinator, entry, 0),
             ThermalPlannerStatusSensor(coordinator, entry),
             ThermalSolverSensor(coordinator, entry, "solver_seconds"),
-            ThermalSolverSensor(coordinator, entry, "solver_gap")]
+            ThermalSolverSensor(coordinator, entry, "solver_gap"),
+            ThermalCharacteristicSensor(coordinator, entry, "runtime_requirement")]
 
 
 class ThermalStorageLevelSensor(ThermalPlanEntity, SensorEntity):

@@ -45,7 +45,12 @@ async def _async_setup_item(hass, entry, async_add_entities):
         add_item_entities(async_add_entities,
             [ThermalStorageSensor(coordinator, entry), *thermal_plan_sensors(coordinator, entry)], entry)
         return
-    add_item_entities(async_add_entities, [BEMSForecastSensor(coordinator, entry, module)], entry)
+    entities = [BEMSForecastSensor(coordinator, entry, module)]
+    if module == MODULE_THERMAL_COST:
+        from .characteristic_sensor import ThermalCharacteristicSensor
+
+        entities.append(ThermalCharacteristicSensor(coordinator, entry, "cop"))
+    add_item_entities(async_add_entities, entities, entry)
 
 
 class SeasonalSOCSensor(SensorEntity):
