@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.10.3**
+Modular planning for flexible devices and energy storage. Version **0.10.4**
 uses separate BEMS forecast importer and BEMS entity creator integration entries,
 plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -26,6 +26,14 @@ Thermal MILP planners calculate on the fixed HH:00/15/30/45 clock; startup and
 reloads can calculate immediately.
 [Service-device setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
+
+Thermal cost setups now expose a diagnostic **COP characteristic** sensor;
+thermal MILP planners expose a diagnostic **Runtime characteristic** sensor.
+Their attributes contain reference points and an evaluated numeric curve,
+including runtime limits, heating cutoff and COP fallback regions. The bundled
+read-only Lovelace card plots these functions against outdoor temperature.
+Settings remain in the normal HA setup dialogs. No external editor, app or
+additional chart library is needed. [Characteristic sensors and charts](docs/characteristics.md).
 
 ## Install for the first manual check
 
