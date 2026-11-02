@@ -32,6 +32,8 @@ class ThermalPlanEntity(CoordinatorEntity):
         attributes = {key: value for key, value in (self.coordinator.data or {}).items()
                       if key not in ("value", "initial_previous_operation", "initial_previous_elapsed_h")}
         attributes["status"] = attributes.get("solver_status", "unavailable") if self.available else "unavailable"
+        if self.available and attributes.get("using_previous_plan"):
+            attributes["status"] = "using_previous_plan"
         if not self.available:
             attributes.pop("forecast", None)
             attributes["reason"] = str(self.coordinator.last_exception or "No current plan")

@@ -3,7 +3,7 @@
 from bisect import bisect_right
 from math import isfinite
 
-from .forecast import parse_timestamp, validate_forecast
+from .forecast import FILL_MARKER, MAX_FILL_INTERVALS, ForecastCoverageError, parse_timestamp, validate_forecast
 
 
 def number(value, label, *, positive=False, nonnegative=False):
@@ -62,6 +62,8 @@ def _matched_rows(reference, rows, key, label, now, nonnegative=False):
         row = indexed.get(parse_timestamp(item["start"]))
         if row is None or parse_timestamp(row["end"]) != parse_timestamp(item["end"]):
             raise ValueError(f"{label} must match the cost forecast intervals")
+        if row.get(FILL_MARKER):
+            item[FILL_MARKER] = True
         result.append(row[key])
     return result
 
@@ -120,13 +122,17 @@ def calculate_cost_forecast(config, now, pv, import_prices, export_prices,
                         "cost_eur_per_timestep": cost, "cop": cop,
                         "electrical_power_w": power, "grid_import_power_w": imported,
                         "pv_export_opportunity_power_w": exported,
-                        "curtailed_pv_power_w": curtailed, "cop_fallback": fallback})
+                        "curtailed_pv_power_w": curtailed, "cop_fallback": fallback,
+                        **({FILL_MARKER: True} if row.get(FILL_MARKER) else {})})
+    if sum(row.get(FILL_MARKER, False) for row in records) > MAX_FILL_INTERVALS:
+        raise ForecastCoverageError("Combined cost inputs contain more than four filled intervals")
     return {"value": records[0]["cost_eur_per_timestep"], "forecast": records,
             "cop_model": config["cop_model"], "current_cop": records[0]["cop"],
             "thermal_power_kw": config["thermal_power_kw"],
             "current_electrical_power_w": records[0]["electrical_power_w"],
             "cop_fallback_active": any(row["cop_fallback"] for row in records),
             "cop_fallback_intervals": sum(row["cop_fallback"] for row in records),
+            "filled_previous_intervals": sum(row.get(FILL_MARKER, False) for row in records),
             "cop_fallback_reason": "; ".join(sorted(reasons)),
             "status": "ready_cop_fallback" if reasons else "ready",
             "schema_version": 1, "interval_minutes": 15,

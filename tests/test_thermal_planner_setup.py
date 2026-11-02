@@ -141,6 +141,10 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         from custom_components.ha_bems.thermal_plan_coordinator import dt_util
         with patch.object(dt_util,'now',lambda:NOW+timedelta(minutes=15)):
             await ufh.async_refresh()
+        self.assertTrue(ufh.last_update_success)
+        self.assertTrue(ufh.data['using_previous_plan'])
+        with patch.object(dt_util,'now',lambda:NOW+timedelta(minutes=61)):
+            await ufh.async_refresh()
         self.assertFalse(ufh.last_update_success)
         self.root.data['items']['dhw']['data']['constraint_entry_id']='permissions'
         with self.assertRaisesRegex(ValueError,'Circular'):
@@ -286,6 +290,7 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         dhw.data['forecast'][0]['operation']=.5
         with self.assertRaises(ValueError):read_constraint_forecast(self.hass,config,NOW)
         dhw.last_update_success=False
+        dhw.data['generated_at']=(NOW-timedelta(hours=2)).isoformat()
         with self.assertRaisesRegex(ValueError,'unavailable'):read_constraint_forecast(self.hass,config,NOW)
         self.root.data['items']['dhw']['data']['enabled']=False
         with self.assertRaisesRegex(ValueError,'disabled'):read_constraint_forecast(self.hass,config,NOW)

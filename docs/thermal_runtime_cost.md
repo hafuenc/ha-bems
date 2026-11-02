@@ -139,14 +139,23 @@ check and quarter-hour updates. The cost calculation runs outside the event loop
 
 ## Failure handling
 
-A missing/invalid temperature forecast, or a non-positive/non-finite extrapolated
-COP, uses the explicitly configured fallback COP. Attributes expose
+A brief temperature refresh failure retains the last valid cost forecast for
+at most one hour, selecting its current interval rather than freezing one state.
+Only a prolonged failure, exhausted forecast-fill allowance, or invalid
+extrapolated COP uses the configured fallback COP. Attributes expose
 `cop_fallback_active`, `cop_fallback_intervals`, `cop_fallback_reason` and
 `temperature_input_error`; affected records set `cop_fallback: true`. Recovery
 restores normal lookup operation automatically.
 
-PV, price or selected building-load failures make the cost sensor unavailable
-and remove its forecast from the published attributes. An expired 72-hour horizon
-also fails validation. BEMS does not manufacture prices, reuse a failed input's
-retained good snapshot or silently ignore a selected load. Provider-side helpers
-may implement their own explicit price fallback, as `cs_export` does.
+All forecast consumers may copy the previous value for up to four missing
+15-minute intervals in total, including a short tail. The current interval must
+exist; invalid values, duplicates and unordered timestamps are not repaired.
+`filled_previous` is preserved through derived forecasts so chaining modules
+cannot renew the allowance. `filled_previous_intervals` reports the count.
+
+Brief PV, price or selected-load refresh failures can retain the last valid cost
+forecast for up to one hour, while its coverage remains within that same fill
+allowance. `using_previous_forecast`, `status` and `refresh_error` identify this
+mode; the original generation timestamp is retained. Disabled/deleted inputs
+still fail immediately. No selected load is silently ignored. Once retention
+or coverage limits are exhausted, the sensor becomes unavailable.

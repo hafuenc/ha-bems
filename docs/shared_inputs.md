@@ -40,7 +40,11 @@ when forecast values/coverage or input health change; validation timestamps and
 informational source age alone do not trigger a new device plan. Consumers also
 check current coverage before calculating.
 Source age is reported for information only, without a rejection threshold.
-They never use a retained successful snapshot after the importer reports failure.
+After a brief importer failure, consumers may use its last validated snapshot
+for at most one hour, subject to the same coverage checks. Up to four missing
+15-minute intervals in total are filled by copying the preceding value. The
+current interval must exist; invalid values and ordering still fail. Filled
+rows retain their provenance through chained BEMS modules.
 Changing the importer's source updates all its consumers without
 reconfiguring them. Disable/delete/unload makes the selected input unavailable;
 reloading it reconnects consumers through the stable registration ID. No fallback

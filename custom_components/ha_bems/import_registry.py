@@ -6,8 +6,8 @@ from .const import (
     CONF_LOAD_INPUT, CONF_MODULE, CONF_PV_IMPORT, DOMAIN, MODULE_LOAD,
     MODULE_LOAD_IMPORT, MODULE_PV_IMPORT, CONF_PV_POWER_TYPE, FORECAST_IMPORT_MODULES,
 )
-from .forecast import MIN_HORIZON, parse_timestamp
-from .forecast_input import ForecastUnavailable, source_age
+from .forecast import FILL_MARKER, parse_timestamp, validate_forecast
+from .forecast_input import ForecastConfigurationError, ForecastExpired, ForecastUnavailable, source_age
 from .entries import all_module_entries, item_enabled, module_type
 
 
@@ -49,13 +49,13 @@ def read_pv_import(hass, config, now):
     entry_id = config.get(CONF_PV_IMPORT)
     entry = next((entry for entry in pv_imports(hass) if entry.entry_id == entry_id), None)
     if entry is None:
-        raise ForecastUnavailable("Register a PV forecast under BEMS forecast importer, then select it in the module's Configure settings")
+        raise ForecastConfigurationError("Register a PV forecast under BEMS forecast importer, then select it in the module's Configure settings")
     if not item_enabled(entry):
-        raise ForecastUnavailable("The selected PV input has been disabled")
+        raise ForecastConfigurationError("The selected PV input has been disabled")
     coordinator = coordinators(hass).get(entry_id)
     if coordinator is None:
-        raise ForecastUnavailable("The selected PV input importer is not loaded or has been disabled")
-    if not coordinator.last_update_success or not coordinator.data:
+        raise ForecastConfigurationError("The selected PV input importer is not loaded or has been disabled")
+    if not snapshot_usable(coordinator, now):
         raise ForecastUnavailable(f"PV input is {coordinator.input_status}: {coordinator.last_exception}")
     rows, details = _read_snapshot(coordinator.data, now, "PV")
     details.update({"pv_import_entry_id": entry_id, "pv_import_name": entry.title,
@@ -69,15 +69,20 @@ def read_forecast_import(hass, entry_id, module, now):
         raise ValueError("Unsupported forecast import type")
     entry = next((entry for entry in input_entries(hass, module) if entry.entry_id == entry_id), None)
     if entry is None:
-        raise ForecastUnavailable("The selected forecast input no longer exists or has a different type")
+        raise ForecastConfigurationError("The selected forecast input no longer exists or has a different type")
     if not item_enabled(entry):
-        raise ForecastUnavailable("The selected forecast input has been disabled")
+        raise ForecastConfigurationError("The selected forecast input has been disabled")
     coordinator = coordinators(hass).get(entry_id)
     if coordinator is None:
-        raise ForecastUnavailable("The selected forecast importer is not loaded or has been disabled")
-    if not coordinator.last_update_success or not coordinator.data:
+        raise ForecastConfigurationError("The selected forecast importer is not loaded or has been disabled")
+    if not snapshot_usable(coordinator, now):
+        if coordinator.data:
+            raise ForecastExpired(f"Forecast input is unavailable after one hour: {coordinator.last_exception}")
         raise ForecastUnavailable(f"Forecast input is {coordinator.input_status}: {coordinator.last_exception}")
-    return _read_snapshot(coordinator.data, now, entry.title)
+    from .forecast_types import forecast_type
+
+    _label, _unit, key, nonnegative = forecast_type({**entry.data, **entry.options})
+    return _read_snapshot(coordinator.data, now, entry.title, key, nonnegative)
 
 
 def read_load_input(hass, config, now):
@@ -91,14 +96,14 @@ def read_load_input(hass, config, now):
         raise ForecastUnavailable("Select a configured HA-BEMS load profile or imported building load forecast")
     entry = next((entry for entry in input_entries(hass, module) if entry.entry_id == entry_id), None)
     if entry is None:
-        raise ForecastUnavailable("The selected building load input no longer exists; select another or explicitly choose PV only")
+        raise ForecastConfigurationError("The selected building load input no longer exists; select another or explicitly choose PV only")
     if not item_enabled(entry):
-        raise ForecastUnavailable("The selected building load input has been disabled")
+        raise ForecastConfigurationError("The selected building load input has been disabled")
     registry = planners(hass) if kind == "generated" else coordinators(hass)
     coordinator = registry.get(entry_id)
     if coordinator is None:
-        raise ForecastUnavailable("The selected building load input is not loaded or has been disabled")
-    if not coordinator.last_update_success or not coordinator.data:
+        raise ForecastConfigurationError("The selected building load input is not loaded or has been disabled")
+    if not snapshot_usable(coordinator, now):
         raise ForecastUnavailable(f"Building load input is unavailable: {coordinator.last_exception}")
     rows, details = _read_snapshot(coordinator.data, now, "Building load")
     return rows, {
@@ -108,18 +113,23 @@ def read_load_input(hass, config, now):
     }
 
 
-def _read_snapshot(snapshot, now, label):
+def _read_snapshot(snapshot, now, label, key="power_w", nonnegative=True):
     """Provider snapshots are structurally validated; recheck rolling coverage."""
     age, updated = source_age(snapshot["source_updated_at"], now)
-    current = now.astimezone(UTC).replace(second=0, microsecond=0)
-    current -= timedelta(minutes=current.minute % 15)
-    rows = [row for row in snapshot["forecast"] if parse_timestamp(row["start"]) >= current]
-    if not rows or parse_timestamp(rows[0]["start"]) != current:
-        raise ValueError(f"{label} input does not include the current 15-minute interval")
-    if parse_timestamp(rows[-1]["end"]) < now.astimezone(UTC) + MIN_HORIZON:
-        raise ValueError(f"{label} input no longer covers the next 72 hours; update the source helper")
+    rows = validate_forecast(snapshot["forecast"], now, key, nonnegative)
     details = {key: value for key, value in snapshot.items() if key not in ("forecast", "value", "status")}
     details.update({"source_age_minutes": round(age, 1), "source_updated_at": updated,
                     "input_forecast_start": rows[0]["start"],
-                    "input_forecast_end": rows[-1]["end"], "input_forecast_intervals": len(rows)})
+                    "input_forecast_end": rows[-1]["end"], "input_forecast_intervals": len(rows),
+                    "filled_previous_intervals": sum(row.get(FILL_MARKER, False) for row in rows)})
     return rows, details
+
+
+def snapshot_usable(coordinator, now):
+    """Bound reuse after a failed refresh independently of coverage checks."""
+    if not coordinator.data:
+        return False
+    if coordinator.last_update_success:
+        return True
+    stamp = coordinator.data.get("input_validated_at") or coordinator.data.get("generated_at")
+    return bool(stamp and now.astimezone(UTC) - parse_timestamp(stamp) <= timedelta(hours=1))

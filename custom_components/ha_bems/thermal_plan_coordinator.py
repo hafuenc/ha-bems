@@ -1,6 +1,6 @@
 """Persistent, feed-forward storage state and hierarchical thermal planning."""
 
-from datetime import UTC
+from datetime import UTC, timedelta
 import json
 import logging
 
@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, MODULE_OUTDOOR_TEMP
-from .forecast import parse_timestamp
+from .forecast import FILL_MARKER, MAX_FILL_INTERVALS, ForecastCoverageError, parse_timestamp, validate_forecast
 from .forecast_input import _async_read_forecast
 from .import_registry import coordinators, planners, read_forecast_import
 from .operation_constraints import constraint_dependency, constraint_selection, read_constraint_forecast, validate_hierarchy
@@ -38,6 +38,8 @@ def aligned_values(reference, other, key):
         matching = index.get(row["start"])
         if matching is None or matching["end"] != row["end"]:
             raise ValueError("All planner input forecasts must match the same 15-minute intervals")
+        if matching.get(FILL_MARKER):
+            row[FILL_MARKER] = True
         result.append(matching[key])
     return result
 
@@ -78,6 +80,8 @@ async def read_plan_inputs(hass, config, now):
     allowed = [1] * len(rows)
     if (other := read_constraint_forecast(hass, config, now)) is not None:
         allowed = aligned_values(rows, other, "allowed")
+    if sum(row.get(FILL_MARKER, False) for row in rows) > MAX_FILL_INTERVALS:
+        raise ForecastCoverageError("Combined planner inputs contain more than four filled intervals")
     return rows, required_runtimes(config, temperatures, len(rows)), allowed, info
 
 
@@ -100,6 +104,17 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         # Changes to the storage/demand model explicitly restart its estimate.
         self._model_key = model_key(self.config)
 
+    def retained_plan(self, now, reason):
+        """Keep advancing the last published plan during a bounded refresh gap."""
+        if not self._plan or now - parse_timestamp(self._plan["generated_at"]) > timedelta(hours=1):
+            return None
+        try:
+            validate_forecast(self._plan["forecast"], now, "operation", True)
+            value = projected_state(self._plan, now)[0]
+        except ValueError:
+            return None
+        return {**self._plan, "value": value, "using_previous_plan": True, "refresh_error": reason}
+
     @callback
     def _async_refresh_finished(self):
         # Consecutive failed refreshes normally suppress coordinator updates.
@@ -114,6 +129,8 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         now = dt_util.now().astimezone(UTC)
         if self._last_solve_slot == quarter_slot(now):
             if self._slot_error:
+                if retained := self.retained_plan(now, self._slot_error):
+                    return retained
                 raise UpdateFailed(self._slot_error)
             # Parent requests, duplicate startup callbacks and input updates
             # must not launch a second solve in an already calculated slot.
@@ -125,6 +142,8 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
                                 else "waiting_for_inputs" if self.awaiting_inputs else "error")
             if self._last_solve_slot == quarter_slot(now):
                 self._slot_error = str(err)
+            if retained := self.retained_plan(now, str(err)):
+                return retained
             if not self._failure_notified:
                 from homeassistant.components import persistent_notification
 
@@ -201,6 +220,9 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             "operation": operation, "storage_start_h": result["storage"][i],
             "storage_end_h": result["storage"][i + 1], "runtime_h_per_24h": runtimes[i], "allowed": allowed[i]}
             for i, (row, operation) in enumerate(zip(rows, result["operations"]))]
+        for source_row, output_row in zip(rows, forecast):
+            if source_row.get(FILL_MARKER):
+                output_row[FILL_MARKER] = True
         plan = {"value": level, "forecast": forecast, "schema_version": 1, "interval_minutes": 15,
             "planner_item_id": self.identifier, "module": "thermal_storage_milp",
             "generated_at": now.isoformat(), "source_updated_at": now.isoformat(),
@@ -210,6 +232,8 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             "terminal_storage_min_h": terminal, "storage_min_h": low, "storage_max_h": high,
             "cost_entity": self.config["cost_entity"], "constraint_source": source, "constraint_mode": mode,
             "runtime_model": self.config["runtime_model"], "input_source_updated_at": info["source_updated_at"],
+            "using_previous_plan": False,
+            "filled_previous_intervals": sum(row.get(FILL_MARKER, False) for row in forecast),
             **{key: value for key, value in result.items() if key not in ("storage", "operations")}}
         await self._store.async_save({"model_key": self._model_key, "plan": plan})
         self._plan = plan

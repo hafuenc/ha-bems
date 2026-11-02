@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.10.2**
+Modular planning for flexible devices and energy storage. Version **0.10.3**
 uses separate BEMS forecast importer and BEMS entity creator integration entries,
 plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -287,3 +287,23 @@ Credentials, private measurement data and the local project handover are exclude
 from version control. Source syntax, profile-energy calculations and standalone
 Python results are checked locally. The complete setup and live input mappings
 still need their first manual check inside the user's Home Assistant instance.
+
+
+### Bounded forecast continuity
+
+Every BEMS forecast consumer uses the same 15-minute rolling window and can
+hold the previous value across at most four missing intervals (one hour),
+including a short forecast tail. No longer source forecast or extra upstream
+calculation is required. Current data is required; invalid numeric values,
+duplicates, overlaps and unordered timestamps still fail. Filled rows carry
+`filled_previous: true` through derived costs and operation constraints so
+chained modules cannot reset the four-slot allowance.
+
+Cost entities retain their last valid forecast during brief refresh failures,
+using the current interval's value and preserving its original timestamp.
+Fallback COP is reserved for prolonged temperature failures or invalid COPs.
+Thermal planners keep their existing feed-forward plan through brief refresh
+failures, for at most one hour and only while it covers the current time.
+Diagnostics identify retained outputs and their refresh error. Successful
+replanning replaces the retained plan; MILP execution remains limited to one
+attempt per clock-aligned quarter-hour.

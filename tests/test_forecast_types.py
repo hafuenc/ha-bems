@@ -58,12 +58,11 @@ class TypedImportTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(rows[0][key], value)
                 self.assertEqual(details['forecast_unit'], unit)
                 with self.assertRaisesRegex(ValueError, '72 hours'):
-                    read_forecast_import(hass, step, module, NOW + timedelta(minutes=8))
-                # A retained good snapshot must not survive a source failure.
+                    read_forecast_import(hass, step, module, NOW + timedelta(minutes=75))
+                # A retained good snapshot survives a brief source refresh failure.
                 hass.state.state = 'unavailable'
                 await coordinator.async_refresh()
-                with self.assertRaisesRegex(ValueError, 'unavailable'):
-                    read_forecast_import(hass, step, module, NOW)
+                self.assertEqual(read_forecast_import(hass, step, module, NOW)[0][0][key], value)
 
     async def test_wrong_units_nonfinite_values_and_missing_fields_rejected(self):
         for module, _step, unit, key, value in TYPES:
@@ -79,9 +78,9 @@ class TypedImportTests(unittest.IsolatedAsyncioTestCase):
                     elif bad == 'missing':
                         del hass.state.attributes['forecast'][0][key]
                     elif bad == 'gap':
-                        del hass.state.attributes['forecast'][20]
+                        del hass.state.attributes['forecast'][20:25]
                     elif bad == 'short':
-                        hass.state.attributes['forecast'].pop()
+                        hass.state.attributes['forecast'] = hass.state.attributes['forecast'][:-5]
                     else:
                         hass.state.attributes['forecast'][0][key] = float('nan') if bad == 'nan' else True
                     with self.assertRaises(ValueError):
@@ -96,7 +95,7 @@ class TypedImportTests(unittest.IsolatedAsyncioTestCase):
             options.config_entry = entry(step, module=module, forecast_entity='sensor.pv')
             self.assertEqual((await options.async_step_init())['step_id'], step)
             await getattr(options, 'async_step_' + step)({'forecast_entity': 'sensor.pv'})
-            hass.state.attributes['forecast'].pop()
+            hass.state.attributes['forecast'] = hass.state.attributes['forecast'][:-5]
             result = await options.async_step_import_value_preview({})
             self.assertEqual(result['step_id'], step)
             self.assertEqual(result['errors']['base'], 'invalid_forecast')
