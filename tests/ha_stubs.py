@@ -66,6 +66,8 @@ class Coordinator:
     def __init__(self, hass, logger, **kwargs):
         self.hass = hass
         self.name = kwargs.get('name')
+        self.update_interval = kwargs.get('update_interval')
+        self.always_update = kwargs.get('always_update', True)
         self.data = None
         self.last_update_success = True
         self.last_exception = None
@@ -77,6 +79,7 @@ class Coordinator:
 
     async def async_refresh(self):
         previous_success = self.last_update_success
+        previous_data = self.data
         try:
             self.data = await self._async_update_data()
             self.last_update_success = True
@@ -87,6 +90,9 @@ class Coordinator:
         if hasattr(self, '_async_refresh_finished'):
             self._async_refresh_finished()
         if not self.last_update_success and not previous_success:
+            return
+        if (self.last_update_success and previous_success and not self.always_update
+                and previous_data == self.data):
             return
         self.async_update_listeners()
 
@@ -104,6 +110,8 @@ class UpdateFailed(Exception):
 
 def modules():
     ha = ModuleType('homeassistant')
+    const = ModuleType('homeassistant.const')
+    const.MATCH_ALL = '*'
     entries = ModuleType('homeassistant.config_entries')
     entries.ConfigFlow = Flow
     entries.OptionsFlow = OptionsFlow
@@ -121,6 +129,6 @@ def modules():
     update = ModuleType('homeassistant.helpers.update_coordinator')
     update.DataUpdateCoordinator = Coordinator
     update.UpdateFailed = UpdateFailed
-    return {'homeassistant': ha, 'homeassistant.config_entries': entries,
+    return {'homeassistant': ha, 'homeassistant.const': const, 'homeassistant.config_entries': entries,
             'homeassistant.core': core, 'homeassistant.helpers': helpers,
             'homeassistant.util': util, 'homeassistant.helpers.update_coordinator': update}

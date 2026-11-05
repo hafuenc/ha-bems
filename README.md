@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.10.4**
+Modular planning for flexible devices and energy storage. Version **0.10.5**
 uses separate BEMS forecast importer and BEMS entity creator integration entries,
 plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -24,6 +24,9 @@ standalone or grouped entries migrate at startup. Thermal operating costs and a 
 forecasts are created under BEMS entity creator.
 Thermal MILP planners calculate on the fixed HH:00/15/30/45 clock; startup and
 reloads can calculate immediately.
+Thermal runtime-cost forecasts refresh on changed shared inputs and the same
+quarter-hour clock, without minute polling. Unchanged inputs within a slot reuse
+the calculation, and identical outputs do not produce duplicate publications.
 [Service-device setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
 
@@ -49,6 +52,14 @@ The repository is a HACS custom repository; it is not included in the default
 HACS catalogue. Version 0.10.0 requires Home Assistant 2026.10 or newer.
 
 ## Updates
+
+All HA-BEMS entities exclude additional state attributes from Recorder history.
+Their states and Home Assistant's core metadata (`device_class`, `state_class`,
+`unit_of_measurement`, `friendly_name`) remain recordable. Statistics continue
+for eligible sensors that are included in Recorder. Forecasts, curves and
+diagnostic attributes remain available live to dashboards and automations.
+This policy does not change InfluxDB exports, thermal-plan persistence or the
+recording of external forecast-source entities. Existing history is not purged.
 
 HACS supplies the HA-BEMS update entity and Home Assistant's update suggestion.
 Each published version has a matching GitHub release, tag and manifest version.

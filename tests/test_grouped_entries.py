@@ -332,6 +332,7 @@ class GroupRuntimeTests(unittest.IsolatedAsyncioTestCase):
         injected = modules()
         platform = ModuleType('homeassistant.const')
         platform.Platform = SimpleNamespace(SENSOR='sensor', SWITCH='switch')
+        platform.MATCH_ALL = '*'
         dispatcher = ModuleType('homeassistant.helpers.dispatcher')
         dispatcher.async_dispatcher_send = lambda *args: None
         events = ModuleType('homeassistant.helpers.event')

@@ -1,5 +1,6 @@
 """Shared availability and output metadata for thermal planner entities."""
 
+from homeassistant.const import MATCH_ALL
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -10,7 +11,7 @@ from .forecast import parse_timestamp
 class ThermalPlanEntity(CoordinatorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _unrecorded_attributes = frozenset({"forecast"})
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.5
+
+- Recalculate thermal runtime costs on changed shared inputs and clock-aligned
+  quarter-hours instead of minute polling. Reuse calculations within a slot
+  after validating input health/coverage, and suppress identical publications
+  caused only by calculation/validation timestamps or source-age metadata.
+  Preserve source freshness, error recovery and bounded forecast retention.
+- Exclude all additional state attributes from Recorder for every HA-BEMS
+  entity, including import statuses, SOC thresholds, FBC switches, forecasts,
+  characteristics and thermal planner outputs/diagnostics. Keep entity states
+  and Home Assistant's essential metadata recordable for history/statistics.
+- Preserve live attributes, InfluxDB exports and saved thermal plans. External
+  forecast sources retain their own recording policy; no history is deleted.
+
 ## 0.10.2
 
 - Clear a previous failure reason from planner diagnostics after successful
