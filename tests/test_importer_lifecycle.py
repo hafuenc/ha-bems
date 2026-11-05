@@ -55,6 +55,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         injected = modules()
         const = ModuleType('homeassistant.const')
         const.Platform = SimpleNamespace(SENSOR='sensor')
+        const.MATCH_ALL = '*'
         dispatcher = ModuleType('homeassistant.helpers.dispatcher')
         dispatcher.async_dispatcher_send = lambda _hass, signal: notifications.append(signal)
         events = ModuleType('homeassistant.helpers.event')
@@ -132,6 +133,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         hass.config_entries.async_forward_entry_setups = broken_forward
         injected = modules()
         const = ModuleType('homeassistant.const'); const.Platform = SimpleNamespace(SENSOR='sensor')
+        const.MATCH_ALL = '*'
         dispatcher = ModuleType('homeassistant.helpers.dispatcher')
         dispatcher.async_dispatcher_send = lambda *args: None
         events = ModuleType('homeassistant.helpers.event')
@@ -171,6 +173,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         injected = modules()
         const = ModuleType('homeassistant.const')
         const.Platform = SimpleNamespace(SENSOR='sensor', SWITCH='switch')
+        const.MATCH_ALL = '*'
         dispatcher = ModuleType('homeassistant.helpers.dispatcher')
         dispatcher.async_dispatcher_send = lambda *args: None
         events = ModuleType('homeassistant.helpers.event')

@@ -1,6 +1,7 @@
 """Always-readable diagnostic curves; no extra provider or solver refreshes."""
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import MATCH_ALL
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -18,7 +19,7 @@ class ThermalCharacteristicSensor(CoordinatorEntity, SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_suggested_display_precision = 3
     _attr_icon = "mdi:chart-bell-curve-cumulative"
-    _unrecorded_attributes = frozenset({"curve_points", "reference_points"})
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(self, coordinator, entry, function):
         super().__init__(coordinator)

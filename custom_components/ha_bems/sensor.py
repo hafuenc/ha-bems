@@ -1,6 +1,7 @@
 """Expose a shared threshold for FBC and future battery modules."""
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import MATCH_ALL
 from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -54,6 +55,7 @@ async def _async_setup_item(hass, entry, async_add_entities):
 
 
 class SeasonalSOCSensor(SensorEntity):
+    _unrecorded_attributes = frozenset({MATCH_ALL})
     _attr_name = SEASONAL_SOC_NAME
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "%"
@@ -115,8 +117,8 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "W"
     _attr_should_poll = False
-    # Rolling plans remain available live without duplicating them in recorder.
-    _unrecorded_attributes = frozenset({"forecast"})
+    # Keep live attributes for consumers; recorder retains state and core metadata.
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(self, coordinator, entry, module):
         super().__init__(coordinator)
@@ -228,6 +230,8 @@ class ThermalStorageSensor(ThermalPlanEntity, SensorEntity):
 
 class ImportedForecastStatusSensor(CoordinatorEntity, SensorEntity):
     """Expose input health without duplicating the source's forecast attribute."""
+
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     _attr_name = "Input status"
     _attr_has_entity_name = True

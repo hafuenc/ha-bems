@@ -242,6 +242,7 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         component = ModuleType('homeassistant.components')
         platform = ModuleType('homeassistant.const')
         platform.Platform = SimpleNamespace(SENSOR='sensor')
+        platform.MATCH_ALL = '*'
         dispatcher = ModuleType('homeassistant.helpers.dispatcher')
         callbacks = {}
         def connect(_hass, signal, handler):

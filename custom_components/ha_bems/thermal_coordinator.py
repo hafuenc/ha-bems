@@ -1,5 +1,6 @@
 """Connect reusable validated inputs to the solver-independent cost model."""
 
+from copy import deepcopy
 from datetime import timedelta
 import logging
 
@@ -61,9 +62,9 @@ def read_cost_inputs(hass, config, now):
     return (pv, imports, exports, load, temperatures, temperature_error), metadata
 
 
-async def async_calculate_cost(hass, config, defer_temperature_fallback=False):
-    now = dt_util.now()
-    inputs, metadata = read_cost_inputs(hass, config, now)
+async def async_calculate_cost(hass, config, defer_temperature_fallback=False, *, prepared=None, now=None):
+    now = now if now is not None else dt_util.now()
+    inputs, metadata = prepared if prepared is not None else read_cost_inputs(hass, config, now)
     if defer_temperature_fallback and inputs[-1] and not metadata["temperature_major_failure"]:
         raise TemperatureRefreshPending(inputs[-1])
     result = await hass.async_add_executor_job(calculate_cost_forecast, config, now, *inputs)
@@ -73,20 +74,45 @@ async def async_calculate_cost(hass, config, defer_temperature_fallback=False):
 class ThermalCostCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry, parent=None):
         super().__init__(hass, _LOGGER, name=entry.title, config_entry=parent or entry,
-                         update_interval=timedelta(minutes=1))
+                         update_interval=None, always_update=False)
         self.config = {**entry.data, **entry.options}
         self._temperature_failure_since = None
         self._last_good_cost = None
+        self._calculation_key = None
+        self._calculation_result = None
+
+    def _deduplicate(self, result):
+        """Do not publish clock-only metadata changes as a new cost forecast."""
+        def comparable(data):
+            return {key: value for key, value in data.items()
+                    if key != "generated_at"
+                    and not key.endswith(("source_age_minutes", "input_validated_at"))}
+
+        if self.data is not None and comparable(result) == comparable(self.data):
+            return self.data
+        return result
 
     async def _async_update_data(self):
         now = dt_util.now()
         try:
-            result = await async_calculate_cost(self.hass, self.config,
-                self._temperature_failure_since is None or
+            # Always validate current input health/coverage before reusing a
+            # calculation. A cached result must never hide a removed source.
+            prepared = read_cost_inputs(self.hass, self.config, now)
+            defer_fallback = (self._temperature_failure_since is None or
                 now - self._temperature_failure_since < timedelta(hours=1))
+            key = (int(now.timestamp()) // 900, self.config, prepared[0], defer_fallback)
+            if key == self._calculation_key:
+                result = {**self._calculation_result, **prepared[1]}
+            else:
+                result = await async_calculate_cost(self.hass, self.config, defer_fallback,
+                                                   prepared=prepared, now=now)
+                # Keep an independent key even if a provider mutates its rows.
+                self._calculation_key = deepcopy(key)
+                self._calculation_result = result
             if not result.get("temperature_input_error"):
                 self._temperature_failure_since = None
             result["using_previous_forecast"] = False
+            result = self._deduplicate(result)
             if not result.get("cop_fallback_active"):
                 self._last_good_cost = result
             return result
@@ -103,9 +129,9 @@ class ThermalCostCoordinator(DataUpdateCoordinator):
                     pass
                 else:
                     row = rows[0]
-                    return {**cached, "forecast": rows, "value": row["cost_eur_per_timestep"],
+                    return self._deduplicate({**cached, "forecast": rows, "value": row["cost_eur_per_timestep"],
                             "current_cop": row["cop"], "current_electrical_power_w": row["electrical_power_w"],
                             "filled_previous_intervals": sum(r.get(FILL_MARKER, False) for r in rows),
                             "status": "using_previous_forecast", "using_previous_forecast": True,
-                            "refresh_error": str(err)}
+                            "refresh_error": str(err)})
             raise UpdateFailed(str(err)) from err

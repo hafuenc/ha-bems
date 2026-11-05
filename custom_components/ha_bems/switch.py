@@ -1,6 +1,7 @@
 """User-controlled FBC bypass; never sends commands to physical equipment."""
 
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.const import MATCH_ALL
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -16,6 +17,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class FBCEnabledSwitch(SwitchEntity, RestoreEntity):
+    _unrecorded_attributes = frozenset({MATCH_ALL})
     _attr_has_entity_name = True
     _attr_name = "FBC charging limitation enabled"
     _attr_icon = "mdi:battery-clock"

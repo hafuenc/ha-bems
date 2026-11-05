@@ -339,6 +339,7 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         entity.EntityCategory=SimpleNamespace(DIAGNOSTIC='diagnostic')
         platform=ModuleType('homeassistant.const')
         platform.Platform=SimpleNamespace(SENSOR='sensor',BINARY_SENSOR='binary_sensor',SWITCH='switch')
+        platform.MATCH_ALL = '*'
         dispatcher=ModuleType('homeassistant.helpers.dispatcher')
         dispatcher.async_dispatcher_send=lambda *a:None
         dispatcher.async_dispatcher_connect=lambda *a:(lambda:None)
