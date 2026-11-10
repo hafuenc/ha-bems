@@ -6,6 +6,9 @@ matlab_reference/
 !.env.example
 secrets.yaml
 secrets.yml
+ha_bems_eeg_setup_password.json
+.ha_bems_eeg_setup_password.json.tmp
+custom_components/ha_bems/wind_access_password.json.tmp
 *.pem
 *.key
 .venv/

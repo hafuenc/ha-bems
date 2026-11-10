@@ -22,7 +22,8 @@ First register the needed forecasts under **HA-BEMS → Configure → BEMS forec
 
 - **PV AC** generation. Thermal electrical demand and building load use an AC
   basis. DC registrations remain selectable in FBC, but not in thermal costs.
-- Electricity import and export prices, in `EUR/kWh`.
+- Electricity import and export prices, in `EUR/kWh`, when choosing price forecasts
+  rather than fixed prices.
 - Outdoor temperature in `°C`, only when using the COP lookup table.
 - Optionally non-flexible building load, either a generated BEMS load profile or
   an imported load forecast. Exclude the thermal tasks costed by this module to
@@ -31,7 +32,7 @@ First register the needed forecasts under **HA-BEMS → Configure → BEMS forec
 
 The input contracts are described in [price/temperature forecasts](price_temperature_forecasts.md)
 and [PV forecasts](pv_forecast_helper.md). Existing helpers such as `cs_import`,
-`cs_export` and `te_outdoor` must be registered first; the module selects shared
+`cs_export` and `te_outdoor` must be registered first when used as forecast inputs; the module selects shared
 registrations rather than copying provider-specific attributes.
 
 Each runtime-cost setup asks for:
@@ -67,20 +68,90 @@ Older saved additional electrical power settings are ignored and removed when
 the setup is saved again. Only thermal output divided by COP determines electrical
 demand.
 
+## Price forecasts or fixed prices
+
+For **grid import**, **grid export** and **EEG**, independently choose a price
+source: **Price forecast** or **Fixed price**. A fixed price is entered directly
+in `EUR/kWh` and applies to every 15-minute interval of the cost forecast. No price
+import registration or external helper is needed for that tariff. Mixed choices
+are supported, e.g. dynamic grid import, fixed export and fixed EEG prices.
+
+A fixed value must be entered explicitly; there is no implicit zero-price default.
+Zero and negative prices are supported. The forecast selection is ignored in fixed
+mode, and the fixed value is ignored in forecast mode. With EEG disabled, its
+entire price configuration is ignored. EEG energy availability remains a forecast.
+
+Existing configurations without a source selector continue to use their selected
+price forecasts. Fixed prices contribute no source timestamp and subscribe to no
+price importer. `source_updated_at` remains the oldest actual contributing forecast
+timestamp. Output attributes identify each active price source and fixed value.
+
+## Optional energy community (EEG) supply and load priorities
+
+Register **Energy community (EEG) available energy forecast** in the BEMS forecast
+importer. Enable EEG in each runtime-cost setup and select this registration.
+Choose an imported **Energy community (EEG) price forecast** or enter a fixed EEG
+price directly. Existing setups default to EEG disabled, retaining their previous
+calculation. Disabled EEG ignores its price and energy settings.
+
+The price contract uses `EUR/kWh` and `price_eur_per_kwh`. The availability
+contract uses `kWh/timestep` and nonnegative `energy_kwh` for each 15-minute
+interval. Both use the existing schema_version 1 forecast envelope and rolling
+72-hour coverage/fill rules. Prepare both forecasts outside HA-BEMS. Price must
+include the applicable consumption-dependent charges, on the same basis as the
+import price. Energy is the **total potentially available energy at this metering
+point before any load deduction**, rather than an allocation already limited by
+predicted consumption. Convert mean W to kWh/timestep by dividing by 4000.
+Negative prices are accepted; negative available energy is rejected.
+
+Supply priority is fixed: own PV, then EEG, then residual grid supply. EEG is
+used and charged even when more expensive than residual grid supply. Building
+and higher-priority loads consume PV first, then EEG. Only the remaining PV and
+EEG are available to the device being costed. Costs cover this device only;
+considered background loads are deducted from resources, not billed again.
+An explicit zero energy value means no EEG supply. Missing/invalid EEG forecasts
+follow the same bounded previous-forecast retention as other required inputs;
+selected sources are never silently ignored. Deleted or disabled sources fail
+immediately.
+
+Keep the existing optional building-load selection. **Additional higher-priority
+loads** is an optional multiple-selection field offering registered load forecasts,
+generated load profiles and existing MILP plans. No source is selected automatically.
+For a MILP plan, HA-BEMS multiplies its operation (0/1) by the electrical power
+forecast from its associated runtime-cost entity, on the full-quarter-hour basis.
+This conversion is entirely in the cost consumer; the MILP solver and plan outputs
+are unchanged. Plan and cost-power updates refresh dependent runtime costs.
+Duplicate selections and circular dependencies through BEMS plans are rejected.
+Do not include the same physical load in multiple source forecasts.
+
+For a hierarchy A before B, A considers building load only; B considers building
+load plus A's plan. Use an existing valid upstream plan when configuring B.
+This uses the latest published plan and does not request an upstream solve.
+The existing MILP recalculation policy remains unchanged.
+
+Forecast rows additionally expose `eeg_power_w`, `eeg_energy_kwh`,
+`eeg_cost_eur_per_timestep` and `considered_load_power_w`. EEG amounts refer to
+this device's consumption after background loads have been deducted.
+
 ## Calculation
 
 For each complete 15-minute timestep:
 
 ```text
 running_w = thermal_power_kw × 1000 / COP
-surplus_w = max(PV_AC_w - non_flexible_load_w, 0)
-grid_w = max(running_w - surplus_w, 0)
+total_considered_load_w = non_flexible_load_w + sum(higher_priority_loads_w)
+surplus_w = max(PV_AC_w - total_considered_load_w, 0)
+remaining_load_w = max(total_considered_load_w - PV_AC_w, 0)
+eeg_available_w = max(eeg_energy_kwh * 4000 - remaining_load_w, 0)
+eeg_w = min(max(running_w - surplus_w, 0), eeg_available_w)
+grid_w = max(running_w - surplus_w - eeg_w, 0)
 curtailed_w = min(running_w, max(surplus_w - export_limit_w, 0))
               [zero when no export limit is configured]
 export_opportunity_w = min(running_w, surplus_w) - curtailed_w
 
 cost_eur_per_timestep = 0.25 / 1000 × (
     grid_w × import_price_eur_per_kwh
+    + eeg_w × eeg_price_eur_per_kwh
     + export_opportunity_w × export_price_eur_per_kwh
     + curtailed_w × curtailed_price_eur_per_kwh
 )
@@ -97,9 +168,9 @@ PV and a 0.10 EUR/kWh export price, it costs 0.10 EUR/timestep.
 
 **Each setup evaluates the same available PV independently.** These are
 conditional full-activation costs, not additive joint costs for simultaneously
-running DHW, UFH and other consumers. No PV is reserved between setups and no
-battery charging/discharging is modelled. A future coordinated scheduler must
-resolve those competing uses.
+running DHW, UFH and other consumers. No PV or EEG is reserved automatically between setups. To establish priorities,
+include higher-priority devices in each lower-priority setup's additional loads,
+or use operation constraints. No battery charging/discharging is modelled.
 
 ## Output contract
 

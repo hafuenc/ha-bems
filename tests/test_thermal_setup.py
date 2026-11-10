@@ -60,7 +60,7 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         for name, cop in [('DHW', 2), ('UFH', 4)]:
             flow = self.flow()
             menu = await flow.async_step_user()
-            self.assertEqual(menu['menu_options'], ['soc', 'load_profile', 'thermal_cost'])
+            self.assertEqual(menu['menu_options'], ['soc', 'load_profile', 'thermal_cost', 'eeg_wind'])
             result = await flow.async_step_thermal_cost({'name': name, **CONFIG, 'constant_cop': cop})
             self.assertEqual(result['step_id'], 'thermal_cop_constant')
             result = await flow.async_step_thermal_cop_constant({'constant_cop': cop})

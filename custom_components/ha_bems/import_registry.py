@@ -4,7 +4,7 @@ from datetime import UTC, timedelta
 
 from .const import (
     CONF_LOAD_INPUT, CONF_MODULE, CONF_PV_IMPORT, DOMAIN, MODULE_LOAD,
-    MODULE_LOAD_IMPORT, MODULE_PV_IMPORT, CONF_PV_POWER_TYPE, FORECAST_IMPORT_MODULES,
+    MODULE_LOAD_IMPORT, MODULE_PV_IMPORT, CONF_PV_POWER_TYPE, FORECAST_IMPORT_MODULES, MODULE_EEG_ENERGY, MODULE_EEG_WIND,
 )
 from .forecast import FILL_MARKER, parse_timestamp, validate_forecast
 from .forecast_input import ForecastConfigurationError, ForecastExpired, ForecastUnavailable, source_age
@@ -17,7 +17,8 @@ def pv_imports(hass):
 
 
 def input_entries(hass, module):
-    return [entry for entry in all_module_entries(hass) if module_type(entry) == module]
+    accepted = (MODULE_EEG_ENERGY, MODULE_EEG_WIND) if module == MODULE_EEG_ENERGY else (module,)
+    return [entry for entry in all_module_entries(hass) if module_type(entry) in accepted]
 
 
 def load_inputs(hass):
@@ -75,6 +76,16 @@ def read_forecast_import(hass, entry_id, module, now):
     coordinator = coordinators(hass).get(entry_id)
     if coordinator is None:
         raise ForecastConfigurationError("The selected forecast importer is not loaded or has been disabled")
+    if module_type(entry) == MODULE_EEG_WIND:
+        # Weather backup policy is owned by the generator. Never extend an
+        # exhausted cache via the generic importer's one-hour hold allowance.
+        if not coordinator.last_update_success:
+            raise ForecastUnavailable("The generated EEG wind forecast is unavailable")
+        quarter = now.astimezone(UTC).replace(second=0, microsecond=0)
+        quarter -= timedelta(minutes=quarter.minute % 15)
+        if (not coordinator.data or parse_timestamp(coordinator.data["weather_cache_end"])
+                < quarter + timedelta(hours=72, minutes=15)):
+            raise ForecastExpired("Cached wind data no longer cover the next 72 hours")
     if not snapshot_usable(coordinator, now):
         if coordinator.data:
             raise ForecastExpired(f"Forecast input is unavailable after one hour: {coordinator.last_exception}")

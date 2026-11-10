@@ -11,10 +11,10 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_ENTITY, CONF_LOAD_INPUT, CONF_MODULE, CONF_SOURCE, DOMAIN, MODULE_FBC, MODULE_LOAD,
+    CONF_ADDITIONAL_LOADS, CONF_ENTITY, CONF_LOAD_INPUT, CONF_MODULE, CONF_SOURCE, DOMAIN, MODULE_FBC, MODULE_LOAD,
     MODULE_LOAD_IMPORT, MODULE_SOC, MODULE_PV_IMPORT, CONF_PV_IMPORT,
     FORECAST_IMPORT_MODULES, CONF_PV_POWER_TYPE, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN,
-    SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY,
+    SEASONAL_SOC_NAME, SOURCE_ENTITY, SOURCE_MONTHLY, MODULE_EEG_WIND,
 )
 from .import_registry import coordinators, import_signal, planners
 from .seasonal_soc import resolve_threshold
@@ -32,6 +32,9 @@ async def _async_setup_item(hass, entry, async_add_entities):
     module = module_type(entry)
     if module == MODULE_SOC:
         add_item_entities(async_add_entities, [SeasonalSOCSensor(entry)], entry)
+        return
+    if module == MODULE_EEG_WIND:
+        add_item_entities(async_add_entities, [WindEnergySensor(coordinators(hass)[entry.entry_id], entry)], entry)
         return
     if module in FORECAST_IMPORT_MODULES:
         add_item_entities(async_add_entities, [ImportedForecastStatusSensor(coordinators(hass)[entry.entry_id], entry)], entry)
@@ -52,6 +55,42 @@ async def _async_setup_item(hass, entry, async_add_entities):
 
         entities.append(ThermalCharacteristicSensor(coordinator, entry, "cop"))
     add_item_entities(async_add_entities, entities, entry)
+
+
+class WindEnergySensor(CoordinatorEntity, SensorEntity):
+    """Publish the generated EEG energy directly for forecasts and runtime costs."""
+
+    _unrecorded_attributes = frozenset({MATCH_ALL})
+    _attr_name = "EEG available wind energy"
+    _attr_has_entity_name = True
+    _attr_native_unit_of_measurement = "kWh/timestep"
+    _attr_suggested_display_precision = 4
+    _attr_icon = "mdi:wind-turbine"
+    _attr_should_poll = False
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_eeg_wind_energy"
+        self._attr_device_info = shared_device_info(entry) or DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)}, name=entry.title,
+            manufacturer="HA-BEMS", model="BEMS entity creator")
+        if self._attr_device_info and hasattr(entry, "parent"):
+            self._attr_name = entry.title
+
+    @property
+    def native_value(self):
+        if not self.coordinator.last_update_success:
+            return None
+        return (self.coordinator.data or {}).get("value")
+
+    @property
+    def extra_state_attributes(self):
+        attributes = {key: value for key, value in (self.coordinator.data or {}).items() if key != "value"}
+        attributes["module"] = MODULE_EEG_WIND
+        if not self.coordinator.last_update_success:
+            attributes.pop("forecast", None)
+            attributes.update(status="unavailable", reason=str(self.coordinator.last_exception))
+        return attributes
 
 
 class SeasonalSOCSensor(SensorEntity):
@@ -159,6 +198,23 @@ class BEMSForecastSensor(CoordinatorEntity, SensorEntity):
                 self.async_on_remove(async_dispatcher_connect(
                     self.hass, import_signal(reference), refresh,
                 ))
+            priority_ids = {ref.partition(":")[2] for ref in self.coordinator.config.get(CONF_ADDITIONAL_LOADS, [])
+                            if ref.startswith("planner:")}
+            if priority_ids:
+                from .import_registry import input_entries
+
+                priority_cost_entities = {{**item.data, **item.options}.get("cost_entity")
+                    for item in input_entries(self.hass, MODULE_THERMAL_PLAN) if item.entry_id in priority_ids}
+
+                @callback
+                def priority_changed(event):
+                    # Watch published outputs, including plans loaded after this sensor.
+                    states = [event.data.get("old_state"), event.data.get("new_state")]
+                    if (event.data.get("entity_id") in priority_cost_entities or
+                            any(state and state.attributes.get("planner_item_id") in priority_ids for state in states)):
+                        refresh(event)
+
+                self.async_on_remove(async_track_state_change_event(self.hass, MATCH_ALL, priority_changed))
             refresh(None)  # Inputs may have loaded after the thermal category.
         if self._module == MODULE_FBC:
             config = self.coordinator.config

@@ -82,13 +82,18 @@ async def _async_setup_module(hass, entry, parent):
     from homeassistant.helpers.dispatcher import async_dispatcher_send
     from homeassistant.helpers.event import async_track_state_change_event
 
-    from .const import CONF_MODULE, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, FORECAST_IMPORT_MODULES
+    from .const import CONF_MODULE, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, FORECAST_IMPORT_MODULES, MODULE_EEG_WIND
     from .import_registry import coordinators, import_signal, planners
 
     config = {**entry.data, **entry.options}
     module = config.get(CONF_MODULE, MODULE_SOC)
     registry = None
-    if module in FORECAST_IMPORT_MODULES:
+    if module == MODULE_EEG_WIND:
+        from .wind_coordinator import WindEnergyCoordinator
+
+        coordinator = WindEnergyCoordinator(hass, entry, parent)
+        registry = coordinators(hass)
+    elif module in FORECAST_IMPORT_MODULES:
         from .input_coordinator import ForecastImportCoordinator
 
         coordinator = ForecastImportCoordinator(hass, entry, parent)
@@ -172,6 +177,13 @@ async def _async_setup_module(hass, entry, parent):
                 hass, [config["forecast_entity"]], refresh,
             ))
             # Invalid sources still get a visible status and editable options.
+            await coordinator.async_refresh()
+        if module == MODULE_EEG_WIND:
+            from homeassistant.helpers.event import async_track_time_change
+
+            # Clock belongs to the helper, even when its display sensor is disabled.
+            entry.async_on_unload(async_track_time_change(
+                hass, refresh, minute=[0, 15, 30, 45], second=0))
             await coordinator.async_refresh()
 
 

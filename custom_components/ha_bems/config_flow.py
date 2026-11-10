@@ -18,7 +18,8 @@ from .const import (
     CONF_PV_POWER_TYPE, MODULE_IMPORT_PRICE, MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
     CONF_GROUP, CONF_ITEM_ID, CONF_ENABLED, GROUP_TITLES, GROUP_MODULES,
     MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, MODULE_OPERATION_IMPORT, CONF_IMPORT_PRICE, CONF_EXPORT_PRICE, CONF_TEMPERATURE,
-    CONF_ITEMS, CONF_LAYOUT, LAYOUT_FLAT, LAYOUT_SPLIT, GROUP_CREATOR, GROUP_IMPORTER,
+    THERMAL_PRICE_INPUTS, MODULE_EEG_PRICE, MODULE_EEG_ENERGY, CONF_EEG_PRICE, CONF_EEG_ENERGY, CONF_ADDITIONAL_LOADS,
+    CONF_ITEMS, CONF_LAYOUT, LAYOUT_FLAT, LAYOUT_SPLIT, GROUP_CREATOR, GROUP_IMPORTER, MODULE_EEG_WIND,
 )
 from .entries import group_for_module, is_flat, is_split
 from .seasonal_soc import resolve_threshold
@@ -30,6 +31,7 @@ from .import_registry import input_entries, load_inputs, pv_imports, read_load_i
 from .thermal_cost import validate_settings
 from .cop_table import default_table_text, parse_table_text
 from .thermal_plan_flow import ThermalPlanSteps
+from .wind_flow import WindSetupSteps
 
 
 def _number(minimum=0, maximum=100, unit=None, step=1):
@@ -53,7 +55,7 @@ def _percentage_entity():
     }]})
 
 
-class _ModuleSteps(ThermalPlanSteps):
+class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
     """Share configuration steps between initial setup and later options."""
 
     def _values(self):
@@ -75,6 +77,8 @@ class _ModuleSteps(ThermalPlanSteps):
 
     def _finish(self, module):
         values = {**self._values(), CONF_MODULE: module}
+        if module == MODULE_EEG_WIND and values.get(CONF_ENABLED, True) and not getattr(self, "_wind_unlocked", False):
+            return self.async_abort(reason="wind_setup_locked")
         # Retired setting is ignored at runtime and dropped on options save.
         values.pop("forecast_max_age_minutes", None)
         if module == MODULE_FBC:
@@ -324,6 +328,14 @@ class _ModuleSteps(ThermalPlanSteps):
         self._import_type = MODULE_EXPORT_PRICE
         return await self._async_step_import(user_input)
 
+    async def async_step_import_eeg_price(self, user_input=None):
+        self._import_type = MODULE_EEG_PRICE
+        return await self._async_step_import(user_input)
+
+    async def async_step_import_eeg_energy(self, user_input=None):
+        self._import_type = MODULE_EEG_ENERGY
+        return await self._async_step_import(user_input)
+
     async def async_step_import_temperature(self, user_input=None):
         self._import_type = MODULE_OUTDOOR_TEMP
         return await self._async_step_import(user_input)
@@ -336,6 +348,7 @@ class _ModuleSteps(ThermalPlanSteps):
         return {
             MODULE_PV_IMPORT: "import_pv", MODULE_LOAD_IMPORT: "import_load",
             MODULE_IMPORT_PRICE: "import_price", MODULE_EXPORT_PRICE: "export_price",
+            MODULE_EEG_PRICE: "import_eeg_price", MODULE_EEG_ENERGY: "import_eeg_energy",
             MODULE_OUTDOOR_TEMP: "import_temperature",
             MODULE_OPERATION_IMPORT: "import_operation",
         }[self._import_type]
@@ -595,31 +608,59 @@ class _ModuleSteps(ThermalPlanSteps):
                 self._thermal_result = result
                 return await self.async_step_thermal_cost_preview()
         fields = {}
-        for key, module in ((CONF_PV_IMPORT, MODULE_PV_IMPORT), (CONF_IMPORT_PRICE, MODULE_IMPORT_PRICE),
-                            (CONF_EXPORT_PRICE, MODULE_EXPORT_PRICE)):
-            fields[self._thermal_field(key)] = _choice(self._thermal_choices(module, key))
+        fields[self._thermal_field(CONF_PV_IMPORT)] = _choice(self._thermal_choices(MODULE_PV_IMPORT, CONF_PV_IMPORT))
         values = self._values()
+        for prefix, key, module in THERMAL_PRICE_INPUTS:
+            fields[vol.Required(f"{prefix}_price_source", default=values.get(f"{prefix}_price_source", "forecast"))] = _choice([
+                {"value": "forecast", "label": "Price forecast"},
+                {"value": "constant", "label": "Fixed price"}])
+            fields[vol.Optional(key, default=values.get(key, ""))] = _choice([
+                {"value": "", "label": "None - enter a fixed price instead"}, *self._thermal_choices(module, key)])
+            fixed_key = f"{prefix}_price_eur_per_kwh"
+            fixed_field = vol.Optional(fixed_key, default=values[fixed_key]) if fixed_key in values else vol.Optional(fixed_key)
+            fields[fixed_field] = _number(-100, 100, "EUR/kWh", "any")
+        from .thermal_loads import additional_load_choices
+
+        additional_choices = [{"value": ref, "label": name} for ref, name in additional_load_choices(self.hass)]
+        for ref in values.get(CONF_ADDITIONAL_LOADS, []):
+            if ref not in {choice["value"] for choice in additional_choices}:
+                additional_choices.append({"value": ref, "label": "Missing additional load - select another"})
+        fields[vol.Optional(CONF_ADDITIONAL_LOADS, default=values.get(CONF_ADDITIONAL_LOADS, []))] = selector.SelectSelector({
+            "options": additional_choices, "multiple": True, "mode": "dropdown"})
+        fields[vol.Required("eeg_enabled", default=values.get("eeg_enabled", False))] = bool
+        fields[vol.Optional(CONF_EEG_ENERGY, default=values.get(CONF_EEG_ENERGY, ""))] = _choice([
+            {"value": "", "label": "None - EEG disabled"}, *self._thermal_choices(MODULE_EEG_ENERGY, CONF_EEG_ENERGY)])
         loads = load_inputs(self.hass)
         if values.get(CONF_LOAD_INPUT) and values[CONF_LOAD_INPUT] not in {ref for ref, _ in loads}:
             loads.append((values[CONF_LOAD_INPUT], "Missing load input — choose another or explicitly choose no load"))
         fields.update({
             vol.Optional(CONF_LOAD_INPUT, default=values.get(CONF_LOAD_INPUT, "")): _choice([
-                {"value": "", "label": "None — all PV is available to this setup"},
+                {"value": "", "label": "None — no non-flexible building load"},
                 *({"value": ref, "label": name} for ref, name in loads)]),
             vol.Required("feed_in_limit_enabled", default=values.get("feed_in_limit_enabled", False)): bool,
             vol.Required("feed_in_limit_w", default=values.get("feed_in_limit_w", 0)): _number(0, 10000000, "W", "any"),
             vol.Required("curtailed_price_eur_per_kwh", default=values.get("curtailed_price_eur_per_kwh", 0)): _number(-100, 100, "EUR/kWh", "any"),
         })
-        if any(not self._thermal_choices(module, key) for key, module in (
-                (CONF_PV_IMPORT, MODULE_PV_IMPORT), (CONF_IMPORT_PRICE, MODULE_IMPORT_PRICE),
-                (CONF_EXPORT_PRICE, MODULE_EXPORT_PRICE))):
-            placeholders["reason"] = "First register PV AC, import prices and export prices under BEMS forecast importer."
+        if not self._thermal_choices(MODULE_PV_IMPORT, CONF_PV_IMPORT):
+            placeholders["reason"] = "First register PV AC under BEMS forecast importer."
+        elif any(values.get(f"{prefix}_price_source", "forecast") == "forecast"
+                 and not self._thermal_choices(module, key)
+                 for prefix, key, module in THERMAL_PRICE_INPUTS
+                 if prefix != "eeg" or values.get("eeg_enabled")):
+            placeholders["reason"] = "Register the selected price forecasts, or choose fixed prices and enter EUR/kWh directly."
         return self.async_show_form(step_id="thermal_cost_inputs", errors=errors,
                                     description_placeholders=placeholders, data_schema=vol.Schema(fields))
 
     async def _async_thermal_preview(self):
         from .thermal_coordinator import async_calculate_cost
+        from .thermal_loads import validate_load_hierarchy
 
+        identifier = getattr(self, "_flat_item_id", None)
+        if subentry := getattr(self, "_subentry", None):
+            identifier = subentry.data.get(CONF_ITEM_ID, subentry.subentry_id)
+        elif isinstance(self, config_entries.OptionsFlow) and not getattr(self, "_flat_mode", None):
+            identifier = self.config_entry.entry_id
+        validate_load_hierarchy(self.hass, self._values(), identifier)
         return await async_calculate_cost(self.hass, self._values())
 
     async def async_step_thermal_cost_preview(self, user_input=None):
@@ -724,6 +765,12 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
             return await self.async_step_import_price()
         if module == MODULE_EXPORT_PRICE:
             return await self.async_step_export_price()
+        if module == MODULE_EEG_PRICE:
+            return await self.async_step_import_eeg_price()
+        if module == MODULE_EEG_ENERGY:
+            return await self.async_step_import_eeg_energy()
+        if module == MODULE_EEG_WIND:
+            return await self.async_step_eeg_wind()
         if module == MODULE_OUTDOOR_TEMP:
             return await self.async_step_import_temperature()
         if module == MODULE_THERMAL_COST:
@@ -742,11 +789,11 @@ class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
     async def async_step_add_import(self, user_input=None):
         self._start_flat_add()
         return self.async_show_menu(step_id="add_import", menu_options=[
-            "import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature", "import_operation"])
+            "import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature", "import_operation", "import_eeg_price", "import_eeg_energy"])
 
     async def async_step_add_helper(self, user_input=None):
         self._start_flat_add()
-        return self.async_show_menu(step_id="add_helper", menu_options=["soc", "load_profile", "thermal_cost"])
+        return self.async_show_menu(step_id="add_helper", menu_options=["soc", "load_profile", "thermal_cost", "eeg_wind"])
 
     async def async_step_add_planner(self, user_input=None):
         self._start_flat_add()
@@ -805,8 +852,8 @@ class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):
     async def async_step_user(self, user_input=None):
         group = self._get_entry().data[CONF_GROUP]
         options = {
-            "entity_creator": ["soc", "load_profile", "thermal_cost"],
-            "entity_importer": ["import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature", "import_operation"],
+            "entity_creator": ["soc", "load_profile", "thermal_cost", "eeg_wind"],
+            "entity_importer": ["import_pv_ac", "import_pv_dc", "import_load", "import_price", "export_price", "import_temperature", "import_operation", "import_eeg_price", "import_eeg_energy"],
             "electrical_storage": ["fbc"],
             "thermal_storage": ["thermal_plan"],
         }
@@ -832,8 +879,10 @@ class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):
             MODULE_SOC: self.async_step_soc, MODULE_LOAD: self.async_step_load_profile,
             MODULE_FBC: self.async_step_fbc, MODULE_PV_IMPORT: self.async_step_import_pv,
             MODULE_LOAD_IMPORT: self.async_step_import_load, MODULE_IMPORT_PRICE: self.async_step_import_price,
+            MODULE_EEG_PRICE: self.async_step_import_eeg_price, MODULE_EEG_ENERGY: self.async_step_import_eeg_energy,
             MODULE_EXPORT_PRICE: self.async_step_export_price, MODULE_OUTDOOR_TEMP: self.async_step_import_temperature,
             MODULE_THERMAL_COST: self.async_step_thermal_cost,
+            MODULE_EEG_WIND: self.async_step_eeg_wind,
             MODULE_THERMAL_PLAN: self.async_step_thermal_plan, MODULE_OPERATION_IMPORT: self.async_step_import_operation,
         }[self._values()[CONF_MODULE]]
         return await method()

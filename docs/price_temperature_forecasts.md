@@ -76,3 +76,13 @@ successful snapshot to consumers.
 PV AC/DC and non-flexible load continue to use the separate nonnegative
 `power_w`/W contract; see [PV](pv_forecast_helper.md) and
 [building load](load_forecast_helper.md).
+
+## Energy community (EEG) forecasts
+
+The importer also offers EEG price (`EUR/kWh`, `price_eur_per_kwh`) and available
+energy (`kWh/timestep`, `energy_kwh`). They use the same numeric schema_version 1,
+source_updated_at and ordered start/end forecast envelope. Each energy value is
+the total potentially available energy at the metering point for that quarter-hour,
+before HA-BEMS deducts background loads. Zero is valid, negative energy is not.
+Prices may be negative. Prepare sources externally; see the
+[EEG and load-priority calculation](thermal_runtime_cost.md).

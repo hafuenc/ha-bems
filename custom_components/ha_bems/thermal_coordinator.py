@@ -7,12 +7,14 @@ import logging
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import (CONF_EXPORT_PRICE, CONF_IMPORT_PRICE, CONF_PV_IMPORT, CONF_TEMPERATURE,
-                    CONF_PV_POWER_TYPE, MODULE_EXPORT_PRICE, MODULE_IMPORT_PRICE, MODULE_OUTDOOR_TEMP)
+from .const import (CONF_PV_IMPORT, CONF_TEMPERATURE,
+                    CONF_EEG_PRICE, CONF_EEG_ENERGY, CONF_ADDITIONAL_LOADS, MODULE_EEG_ENERGY,
+                    THERMAL_PRICE_INPUTS, CONF_PV_POWER_TYPE, MODULE_OUTDOOR_TEMP)
 from .forecast import FILL_MARKER, ForecastCoverageError, parse_timestamp, validate_forecast
 from .forecast_input import ForecastConfigurationError, ForecastExpired
 from .import_registry import read_forecast_import, read_load_input, read_pv_import
-from .thermal_cost import calculate_cost_forecast
+from .thermal_cost import calculate_cost_forecast, validate_settings
+from .thermal_loads import read_additional_loads
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,21 +24,53 @@ class TemperatureRefreshPending(ValueError):
 
 
 def thermal_references(config):
-    references = [config.get(key) for key in (CONF_PV_IMPORT, CONF_IMPORT_PRICE, CONF_EXPORT_PRICE)]
+    references = [config.get(CONF_PV_IMPORT)]
+    references.extend(config.get(key) for prefix, key, _module in THERMAL_PRICE_INPUTS
+                      if config.get(f"{prefix}_price_source", "forecast") == "forecast"
+                      and (prefix != "eeg" or config.get("eeg_enabled")))
     if config.get("cop_model") == "lookup":
         references.append(config.get(CONF_TEMPERATURE))
     if config.get("load_forecast_input"):
         references.append(config["load_forecast_input"].partition(":")[2])
-    return [reference for reference in references if reference]
+    references.extend(ref.partition(":")[2] for ref in config.get(CONF_ADDITIONAL_LOADS, [])
+                      if not ref.startswith("planner:"))
+    if config.get("eeg_enabled"):
+        references.append(config.get(CONF_EEG_ENERGY))
+    return list(dict.fromkeys(reference for reference in references if reference))
+
+
+def read_price_input(hass, config, prefix, reference_key, module, intervals, now):
+    """Expand a fixed tariff onto the validated timeline, without a source timestamp."""
+    if config.get(f"{prefix}_price_source", "forecast") == "constant":
+        price = config[f"{prefix}_price_eur_per_kwh"]
+        return [{"start": row["start"], "end": row["end"], "price_eur_per_kwh": price}
+                for row in intervals], {}
+    return read_forecast_import(hass, config.get(reference_key), module, now)
 
 
 def read_cost_inputs(hass, config, now):
+    validate_settings(config)
     pv, pv_info = read_pv_import(hass, config, now)
     if pv_info[CONF_PV_POWER_TYPE] != "ac":
         raise ValueError("Select a PV AC forecast for thermal electrical operating costs")
-    imports, import_info = read_forecast_import(hass, config.get(CONF_IMPORT_PRICE), MODULE_IMPORT_PRICE, now)
-    exports, export_info = read_forecast_import(hass, config.get(CONF_EXPORT_PRICE), MODULE_EXPORT_PRICE, now)
+    price_rows, price_details, price_metadata = {}, [], {}
+    for prefix, key, module in THERMAL_PRICE_INPUTS:
+        if prefix == "eeg" and not config.get("eeg_enabled"):
+            continue
+        price_rows[prefix], details = read_price_input(hass, config, prefix, key, module, pv, now)
+        price_details.append(details)
+        source = config.get(f"{prefix}_price_source", "forecast")
+        price_metadata.update({f"{prefix}_price_source": source,
+            key: config.get(key) if source == "forecast" else None,
+            f"{prefix}_price_eur_per_kwh": config.get(f"{prefix}_price_eur_per_kwh") if source == "constant" else None})
+    imports, exports = price_rows["import"], price_rows["export"]
     load, load_info = read_load_input(hass, config, now)
+    additional_loads, additional_info = read_additional_loads(hass, config, now)
+    eeg_prices, eeg_energy, eeg_info = None, None, []
+    if config.get("eeg_enabled"):
+        eeg_prices = price_rows["eeg"]
+        eeg_energy, energy_info = read_forecast_import(hass, config.get(CONF_EEG_ENERGY), MODULE_EEG_ENERGY, now)
+        eeg_info = [energy_info]
     temperatures, temperature_info, temperature_error = None, {}, None
     temperature_major_failure = False
     if config.get("cop_model") == "lookup":
@@ -48,25 +82,33 @@ def read_cost_inputs(hass, config, now):
                 raise
             temperature_error = str(err)
             temperature_major_failure = isinstance(err, (ForecastCoverageError, ForecastExpired))
-    updated = [pv_info["source_updated_at"], import_info["source_updated_at"], export_info["source_updated_at"]]
+    updated = [pv_info["source_updated_at"]]
+    updated.extend(info["source_updated_at"] for info in price_details if info)
     if load is not None:
         updated.append(load_info["load_source_updated_at"])
+    updated.extend(info["source_updated_at"] for info in additional_info + eeg_info)
     if temperature_info:
         updated.append(temperature_info["source_updated_at"])
     metadata = {"source_updated_at": min(updated, key=parse_timestamp),
                 "pv_import_entry_id": config[CONF_PV_IMPORT], "pv_power_type": "ac",
-                CONF_IMPORT_PRICE: config[CONF_IMPORT_PRICE], CONF_EXPORT_PRICE: config[CONF_EXPORT_PRICE],
                 CONF_TEMPERATURE: config.get(CONF_TEMPERATURE) if config.get("cop_model") == "lookup" else None,
+                CONF_ADDITIONAL_LOADS: config.get(CONF_ADDITIONAL_LOADS, []),
+                "additional_load_sources": additional_info,
+                CONF_EEG_PRICE: None,
+                **price_metadata,
+                CONF_EEG_ENERGY: config.get(CONF_EEG_ENERGY) if config.get("eeg_enabled") else None,
                 "temperature_input_error": temperature_error,
-                "temperature_major_failure": temperature_major_failure, **load_info}
-    return (pv, imports, exports, load, temperatures, temperature_error), metadata
+                "temperature_major_failure": temperature_major_failure, **load_info,
+                "load_consideration_active": load is not None or bool(additional_loads)}
+    return (pv, imports, exports, load, temperatures, temperature_error,
+            eeg_prices, eeg_energy, additional_loads), metadata
 
 
 async def async_calculate_cost(hass, config, defer_temperature_fallback=False, *, prepared=None, now=None):
     now = now if now is not None else dt_util.now()
     inputs, metadata = prepared if prepared is not None else read_cost_inputs(hass, config, now)
-    if defer_temperature_fallback and inputs[-1] and not metadata["temperature_major_failure"]:
-        raise TemperatureRefreshPending(inputs[-1])
+    if defer_temperature_fallback and inputs[5] and not metadata["temperature_major_failure"]:
+        raise TemperatureRefreshPending(inputs[5])
     result = await hass.async_add_executor_job(calculate_cost_forecast, config, now, *inputs)
     return {**result, **metadata}
 

@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.10.5**
+Modular planning for flexible devices and energy storage. Version **0.11.0**
 uses separate BEMS forecast importer and BEMS entity creator integration entries,
 plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -18,7 +18,8 @@ HA-BEMS module and future version.
 Thermal runtime-cost setup uses an editable COP lookup table. The importer
 shows diagnostic input-status entities; imported sources remain with their
 original integrations. The **BEMS forecast importer** supports PV AC/DC, import/export prices and outdoor
-air temperature. FBC users choose their PV source. Each imported forecast and generated helper has its own service-device row
+air temperature, plus EEG prices and available energy. Runtime costs can also use
+fixed tariffs and additional background loads. FBC users choose their PV source. Each imported forecast and generated helper has its own service-device row
 under its respective integration entry. Existing
 standalone or grouped entries migrate at startup. Thermal operating costs and a feed-forward thermal MILP operation planner are implemented. Runtime-cost
 forecasts are created under BEMS entity creator.
@@ -29,6 +30,13 @@ quarter-hour clock, without minute polling. Unchanged inputs within a slot reuse
 the calculation, and identical outputs do not produce duplicate publications.
 [Service-device setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
+
+The entity creator also offers a password-gated **EEG wind energy forecast**:
+Open-Meteo Best Match wind, an editable E-70 E4 power curve, hub height and a
+constant share produce available kWh per 15-minute interval. A shared seven-day
+weather cache refreshes every three hours and supplies the rolling 72-hour
+forecast during API outages. Opening the setup requires the shared release
+password on every installation. [Private EEG wind setup](docs/eeg_wind_forecast.md).
 
 Thermal cost setups now expose a diagnostic **COP characteristic** sensor;
 thermal MILP planners expose a diagnostic **Runtime characteristic** sensor.
@@ -88,7 +96,8 @@ HA-BEMS integration
 ├── BEMS entity creator [integration entry]
 │   ├── Seasonal SOC threshold [service row]
 │   ├── Non-flexible load forecast [service row]
-│   └── Thermal runtime-cost forecast [service row]
+│   ├── Thermal runtime-cost forecast [service row]
+│   └── EEG wind energy forecast [password-protected setup]
 ├── FBC Battery 1 [integration entry]
 │   └── Battery planner device and entities
 └── Thermal MILP – DHW [integration entry]
@@ -129,8 +138,8 @@ Bundesland dropdown, including National holidays only. These are
 standard-profile estimates rather than measured or learned building demand.
 [Load-profile calculation and sources](docs/load_profile.md).
 
-Users can supply existing entities directly to modules. The entity creator will
-initially supply only these two helpers. The importer registers prepared external
+Users can supply existing entities directly to modules. The entity creator also
+provides thermal runtime costs and the private EEG wind forecast. The importer registers prepared external
 PV AC/DC, non-flexible building load, electricity import/export prices and outdoor
 air temperature forecasts for shared use. [Price and temperature format](docs/price_temperature_forecasts.md).
 

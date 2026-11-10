@@ -17,7 +17,8 @@
         "menu_options": {
           "soc": "Battery seasonal SOC min threshold",
           "load_profile": "Non-flexible load profile",
-          "thermal_cost": "Thermal runtime cost (EUR/timestep)"
+          "thermal_cost": "Thermal runtime cost (EUR/timestep)",
+          "eeg_wind": "EEG wind energy forecast (private setup)"
         }
       },
       "electrical_storage": {
@@ -139,7 +140,9 @@
           "import_price": "Electricity import price forecast",
           "export_price": "Electricity export price forecast",
           "import_temperature": "Outdoor air temperature forecast",
-          "import_operation": "Operation constraint forecast"
+          "import_operation": "Operation constraint forecast",
+          "import_eeg_price": "Energy community (EEG) price forecast",
+          "import_eeg_energy": "Energy community (EEG) available energy forecast"
         }
       },
       "import_pv": {
@@ -243,7 +246,7 @@
       },
       "thermal_cost_inputs": {
         "title": "Thermal runtime cost — electricity inputs",
-        "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
+        "description": "Select registered forecasts. Building load and selected higher-priority electrical loads are added and supplied first by own PV, then EEG. This device uses the remaining PV, then remaining EEG, then grid imports. EEG is charged even when its price exceeds the grid import price. For import, export and EEG prices, independently choose a registered price forecast or a fixed price in EUR/kWh. Enter a fixed value explicitly, including 0 for a zero tariff. Only fields belonging to the chosen price source are used. EEG still requires its available-energy forecast when enabled; when disabled its price and energy settings are ignored.\n\nAdditional loads are optional: select any number of load forecasts or existing MILP plans. A plan is converted to electrical load using operation times its associated runtime-cost electrical power. Select each load once and exclude this device; use a one-way priority hierarchy. No additional load is selected automatically.\n\nPV uses lost export revenue. If export is limited, surplus above the limit uses the curtailed-PV price. Each setup evaluates the remaining resources independently. No battery effects are simulated.\n\n{reason}",
         "data": {
           "pv_import_entry_id": "PV AC forecast",
           "import_price_entry_id": "Electricity import prices",
@@ -251,10 +254,28 @@
           "load_forecast_input": "Non-flexible building load (optional)",
           "feed_in_limit_enabled": "Consider an export power limit/feed-in limitation at grid connection point",
           "feed_in_limit_w": "Maximum export power",
-          "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
+          "curtailed_price_eur_per_kwh": "Price of PV above the export limit",
+          "additional_load_inputs": "Additional higher-priority loads (optional, multiple)",
+          "eeg_enabled": "Consider energy community (EEG) supply",
+          "eeg_price_entry_id": "EEG price forecast",
+          "eeg_energy_entry_id": "EEG available energy forecast",
+          "import_price_source": "Grid import: price source",
+          "import_price_eur_per_kwh": "Grid import: fixed price",
+          "export_price_source": "Grid export: price source",
+          "export_price_eur_per_kwh": "Grid export: fixed price",
+          "eeg_price_source": "Energy community (EEG): price source",
+          "eeg_price_eur_per_kwh": "Energy community (EEG): fixed price"
         },
         "data_description": {
-          "curtailed_price_eur_per_kwh": "Cost assigned to PV electricity that would otherwise be curtailed. Use 0 EUR/kWh if curtailment has no cost. Negative prices are supported."
+          "curtailed_price_eur_per_kwh": "Cost assigned to PV electricity that would otherwise be curtailed. Use 0 EUR/kWh if curtailment has no cost. Negative prices are supported.",
+          "additional_load_inputs": "Added to the building load before PV and EEG availability are calculated. Existing MILP plans are offered as selectable sources.",
+          "eeg_energy_entry_id": "Total potentially available energy at this metering point, before deductions, in kWh per 15-minute timestep.",
+          "import_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+          "import_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored.",
+          "export_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+          "export_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored.",
+          "eeg_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+          "eeg_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored."
         }
       },
       "thermal_cost_preview": {
@@ -315,6 +336,41 @@
           "fbc": "Forecast-based battery charging (FBC)",
           "thermal_plan": "Thermal storage management (MILP)"
         }
+      },
+      "import_eeg_price": {
+        "title": "Energy community (EEG) price forecast",
+        "description": "Select a prepared price forecast in EUR/kWh, using price_eur_per_kwh. Include all applicable consumption-dependent charges. EEG is used after own PV and before residual grid supply, even when EEG is more expensive. Prepare the forecast outside HA-BEMS. {reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity import price forecast entity"
+        }
+      },
+      "import_eeg_energy": {
+        "title": "Energy community (EEG) available energy forecast",
+        "description": "Select a prepared forecast in kWh/timestep, using energy_kwh for each 15-minute interval. Supply the total potentially available EEG energy at this metering point before subtracting any building or higher-priority loads. HA-BEMS performs these deductions. Zero means no available energy; missing data does not mean zero. {reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity import price forecast entity"
+        }
+      },
+      "eeg_wind": {
+        "title": "Private EEG wind forecast setup",
+        "description": "Enter the shared HA-BEMS release password to open the EEG wind creator. The same password is required on every installation and for each creation or edit. Automatic weather updates continue after setup without further password entry.",
+        "data": {
+          "password": "Shared release password"
+        }
+      },
+      "eeg_wind_settings": {
+        "title": "EEG wind energy forecast",
+        "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into 15-minute energy intervals. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo](https://open-meteo.com/), CC BY 4.0. Estimated energy is derived from these data. Check Open-Meteo usage terms for your application.",
+        "data": {
+          "name": "Forecast name",
+          "latitude": "Turbine latitude",
+          "longitude": "Turbine longitude",
+          "hub_height_m": "Hub height above ground",
+          "share_percent": "Constant share",
+          "wind_curve_text": "Wind speed (m/s); electrical power (kW)"
+        }
       }
     },
     "error": {
@@ -328,10 +384,15 @@
       "invalid_cop_points": "Enter exactly the selected number of reference points, one outdoor temperature;COP pair per line. Use finite numbers, unique outdoor temperatures and positive COPs. Decimal dots and commas are accepted.",
       "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below.",
       "invalid_thermal_plan": "Check the runtime model, storage settings and forecast inputs.",
-      "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
+      "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h.",
+      "wind_setup_disabled": "The bundled EEG unlock key is missing or invalid. Reinstall HA-BEMS or contact its maintainer.",
+      "invalid_wind_password": "Incorrect shared release password.",
+      "wind_password_locked": "Too many incorrect passwords. Try again in five minutes.",
+      "invalid_wind_settings": "Check coordinates, hub height (10-180 m), share (0-100%) and the curve. Enter at least two strictly increasing, nonnegative wind speeds with finite, nonnegative powers."
     },
     "abort": {
-      "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items."
+      "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items.",
+      "wind_setup_locked": "Unlock the private EEG wind setup before saving an enabled helper."
     }
   },
   "options": {
@@ -524,7 +585,7 @@
       },
       "thermal_cost_inputs": {
         "title": "Thermal runtime cost — electricity inputs",
-        "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
+        "description": "Select registered forecasts. Building load and selected higher-priority electrical loads are added and supplied first by own PV, then EEG. This device uses the remaining PV, then remaining EEG, then grid imports. EEG is charged even when its price exceeds the grid import price. For import, export and EEG prices, independently choose a registered price forecast or a fixed price in EUR/kWh. Enter a fixed value explicitly, including 0 for a zero tariff. Only fields belonging to the chosen price source are used. EEG still requires its available-energy forecast when enabled; when disabled its price and energy settings are ignored.\n\nAdditional loads are optional: select any number of load forecasts or existing MILP plans. A plan is converted to electrical load using operation times its associated runtime-cost electrical power. Select each load once and exclude this device; use a one-way priority hierarchy. No additional load is selected automatically.\n\nPV uses lost export revenue. If export is limited, surplus above the limit uses the curtailed-PV price. Each setup evaluates the remaining resources independently. No battery effects are simulated.\n\n{reason}",
         "data": {
           "pv_import_entry_id": "PV AC forecast",
           "import_price_entry_id": "Electricity import prices",
@@ -532,10 +593,28 @@
           "load_forecast_input": "Non-flexible building load (optional)",
           "feed_in_limit_enabled": "Consider an export power limit/feed-in limitation at grid connection point",
           "feed_in_limit_w": "Maximum export power",
-          "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
+          "curtailed_price_eur_per_kwh": "Price of PV above the export limit",
+          "additional_load_inputs": "Additional higher-priority loads (optional, multiple)",
+          "eeg_enabled": "Consider energy community (EEG) supply",
+          "eeg_price_entry_id": "EEG price forecast",
+          "eeg_energy_entry_id": "EEG available energy forecast",
+          "import_price_source": "Grid import: price source",
+          "import_price_eur_per_kwh": "Grid import: fixed price",
+          "export_price_source": "Grid export: price source",
+          "export_price_eur_per_kwh": "Grid export: fixed price",
+          "eeg_price_source": "Energy community (EEG): price source",
+          "eeg_price_eur_per_kwh": "Energy community (EEG): fixed price"
         },
         "data_description": {
-          "curtailed_price_eur_per_kwh": "Cost assigned to PV electricity that would otherwise be curtailed. Use 0 EUR/kWh if curtailment has no cost. Negative prices are supported."
+          "curtailed_price_eur_per_kwh": "Cost assigned to PV electricity that would otherwise be curtailed. Use 0 EUR/kWh if curtailment has no cost. Negative prices are supported.",
+          "additional_load_inputs": "Added to the building load before PV and EEG availability are calculated. Existing MILP plans are offered as selectable sources.",
+          "eeg_energy_entry_id": "Total potentially available energy at this metering point, before deductions, in kWh per 15-minute timestep.",
+          "import_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+          "import_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored.",
+          "export_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+          "export_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored.",
+          "eeg_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+          "eeg_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored."
         }
       },
       "thermal_cost_preview": {
@@ -563,7 +642,9 @@
           "import_price": "Electricity import price forecast",
           "export_price": "Electricity export price forecast",
           "import_temperature": "Outdoor air temperature forecast",
-          "import_operation": "Operation constraint forecast"
+          "import_operation": "Operation constraint forecast",
+          "import_eeg_price": "Energy community (EEG) price forecast",
+          "import_eeg_energy": "Energy community (EEG) available energy forecast"
         }
       },
       "add_helper": {
@@ -572,7 +653,8 @@
         "menu_options": {
           "soc": "Battery seasonal SOC min threshold",
           "load_profile": "Non-flexible load profile",
-          "thermal_cost": "Thermal runtime cost (EUR/timestep)"
+          "thermal_cost": "Thermal runtime cost (EUR/timestep)",
+          "eeg_wind": "EEG wind energy forecast (private setup)"
         }
       },
       "add_planner": {
@@ -669,6 +751,41 @@
       "thermal_plan_preview": {
         "title": "Thermal operating plan — preview",
         "description": "Solver: {status}\nIntervals: {count}\nInitial estimated storage: {initial} h\nPlanned operating cost: {cost} EUR\n\nThe plan is feed-forward and assumes its recommendation is followed. It does not control equipment. Save to create an operation-plan binary sensor and a storage-duration sensor, each with forecast attributes. Inputs are checked again before saving."
+      },
+      "import_eeg_price": {
+        "title": "Energy community (EEG) price forecast",
+        "description": "Select a prepared price forecast in EUR/kWh, using price_eur_per_kwh. Include all applicable consumption-dependent charges. EEG is used after own PV and before residual grid supply, even when EEG is more expensive. Prepare the forecast outside HA-BEMS. {reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity import price forecast entity"
+        }
+      },
+      "import_eeg_energy": {
+        "title": "Energy community (EEG) available energy forecast",
+        "description": "Select a prepared forecast in kWh/timestep, using energy_kwh for each 15-minute interval. Supply the total potentially available EEG energy at this metering point before subtracting any building or higher-priority loads. HA-BEMS performs these deductions. Zero means no available energy; missing data does not mean zero. {reason}",
+        "data": {
+          "name": "Shared input name",
+          "forecast_entity": "Electricity import price forecast entity"
+        }
+      },
+      "eeg_wind": {
+        "title": "Private EEG wind forecast setup",
+        "description": "Enter the shared HA-BEMS release password to open the EEG wind creator. The same password is required on every installation and for each creation or edit. Automatic weather updates continue after setup without further password entry.",
+        "data": {
+          "password": "Shared release password"
+        }
+      },
+      "eeg_wind_settings": {
+        "title": "EEG wind energy forecast",
+        "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into 15-minute energy intervals. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo](https://open-meteo.com/), CC BY 4.0. Estimated energy is derived from these data. Check Open-Meteo usage terms for your application.",
+        "data": {
+          "name": "Forecast name",
+          "latitude": "Turbine latitude",
+          "longitude": "Turbine longitude",
+          "hub_height_m": "Hub height above ground",
+          "share_percent": "Constant share",
+          "wind_curve_text": "Wind speed (m/s); electrical power (kW)"
+        }
       }
     },
     "error": {
@@ -682,10 +799,15 @@
       "invalid_cop_points": "Enter exactly the selected number of reference points, one outdoor temperature;COP pair per line. Use finite numbers, unique outdoor temperatures and positive COPs. Decimal dots and commas are accepted.",
       "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below.",
       "invalid_thermal_plan": "Check the runtime model, storage settings and forecast inputs.",
-      "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h."
+      "invalid_runtime_points": "Enter exactly the selected number of outdoor temperature;runtime pairs. Use unique temperatures and runtime values from 0 to 24 h/24h.",
+      "wind_setup_disabled": "The bundled EEG unlock key is missing or invalid. Reinstall HA-BEMS or contact its maintainer.",
+      "invalid_wind_password": "Incorrect shared release password.",
+      "wind_password_locked": "Too many incorrect passwords. Try again in five minutes.",
+      "invalid_wind_settings": "Check coordinates, hub height (10-180 m), share (0-100%) and the curve. Enter at least two strictly increasing, nonnegative wind speeds with finite, nonnegative powers."
     },
     "abort": {
-      "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items."
+      "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items.",
+      "wind_setup_locked": "Unlock the private EEG wind setup before saving an enabled helper."
     }
   },
   "config_subentries": {
@@ -751,7 +873,8 @@
           "menu_options": {
             "soc": "Battery seasonal SOC min threshold",
             "load_profile": "Non-flexible load profile",
-            "thermal_cost": "Thermal runtime cost (EUR/timestep)"
+            "thermal_cost": "Thermal runtime cost (EUR/timestep)",
+            "eeg_wind": "EEG wind energy forecast (private setup)"
           }
         },
         "reconfigure": {
@@ -800,7 +923,7 @@
         },
         "thermal_cost_inputs": {
           "title": "Thermal runtime cost — electricity inputs",
-          "description": "Select reusable registrations from BEMS forecast importer. PV must be AC power on the same basis as the electrical loads. Optional building load is subtracted first; exclude the thermal tasks being costed. Grid electricity uses the import price; self-consumed PV uses the lost export revenue. Each setup evaluates PV independently; no shared PV reservations or battery effects are simulated.\n\nIf export is limited, PV surplus above that limit uses the curtailed-PV price (usually zero). With this option off, the limit and curtailed-PV price are ignored. A limit of zero explicitly means no export.\n\n{reason}",
+          "description": "Select registered forecasts. Building load and selected higher-priority electrical loads are added and supplied first by own PV, then EEG. This device uses the remaining PV, then remaining EEG, then grid imports. EEG is charged even when its price exceeds the grid import price. For import, export and EEG prices, independently choose a registered price forecast or a fixed price in EUR/kWh. Enter a fixed value explicitly, including 0 for a zero tariff. Only fields belonging to the chosen price source are used. EEG still requires its available-energy forecast when enabled; when disabled its price and energy settings are ignored.\n\nAdditional loads are optional: select any number of load forecasts or existing MILP plans. A plan is converted to electrical load using operation times its associated runtime-cost electrical power. Select each load once and exclude this device; use a one-way priority hierarchy. No additional load is selected automatically.\n\nPV uses lost export revenue. If export is limited, surplus above the limit uses the curtailed-PV price. Each setup evaluates the remaining resources independently. No battery effects are simulated.\n\n{reason}",
           "data": {
             "pv_import_entry_id": "PV AC forecast",
             "import_price_entry_id": "Electricity import prices",
@@ -808,15 +931,52 @@
             "load_forecast_input": "Non-flexible building load (optional)",
             "feed_in_limit_enabled": "Consider an export power limit/feed-in limitation at grid connection point",
             "feed_in_limit_w": "Maximum export power",
-            "curtailed_price_eur_per_kwh": "Price of PV above the export limit"
+            "curtailed_price_eur_per_kwh": "Price of PV above the export limit",
+            "additional_load_inputs": "Additional higher-priority loads (optional, multiple)",
+            "eeg_enabled": "Consider energy community (EEG) supply",
+            "eeg_price_entry_id": "EEG price forecast",
+            "eeg_energy_entry_id": "EEG available energy forecast",
+            "import_price_source": "Grid import: price source",
+            "import_price_eur_per_kwh": "Grid import: fixed price",
+            "export_price_source": "Grid export: price source",
+            "export_price_eur_per_kwh": "Grid export: fixed price",
+            "eeg_price_source": "Energy community (EEG): price source",
+            "eeg_price_eur_per_kwh": "Energy community (EEG): fixed price"
           },
           "data_description": {
-            "curtailed_price_eur_per_kwh": "Cost assigned to PV electricity that would otherwise be curtailed. Use 0 EUR/kWh if curtailment has no cost. Negative prices are supported."
+            "curtailed_price_eur_per_kwh": "Cost assigned to PV electricity that would otherwise be curtailed. Use 0 EUR/kWh if curtailment has no cost. Negative prices are supported.",
+            "additional_load_inputs": "Added to the building load before PV and EEG availability are calculated. Existing MILP plans are offered as selectable sources.",
+            "eeg_energy_entry_id": "Total potentially available energy at this metering point, before deductions, in kWh per 15-minute timestep.",
+            "import_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+            "import_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored.",
+            "export_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+            "export_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored.",
+            "eeg_price_eur_per_kwh": "Used only with Fixed price. Applies to every forecast interval. Enter EUR/kWh directly; zero and negative prices are supported.",
+            "eeg_price_source": "Choose Price forecast to select an imported price forecast, or Fixed price to enter a time-independent tariff. The other price input is ignored."
           }
         },
         "thermal_cost_preview": {
           "title": "Thermal runtime cost — preview",
           "description": "Current cost: {current} EUR/timestep\nRange: {minimum} to {maximum} EUR/timestep\nCurrent COP: {cop}\nCOP fallback intervals: {fallback}\nFallback reason: {reason}\nIntervals: {count}\nUTC coverage: {start} to {end}\n\nEach value is the cost of one complete 15-minute activation, using electrical power calculated as nominal thermal output divided by COP. The current state equals the first forecast value. This is an independent cost estimate, not a heating schedule. Submit to save; inputs are checked again."
+        },
+        "eeg_wind": {
+          "title": "Private EEG wind forecast setup",
+          "description": "Enter the shared HA-BEMS release password to open the EEG wind creator. The same password is required on every installation and for each creation or edit. Automatic weather updates continue after setup without further password entry.",
+          "data": {
+            "password": "Shared release password"
+          }
+        },
+        "eeg_wind_settings": {
+          "title": "EEG wind energy forecast",
+          "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into 15-minute energy intervals. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo](https://open-meteo.com/), CC BY 4.0. Estimated energy is derived from these data. Check Open-Meteo usage terms for your application.",
+          "data": {
+            "name": "Forecast name",
+            "latitude": "Turbine latitude",
+            "longitude": "Turbine longitude",
+            "hub_height_m": "Hub height above ground",
+            "share_percent": "Constant share",
+            "wind_curve_text": "Wind speed (m/s); electrical power (kW)"
+          }
         }
       },
       "error": {
@@ -828,11 +988,16 @@
         "no_pv_import": "No PV input is registered yet. Add HA-BEMS again and choose BEMS forecast importer → PV AC generation forecast or PV DC generation forecast, then complete its test.",
         "invalid_thermal_settings": "Check the positive thermal output/COP, nonnegative electrical power and selected temperature input.",
         "invalid_cop_points": "Enter exactly the selected number of reference points, one outdoor temperature;COP pair per line. Use finite numbers, unique outdoor temperatures and positive COPs. Decimal dots and commas are accepted.",
-        "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below."
+        "invalid_thermal_inputs": "The cost forecast could not be calculated. Check the registered inputs and details below.",
+        "wind_setup_disabled": "The bundled EEG unlock key is missing or invalid. Reinstall HA-BEMS or contact its maintainer.",
+        "invalid_wind_password": "Incorrect shared release password.",
+        "wind_password_locked": "Too many incorrect passwords. Try again in five minutes.",
+        "invalid_wind_settings": "Check coordinates, hub height (10-180 m), share (0-100%) and the curve. Enter at least two strictly increasing, nonnegative wind speeds with finite, nonnegative powers."
       },
       "abort": {
         "wrong_group": "This item does not belong to this category.",
-        "not_implemented": "No modules are available in this category yet."
+        "not_implemented": "No modules are available in this category yet.",
+        "wind_setup_locked": "Unlock the private EEG wind setup before saving an enabled helper."
       }
     },
     "entity_importer": {
@@ -908,7 +1073,9 @@
             "import_price": "Electricity import price forecast",
             "export_price": "Electricity export price forecast",
             "import_temperature": "Outdoor air temperature forecast",
-            "import_operation": "Operation constraint forecast"
+            "import_operation": "Operation constraint forecast",
+            "import_eeg_price": "Energy community (EEG) price forecast",
+            "import_eeg_energy": "Energy community (EEG) available energy forecast"
           }
         },
         "reconfigure": {
@@ -925,6 +1092,22 @@
           "data": {
             "name": "Input name",
             "forecast_entity": "Operation forecast entity"
+          }
+        },
+        "import_eeg_price": {
+          "title": "Energy community (EEG) price forecast",
+          "description": "Select a prepared price forecast in EUR/kWh, using price_eur_per_kwh. Include all applicable consumption-dependent charges. EEG is used after own PV and before residual grid supply, even when EEG is more expensive. Prepare the forecast outside HA-BEMS. {reason}",
+          "data": {
+            "name": "Shared input name",
+            "forecast_entity": "Electricity import price forecast entity"
+          }
+        },
+        "import_eeg_energy": {
+          "title": "Energy community (EEG) available energy forecast",
+          "description": "Select a prepared forecast in kWh/timestep, using energy_kwh for each 15-minute interval. Supply the total potentially available EEG energy at this metering point before subtracting any building or higher-priority loads. HA-BEMS performs these deductions. Zero means no available energy; missing data does not mean zero. {reason}",
+          "data": {
+            "name": "Shared input name",
+            "forecast_entity": "Electricity import price forecast entity"
           }
         }
       },

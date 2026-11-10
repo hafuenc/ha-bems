@@ -21,6 +21,12 @@ MODULE_PV_IMPORT = "pv_forecast_import"
 MODULE_LOAD_IMPORT = "load_forecast_import"
 MODULE_IMPORT_PRICE = "electricity_import_price_forecast"
 MODULE_EXPORT_PRICE = "electricity_export_price_forecast"
+MODULE_EEG_PRICE = "energy_community_price_forecast"
+MODULE_EEG_ENERGY = "energy_community_energy_forecast"
+MODULE_EEG_WIND = "energy_community_wind_forecast"
+CONF_EEG_PRICE = "eeg_price_entry_id"
+CONF_EEG_ENERGY = "eeg_energy_entry_id"
+CONF_ADDITIONAL_LOADS = "additional_load_inputs"
 MODULE_OUTDOOR_TEMP = "outdoor_temperature_forecast"
 MODULE_THERMAL_COST = "thermal_runtime_cost"
 MODULE_THERMAL_PLAN = "thermal_storage_milp"
@@ -28,9 +34,15 @@ MODULE_OPERATION_IMPORT = "operation_constraint_import"
 CONF_IMPORT_PRICE = "import_price_entry_id"
 CONF_EXPORT_PRICE = "export_price_entry_id"
 CONF_TEMPERATURE = "temperature_entry_id"
+# Each tariff independently selects an imported forecast or an explicit fixed price.
+THERMAL_PRICE_INPUTS = (
+    ("import", CONF_IMPORT_PRICE, MODULE_IMPORT_PRICE),
+    ("export", CONF_EXPORT_PRICE, MODULE_EXPORT_PRICE),
+    ("eeg", CONF_EEG_PRICE, MODULE_EEG_PRICE),
+)
 FORECAST_IMPORT_MODULES = (
     MODULE_PV_IMPORT, MODULE_LOAD_IMPORT, MODULE_IMPORT_PRICE,
-    MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP,
+    MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP, MODULE_EEG_PRICE, MODULE_EEG_ENERGY,
     MODULE_OPERATION_IMPORT,
 )
 CONF_PV_POWER_TYPE = "pv_power_type"
@@ -54,7 +66,7 @@ GROUP_TITLES = {
     GROUP_THERMAL: "Thermal storage management",
 }
 GROUP_MODULES = {
-    GROUP_CREATOR: (MODULE_SOC, MODULE_LOAD, MODULE_THERMAL_COST),
+    GROUP_CREATOR: (MODULE_SOC, MODULE_LOAD, MODULE_THERMAL_COST, MODULE_EEG_WIND),
     GROUP_IMPORTER: FORECAST_IMPORT_MODULES,
     GROUP_ELECTRICAL: (MODULE_FBC,),
     GROUP_THERMAL: (MODULE_THERMAL_PLAN,),

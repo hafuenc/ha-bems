@@ -2,7 +2,7 @@
 
 from .const import (
     CONF_MODULE, CONF_PV_POWER_TYPE, MODULE_LOAD_IMPORT, MODULE_IMPORT_PRICE,
-    MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP, MODULE_THERMAL_COST, MODULE_OPERATION_IMPORT,
+    MODULE_EEG_PRICE, MODULE_EEG_ENERGY, MODULE_EEG_WIND, MODULE_EXPORT_PRICE, MODULE_OUTDOOR_TEMP, MODULE_THERMAL_COST, MODULE_OPERATION_IMPORT,
 )
 
 
@@ -17,6 +17,10 @@ def forecast_type(config):
         return "Electricity import price", "EUR/kWh", "price_eur_per_kwh", False
     if module == MODULE_EXPORT_PRICE:
         return "Electricity export price", "EUR/kWh", "price_eur_per_kwh", False
+    if module == MODULE_EEG_PRICE:
+        return "Energy community (EEG) price", "EUR/kWh", "price_eur_per_kwh", False
+    if module in (MODULE_EEG_ENERGY, MODULE_EEG_WIND):
+        return "Energy community (EEG) available energy", "kWh/timestep", "energy_kwh", True
     if module == MODULE_OUTDOOR_TEMP:
         return "Outdoor air temperature", "°C", "temperature_c", False
     if module == MODULE_THERMAL_COST:

@@ -3,6 +3,8 @@
 from bisect import bisect_right
 from math import isfinite
 
+from .const import CONF_ADDITIONAL_LOADS, CONF_LOAD_INPUT, THERMAL_PRICE_INPUTS
+
 from .forecast import FILL_MARKER, MAX_FILL_INTERVALS, ForecastCoverageError, parse_timestamp, validate_forecast
 
 
@@ -31,6 +33,21 @@ def cop_points(points):
 
 
 def validate_settings(config):
+    if type(config.get("eeg_enabled", False)) is not bool:
+        raise ValueError("EEG enabled must be a boolean")
+    for prefix, _key, _module in THERMAL_PRICE_INPUTS:
+        if prefix == "eeg" and not config.get("eeg_enabled", False):
+            continue
+        source = config.get(f"{prefix}_price_source", "forecast")
+        if source not in ("forecast", "constant"):
+            raise ValueError(f"Choose a forecast or fixed {prefix} price")
+        if source == "constant":
+            number(config.get(f"{prefix}_price_eur_per_kwh"), f"Fixed {prefix} price")
+    additional = config.get(CONF_ADDITIONAL_LOADS, [])
+    if not isinstance(additional, list) or any(not isinstance(ref, str) or not ref for ref in additional):
+        raise ValueError("Additional loads must be a list of selected load forecasts")
+    if len(set(additional)) != len(additional) or config.get(CONF_LOAD_INPUT) in additional:
+        raise ValueError("Select each load only once")
     number(config.get("thermal_power_kw"), "Thermal power", positive=True)
     model = config.get("cop_model")
     if model == "constant":
@@ -69,12 +86,13 @@ def _matched_rows(reference, rows, key, label, now, nonnegative=False):
 
 
 def calculate_cost_forecast(config, now, pv, import_prices, export_prices,
-                            load=None, temperatures=None, temperature_error=None):
+                            load=None, temperatures=None, temperature_error=None,
+                            eeg_prices=None, eeg_energy=None, additional_loads=None):
     """Cost of running this complete system for one full 15-minute interval.
 
-    Each setup independently evaluates the available PV surplus. It does not
-    reserve PV or allocate it jointly between DHW, UFH, a battery or other loads.
-    A later scheduler must resolve competing uses.
+    Each setup evaluates PV and optional EEG remaining after its selected loads.
+    Higher-priority devices can be included as background loads. Resources are
+    not automatically reserved between independent setups.
     """
     validate_settings(config)
     pv = validate_forecast(pv, now)
@@ -83,6 +101,14 @@ def calculate_cost_forecast(config, now, pv, import_prices, export_prices,
     imports = _matched_rows(pv, import_prices, "price_eur_per_kwh", "Import price", now)
     exports = _matched_rows(pv, export_prices, "price_eur_per_kwh", "Export price", now)
     loads = _matched_rows(pv, load, "power_w", "Building load", now, True) if load is not None else [0] * len(pv)
+    for additional in additional_loads or []:
+        extra = _matched_rows(pv, additional, "power_w", "Higher-priority load", now, True)
+        loads = [base + value for base, value in zip(loads, extra)]
+    eeg_enabled = config.get("eeg_enabled", False)
+    community_prices = (_matched_rows(pv, eeg_prices, "price_eur_per_kwh", "EEG price", now)
+                        if eeg_enabled else [0] * len(pv))
+    community_energy = (_matched_rows(pv, eeg_energy, "energy_kwh", "EEG available energy", now, True)
+                        if eeg_enabled else [0] * len(pv))
     points = cop_points(config["cop_points"]) if config["cop_model"] == "lookup" else None
     values = None
     if points and temperatures is not None:
@@ -109,24 +135,32 @@ def calculate_cost_forecast(config, now, pv, import_prices, export_prices,
         else:
             cop = config["constant_cop"]
         power = config["thermal_power_kw"] * 1000 / cop
+        number(loads[index], "Total considered electrical load", nonnegative=True)
         surplus = max(0, row["power_w"] - loads[index])
         pv_power = min(power, surplus)
         curtailed = min(power, max(0, surplus - config["feed_in_limit_w"])) if config.get("feed_in_limit_enabled") else 0
         exported = pv_power - curtailed
-        imported = power - pv_power
+        community_available = max(0, community_energy[index] * 4000 - max(0, loads[index] - row["power_w"]))
+        community_power = min(power - pv_power, community_available)
+        imported = power - pv_power - community_power
         cost = 0.25 / 1000 * (imported * imports[index] + exported * exports[index]
-                 + curtailed * config.get("curtailed_price_eur_per_kwh", 0))
-        for value in (power, imported, exported, curtailed, cost):
+                 + curtailed * config.get("curtailed_price_eur_per_kwh", 0)
+                 + community_power * community_prices[index])
+        for value in (power, imported, exported, curtailed, community_power, cost):
             number(value, "Calculated runtime cost/power")
         records.append({"start": row["start"], "end": row["end"],
                         "cost_eur_per_timestep": cost, "cop": cop,
                         "electrical_power_w": power, "grid_import_power_w": imported,
+                        "eeg_power_w": community_power, "eeg_energy_kwh": community_power / 4000,
+                        "eeg_cost_eur_per_timestep": community_power / 4000 * community_prices[index],
+                        "considered_load_power_w": loads[index],
                         "pv_export_opportunity_power_w": exported,
                         "curtailed_pv_power_w": curtailed, "cop_fallback": fallback,
                         **({FILL_MARKER: True} if row.get(FILL_MARKER) else {})})
     if sum(row.get(FILL_MARKER, False) for row in records) > MAX_FILL_INTERVALS:
         raise ForecastCoverageError("Combined cost inputs contain more than four filled intervals")
     return {"value": records[0]["cost_eur_per_timestep"], "forecast": records,
+            "eeg_enabled": eeg_enabled,
             "cop_model": config["cop_model"], "current_cop": records[0]["cop"],
             "thermal_power_kw": config["thermal_power_kw"],
             "current_electrical_power_w": records[0]["electrical_power_w"],

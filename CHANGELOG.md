@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.11.0
+
+- Add EEG price and available-energy forecast inputs to runtime costs. Allocate
+  PV, then EEG energy, then remaining grid import, with EEG disabled by default.
+- Allow fixed import/export/EEG prices and additional background loads, including
+  higher-priority MILP load plans with dependency-cycle checks.
+
+- Add a private, password-gated EEG wind forecast to the entity creator, directly
+  selectable as EEG available energy in runtime costs. Configure turbine coordinates,
+  hub height, an editable E-70 E4 power curve and a constant percentage share.
+- Share seven-day Open-Meteo Best Match weather by location, refresh every three
+  hours, and calculate the moving 72-hour energy forecast on the quarter-hour clock.
+  Persist weather as an outage/restart backup and reject exhausted coverage.
+- Require the same release password to open wind setup on every installation.
+  Bundle only its salted hash, keep the password out of config entries, and
+  rate-limit failed unlock attempts. Local password files cannot override it.
+
 ## 0.10.5
 
 - Recalculate thermal runtime costs on changed shared inputs and clock-aligned

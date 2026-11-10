@@ -29,6 +29,20 @@ To reproduce the extraction, place the original downloads under the ignored
 run `scripts/build_profile_data.py` with openpyxl and xlrd installed. These
 spreadsheet readers are development tools, not HA runtime dependencies.
 
+## Open-Meteo weather and ENERCON wind curve
+
+The optional, password-gated EEG wind helper requests weather from
+[Open-Meteo](https://open-meteo.com/) under [CC BY 4.0](https://open-meteo.com/en/licence).
+HA-BEMS modifies the data by interpolating wind height/time, applying an editable
+turbine power curve and integrating interval energy. Provider attribution is
+included in the entity attributes and setup documentation. The free API's usage
+terms apply separately from the data licence.
+
+The default E-70 E4 numeric power-curve reference is taken from
+[ENERCON's product overview, July 2010](https://docs.wind-watch.org/Enercon.pdf).
+An extra zero point and a simplified zero-output rule above 25 m/s are applied;
+the original manufacturer brochure is not bundled or relicensed.
+
 ## Runtime dependency
 
 [holidays](https://github.com/vacanza/holidays) supplies national/regional public

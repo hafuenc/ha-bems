@@ -53,7 +53,7 @@ class GroupFlowTests(unittest.IsolatedAsyncioTestCase):
             flow.hass = hass
             flow.parent = grouped
             menu = await flow.async_step_user()
-            self.assertEqual(menu['menu_options'], ['soc', 'load_profile', 'thermal_cost'])
+            self.assertEqual(menu['menu_options'], ['soc', 'load_profile', 'thermal_cost', 'eeg_wind'])
             await flow.async_step_soc({'name': name})
             from custom_components.ha_bems.const import MONTHS
             result = await flow.async_step_monthly({month: 40 for month in MONTHS})
