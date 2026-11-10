@@ -1,5 +1,6 @@
 # Local project handover and machine-specific settings
 PROJECT_CONTEXT.txt
+matlab_reference/
 .env
 .env.*
 !.env.example

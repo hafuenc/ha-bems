@@ -1,4 +1,4 @@
-"""Pure FBC calculation ported from matlab_reference/fbc_original_excerpt.m.
+"""Pure FBC calculation ported from the original MATLAB reference.
 
 Based on PVprog 1.1, Bergner, Weniger and Tjaden, HTW Berlin (2016),
 with Florian Wenig's DC forecast and monthly SOC threshold adaptations.

@@ -2,10 +2,10 @@
 
 ## PVprog reference
 
-The MATLAB FBC reference attributes the original algorithm to J. Bergner,
+The FBC calculation is based on the original algorithm by J. Bergner,
 J. Weniger and T. Tjaden, *PVprog-Algorithmus*, version 1.1, HTW Berlin, 2016.
 Florian Wenig's adaptations use full DC PV production and a monthly SOC
-override. Attribution is retained in the MATLAB reference and Python port.
+override. Attribution is retained in the Python port.
 
 ## Standard load profile tables
 
