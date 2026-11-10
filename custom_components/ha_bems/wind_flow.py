@@ -49,4 +49,5 @@ class WindSetupSteps:
             fields[vol.Required(key, default=values.get(key, default))] = selector.NumberSelector(config)
         text = values.get("wind_curve_text", curve_text(values.get("wind_power_points", DEFAULT_WIND_POINTS)))
         fields[vol.Required("wind_curve_text", default=text)] = selector.TextSelector({"multiline": True})
-        return self.async_show_form(step_id="eeg_wind_settings", errors=errors, data_schema=vol.Schema(fields))
+        return self.async_show_form(step_id="eeg_wind_settings", errors=errors, data_schema=vol.Schema(fields),
+            description_placeholders={"weather_source_url": "https://open-meteo.com/"})
