@@ -66,13 +66,13 @@ class WindModelTests(unittest.TestCase):
         rows = wind_energy_forecast(SETTINGS,weather,NOW)
         self.assertEqual(len(rows),289)
         self.assertEqual(rows[0]['start'],'2026-11-10T13:00:00+00:00')
-        self.assertTrue(all(row['energy_kwh']==128.25 for row in rows))
+        self.assertTrue(all(row['power_kw']==513 for row in rows))
         one_percent = wind_energy_forecast({**SETTINGS,'share_percent':1},weather,NOW)
-        self.assertAlmostEqual(one_percent[0]['energy_kwh'],1.2825)
+        self.assertAlmostEqual(one_percent[0]['power_kw'],5.13)
         zero = wind_energy_forecast({**SETTINGS,'share_percent':0},weather,NOW)
-        self.assertTrue(all(r['energy_kwh']==0 for r in zero))
+        self.assertTrue(all(r['power_kw']==0 for r in zero))
         from custom_components.ha_bems.forecast import validate_forecast
-        self.assertEqual(validate_forecast(rows,NOW,'energy_kwh'),rows)
+        self.assertEqual(validate_forecast(rows,NOW,'power_kw'),rows)
 
     def test_dst_uses_absolute_quarter_hours(self):
         weather = validate_weather(payload())
@@ -192,6 +192,12 @@ class WeatherCacheTests(unittest.IsolatedAsyncioTestCase):
         rows,details=read_forecast_import(self.hass,'wind',MODULE_EEG_ENERGY,NOW)
         self.assertEqual(len(rows),289)
         self.assertEqual(rows[0]['energy_kwh'],156.5)
+        self.assertEqual(coordinator.data['forecast'][0]['power_kw'],626)
+        self.assertNotIn('energy_kwh',coordinator.data['forecast'][0])
+        self.assertEqual(coordinator.data['forecast_unit'],'kW')
+        self.assertEqual(coordinator.data['forecast_value_key'],'power_kw')
+        self.assertEqual(details['wind_source_unit'],'kW')
+        self.assertEqual(details['forecast_unit'],'kWh/timestep')
         self.assertIn('weather_attribution',details)
         coordinator.last_update_success=False
         with self.assertRaises(ValueError): read_forecast_import(self.hass,'wind',MODULE_EEG_ENERGY,NOW)
@@ -245,9 +251,9 @@ class WeatherCacheTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(added),1)
             output=added[0]
             self.assertTrue(output.coordinator.last_update_success,str(output.coordinator.last_exception))
-            self.assertEqual(output.native_value,156.5)
+            self.assertEqual(output.native_value,626)
             self.assertEqual(len(output.extra_state_attributes['forecast']),289)
-            self.assertEqual(output._attr_native_unit_of_measurement,'kWh/timestep')
+            self.assertEqual(output._attr_native_unit_of_measurement,'kW')
             clocks[0](None)
             await asyncio.gather(*tasks)
             cache._request.assert_awaited_once()
@@ -258,6 +264,29 @@ class WeatherCacheTests(unittest.IsolatedAsyncioTestCase):
             output.coordinator.last_exception=ValueError('Weather exhausted')
             self.assertIsNone(output.native_value)
             self.assertNotIn('forecast',output.extra_state_attributes)
+
+    async def test_power_profile_preserves_energy_and_runtime_cost_with_small_share(self):
+        with patch.dict('sys.modules',modules()):
+            from custom_components.ha_bems.import_registry import coordinators,read_forecast_import
+        from custom_components.ha_bems.thermal_cost import calculate_cost_forecast
+        e=entry('wind-small',MODULE_EEG_WIND,**{**SETTINGS,'share_percent':0.01})
+        self.hass.entries=[e]
+        coordinator=wc.WindEnergyCoordinator(self.hass,e)
+        coordinator.cache._request=AsyncMock(return_value=payload())
+        with patch.object(wc.dt_util,'now',return_value=NOW):
+            coordinator.data=await coordinator._async_update_data()
+        coordinators(self.hass)[e.entry_id]=coordinator
+        energy,_=read_forecast_import(self.hass,e.entry_id,MODULE_EEG_ENERGY,NOW)
+        self.assertAlmostEqual(coordinator.data['value'],0.0626)
+        self.assertAlmostEqual(energy[0]['energy_kwh'],0.01565)
+        def profile(value,key):
+            return [{'start':r['start'],'end':r['end'],key:value} for r in energy]
+        result=calculate_cost_forecast(
+            {'thermal_power_kw':7,'cop_model':'constant','constant_cop':3.5,'eeg_enabled':True},
+            NOW,profile(0,'power_w'),profile(.3,'price_eur_per_kwh'),profile(.1,'price_eur_per_kwh'),
+            eeg_prices=profile(.1,'price_eur_per_kwh'),eeg_energy=energy)
+        self.assertAlmostEqual(result['value'],.14687)
+        self.assertAlmostEqual(result['forecast'][0]['eeg_energy_kwh'],.01565)
 
     async def test_backup_persistence_error_does_not_discard_fresh_weather(self):
         cache=wc.weather_cache(self.hass,SETTINGS)

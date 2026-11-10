@@ -19,7 +19,9 @@ def forecast_type(config):
         return "Electricity export price", "EUR/kWh", "price_eur_per_kwh", False
     if module == MODULE_EEG_PRICE:
         return "Energy community (EEG) price", "EUR/kWh", "price_eur_per_kwh", False
-    if module in (MODULE_EEG_ENERGY, MODULE_EEG_WIND):
+    if module == MODULE_EEG_WIND:
+        return "Energy community (EEG) available wind power", "kW", "power_kw", True
+    if module == MODULE_EEG_ENERGY:
         return "Energy community (EEG) available energy", "kWh/timestep", "energy_kwh", True
     if module == MODULE_OUTDOOR_TEMP:
         return "Outdoor air temperature", "°C", "temperature_c", False

@@ -94,7 +94,7 @@ class WindWeatherCache:
                 "weather_refresh_error": self.error, "cache_storage_error": self.storage_error,
                 "next_weather_request_at": self.next_attempt.isoformat(),
                 "weather_cache_end": datetime.fromtimestamp(self.weather["time"][-1], UTC).isoformat(),
-                "weather_provider": "Open-Meteo", "weather_attribution": "Weather data by Open-Meteo (CC BY 4.0); wind converted to estimated energy by HA-BEMS",
+                "weather_provider": "Open-Meteo", "weather_attribution": "Weather data by Open-Meteo (CC BY 4.0); wind converted to estimated power by HA-BEMS",
                 "weather_source_url": "https://open-meteo.com/", "weather_model": "best_match",
             }
 
@@ -124,8 +124,8 @@ class WindEnergyCoordinator(DataUpdateCoordinator):
             self.input_status = "unavailable"
             raise UpdateFailed(str(err)) from err
         self.input_status = "cached_backup" if metadata["using_cached_backup"] else "ready"
-        return {"value": rows[0]["energy_kwh"], "forecast": rows,
-                "schema_version": 1, "forecast_value_key": "energy_kwh", "forecast_unit": "kWh/timestep",
+        return {"value": rows[0]["power_kw"], "forecast": rows,
+                "schema_version": 1, "forecast_value_key": "power_kw", "forecast_unit": "kW",
                 "interval_minutes": 15, "generated_at": now.isoformat(),
                 "input_validated_at": now.isoformat(), "status": self.input_status,
                 "hub_height_m": self.config["hub_height_m"], "share_percent": self.config["share_percent"],

@@ -91,14 +91,23 @@ add meteorological detail to hourly weather data.
 The integration's existing forecast contract includes the **current quarter-hour
 plus 288 future quarter-hours (289 records)**. This keeps direct runtime-cost and
 planner inputs aligned and covers a full 72 hours even between clock boundaries.
-Each record contains timezone-aware UTC `start`, `end`, and `energy_kwh`.
-Energy is calculated as the integrated kW × hours × share / 100.
+Each public record contains timezone-aware UTC `start`, `end`, and `power_kw`.
+The power is the interval-average integrated curve output scaled by share / 100.
+The weather interpolation and power-curve integration are unchanged.
 
-The sensor's value is current-interval energy, unit `kWh/timestep`, and its
+The sensor's value is current-interval mean power, unit `kW`, and its
 `forecast` attribute contains the records. `source_updated_at` records the last
 successful fetch, separately from local `generated_at`. Attributes also include
 `source_age_minutes`, `using_cached_backup`, `weather_refresh_error`,
 `next_weather_request_at`, `weather_cache_end`, and attribution.
+
+Since 0.12.0 the public wind profile uses `forecast_value_key: power_kw` and
+`forecast_unit: kW`. Existing entity IDs and shares are preserved. Runtime costs
+convert generated wind power to interval energy exactly once (`kW × 0.25 h`)
+at their input boundary. External EEG energy imports still use `energy_kwh` and
+`kWh/timestep`. Dashboards spanning the update must respect the recorded unit:
+old `kWh/timestep` wind history is multiplied by four to display it as kW;
+new kW history is already power.
 
 A failed request continues producing a usable forecast from the backup while
 the saved weather covers the whole horizon. Once it cannot, the sensor becomes

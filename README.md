@@ -7,7 +7,7 @@
 > development transparency only. Features, interfaces and behaviour may change
 > without notice.
 
-Modular planning for flexible devices and energy storage. Version **0.11.0**
+Modular planning for flexible devices and energy storage. Version **0.12.0**
 uses separate BEMS forecast importer and BEMS entity creator integration entries,
 plus one integration entry per operation planner. Named runtime-cost forecasts, load helpers and
 battery planners remain independently configurable.
@@ -33,7 +33,8 @@ the calculation, and identical outputs do not produce duplicate publications.
 
 The entity creator also offers a password-gated **EEG wind energy forecast**:
 Open-Meteo Best Match wind, an editable E-70 E4 power curve, hub height and a
-constant share produce available kWh per 15-minute interval. A shared seven-day
+constant share produce available wind power in kW at 15-minute resolution. Runtime
+costs convert the power to interval energy internally. A shared seven-day
 weather cache refreshes every three hours and supplies the rolling 72-hour
 forecast during API outages. Opening the setup requires the shared release
 password on every installation. [Private EEG wind setup](docs/eeg_wind_forecast.md).

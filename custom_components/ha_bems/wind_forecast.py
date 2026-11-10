@@ -121,6 +121,7 @@ def interval_energy(v0, v1, points, hours=0.25):
 
 
 def wind_energy_forecast(config, weather, now):
+    """Return interval-average available wind power in kW."""
     validate_wind_settings(config)
     times = weather["time"]
     winds = wind_at_height(weather, config["hub_height_m"])
@@ -141,6 +142,6 @@ def wind_energy_forecast(config, weather, now):
         end = cursor + INTERVAL
         energy = interval_energy(speed_at(cursor.timestamp()), speed_at(end.timestamp()), points)
         result.append({"start": cursor.isoformat(), "end": end.isoformat(),
-                       "energy_kwh": energy * config["share_percent"] / 100})
+                       "power_kw": energy / 0.25 * config["share_percent"] / 100})
         cursor = end
     return result

@@ -93,7 +93,17 @@ def read_forecast_import(hass, entry_id, module, now):
     from .forecast_types import forecast_type
 
     _label, _unit, key, nonnegative = forecast_type({**entry.data, **entry.options})
-    return _read_snapshot(coordinator.data, now, entry.title, key, nonnegative)
+    rows, details = _read_snapshot(coordinator.data, now, entry.title, key, nonnegative)
+    if module_type(entry) == MODULE_EEG_WIND:
+        # The public wind profile is power; runtime costs consume energy.
+        # Convert once at this input boundary, leaving the published profile intact.
+        rows = [{"start": row["start"], "end": row["end"],
+                 "energy_kwh": row["power_kw"] *
+                     (parse_timestamp(row["end"]) - parse_timestamp(row["start"])).total_seconds() / 3600,
+                 **({FILL_MARKER: True} if row.get(FILL_MARKER) else {})} for row in rows]
+        details.update({"wind_source_unit": "kW", "forecast_unit": "kWh/timestep",
+                        "forecast_value_key": "energy_kwh"})
+    return rows, details
 
 
 def read_load_input(hass, config, now):

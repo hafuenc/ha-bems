@@ -58,12 +58,12 @@ async def _async_setup_item(hass, entry, async_add_entities):
 
 
 class WindEnergySensor(CoordinatorEntity, SensorEntity):
-    """Publish the generated EEG energy directly for forecasts and runtime costs."""
+    """Publish interval-average EEG wind power; preserve the existing entity ID."""
 
     _unrecorded_attributes = frozenset({MATCH_ALL})
-    _attr_name = "EEG available wind energy"
+    _attr_name = "EEG available wind power"
     _attr_has_entity_name = True
-    _attr_native_unit_of_measurement = "kWh/timestep"
+    _attr_native_unit_of_measurement = "kW"
     _attr_suggested_display_precision = 4
     _attr_icon = "mdi:wind-turbine"
     _attr_should_poll = False

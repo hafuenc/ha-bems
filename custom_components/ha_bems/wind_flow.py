@@ -38,7 +38,7 @@ class WindSetupSteps:
                 self._remember(values)
                 return self._finish(MODULE_EEG_WIND)
         values = {**self._values(), **(user_input or {})}
-        fields = self._name_fields("EEG wind energy forecast")
+        fields = self._name_fields("EEG wind power forecast")
         for key, default, minimum, maximum, unit in (
             ("latitude", self.hass.config.latitude, -90, 90, None),
             ("longitude", self.hass.config.longitude, -180, 180, None),

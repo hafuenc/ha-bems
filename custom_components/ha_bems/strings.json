@@ -18,7 +18,7 @@
           "soc": "Battery seasonal SOC min threshold",
           "load_profile": "Non-flexible load profile",
           "thermal_cost": "Thermal runtime cost (EUR/timestep)",
-          "eeg_wind": "EEG wind energy forecast (private setup)"
+          "eeg_wind": "EEG wind power forecast (private setup)"
         }
       },
       "electrical_storage": {
@@ -361,8 +361,8 @@
         }
       },
       "eeg_wind_settings": {
-        "title": "EEG wind energy forecast",
-        "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into 15-minute energy intervals. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo]({weather_source_url}), CC BY 4.0. Estimated energy is derived from these data. Check Open-Meteo usage terms for your application.",
+        "title": "EEG wind power forecast",
+        "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into interval-average power in kW at 15-minute resolution. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo]({weather_source_url}), CC BY 4.0. Estimated power is derived from these data. Runtime costs convert kW to interval energy internally. Check Open-Meteo usage terms for your application.",
         "data": {
           "name": "Forecast name",
           "latitude": "Turbine latitude",
@@ -654,7 +654,7 @@
           "soc": "Battery seasonal SOC min threshold",
           "load_profile": "Non-flexible load profile",
           "thermal_cost": "Thermal runtime cost (EUR/timestep)",
-          "eeg_wind": "EEG wind energy forecast (private setup)"
+          "eeg_wind": "EEG wind power forecast (private setup)"
         }
       },
       "add_planner": {
@@ -776,8 +776,8 @@
         }
       },
       "eeg_wind_settings": {
-        "title": "EEG wind energy forecast",
-        "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into 15-minute energy intervals. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo]({weather_source_url}), CC BY 4.0. Estimated energy is derived from these data. Check Open-Meteo usage terms for your application.",
+        "title": "EEG wind power forecast",
+        "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into interval-average power in kW at 15-minute resolution. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo]({weather_source_url}), CC BY 4.0. Estimated power is derived from these data. Runtime costs convert kW to interval energy internally. Check Open-Meteo usage terms for your application.",
         "data": {
           "name": "Forecast name",
           "latitude": "Turbine latitude",
@@ -874,7 +874,7 @@
             "soc": "Battery seasonal SOC min threshold",
             "load_profile": "Non-flexible load profile",
             "thermal_cost": "Thermal runtime cost (EUR/timestep)",
-            "eeg_wind": "EEG wind energy forecast (private setup)"
+            "eeg_wind": "EEG wind power forecast (private setup)"
           }
         },
         "reconfigure": {
@@ -967,8 +967,8 @@
           }
         },
         "eeg_wind_settings": {
-          "title": "EEG wind energy forecast",
-          "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into 15-minute energy intervals. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo]({weather_source_url}), CC BY 4.0. Estimated energy is derived from these data. Check Open-Meteo usage terms for your application.",
+          "title": "EEG wind power forecast",
+          "description": "Enter the wind turbine coordinates and hub height (10-180 m above ground). The constant share scales the full turbine output: 100% means one complete turbine. Enter one wind speed in m/s;electrical power in kW pair per line, with strictly increasing speeds. The default is the ENERCON E-70 E4 calculated power curve. Below the first point and above the last point, power is zero (simplified storm shutdown). Open-Meteo Best Match supplies hourly wind, interpolated in height and time and integrated into interval-average power in kW at 15-minute resolution. Seven days are cached; weather refreshes every three hours. Failed requests use the saved cache while it still covers the next 72 hours. Weather data: [Open-Meteo]({weather_source_url}), CC BY 4.0. Estimated power is derived from these data. Runtime costs convert kW to interval energy internally. Check Open-Meteo usage terms for your application.",
           "data": {
             "name": "Forecast name",
             "latitude": "Turbine latitude",

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0
+
+- Publish the EEG wind creator's state and forecast as interval-average power in
+  kW (`power_kw`) instead of energy in kWh per timestep. Preserve existing helper
+  configuration and entity IDs. Consumers of the wind entity must use the new
+  power unit; external EEG energy imports retain their existing format.
+- Convert generated wind power to kWh at the runtime-cost input boundary so the
+  calculated cost and configured EEG share remain unchanged.
+
 ## 0.11.0
 
 - Add EEG price and available-energy forecast inputs to runtime costs. Allocate
