@@ -43,7 +43,13 @@ The storage balance is:
 next_storage_h = storage_h + (operation - runtime_h_per_24h / 24) × timestep_h
 ```
 
-The terminal storage level cannot be below the model's initial level. Negative
+The terminal storage level must be at least **50% of storage capacity**, independent
+of the configured initial level or the current projected level. This is a lower
+bound, not an exact end level: the optimizer may finish above 50%. For example,
+2 h of DHW storage requires at least 1 h at the horizon end; 6.4 h of UFH storage
+requires at least 3.2 h. Resuming a saved plan preserves the projected storage and
+on/off history, but the next optimization uses this 50% minimum even if the saved
+plan used a different terminal target. Negative
 electricity costs are supported, but the upper storage bound still applies.
 The heating cutoff sets demand to zero; it does not itself forbid operation.
 

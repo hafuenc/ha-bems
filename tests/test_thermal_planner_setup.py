@@ -101,6 +101,54 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restarted.data['value'], .5)
         self.assertTrue(stored)
 
+    async def test_terminal_minimum_is_half_capacity_in_preview_and_live_solve(self):
+        for capacity, initial in ((2, .2), (2, 1.3), (6.4, 5.5)):
+            with self.subTest(capacity=capacity, initial=initial):
+                config = {**CONFIG, 'storage_duration_h': capacity, 'runtime_h_per_24h': 0,
+                          'initial_storage_h': initial, 'cost_entity': 'sensor.cost'}
+                flow = HABEMSOptionsFlow()
+                flow.hass, flow.config_entry = self.hass, self.root
+                flow._flat_mode, flow._draft = 'add', config
+                with patch.object(self.hass, 'async_add_executor_job', wraps=self.hass.async_add_executor_job) as solver:
+                    await flow._async_plan_preview()
+                self.assertEqual(solver.call_args.args[-1], capacity / 2)
+                self.assertEqual(solver.call_args.args[4], initial)
+                planner = self.add('cost-' + str(initial), config)
+                await planner.async_refresh()
+                self.assertTrue(planner.last_update_success, planner.last_exception)
+                self.assertEqual(planner.data['terminal_storage_min_h'], capacity / 2)
+                self.assertEqual(planner.data['value'], initial)
+                self.assertGreaterEqual(planner.data['forecast'][-1]['storage_end_h'], capacity / 2 - 1e-7)
+
+    async def test_saved_old_terminal_target_is_replaced_without_resetting_state(self):
+        from custom_components.ha_bems.thermal_plan_coordinator import dt_util, projected_state
+        config = {**CONFIG, 'storage_duration_h': 2, 'initial_storage_h': 1.3,
+                  'cost_entity': 'sensor.cost'}
+        original = self.add('dhw', config)
+        await original.async_refresh()
+        self.assertTrue(original.last_update_success, original.last_exception)
+        original._plan['terminal_storage_min_h'] = 1.3  # Pre-update persisted target.
+        await original._store.async_save({'model_key': original._model_key, 'plan': original._plan})
+        future = NOW + timedelta(seconds=30)
+        expected, previous, elapsed, fixed = projected_state(original._plan, future)
+        flow = HABEMSOptionsFlow()
+        flow.hass, flow.config_entry = self.hass, self.root
+        flow._flat_mode, flow._flat_item_id, flow._draft = 'edit', 'dhw', config
+        with patch.dict(flow._async_plan_preview.__globals__, dt_util=SimpleNamespace(now=lambda: future)), patch.object(
+                self.hass, 'async_add_executor_job', wraps=self.hass.async_add_executor_job) as solver:
+            await flow._async_plan_preview()
+        self.assertAlmostEqual(solver.call_args.args[4], expected)
+        self.assertEqual(solver.call_args.args[-1], 1)
+        restarted = self.add('dhw', config)
+        with patch.object(dt_util, 'now', lambda: future):
+            await restarted.async_refresh()
+        self.assertTrue(restarted.last_update_success, restarted.last_exception)
+        self.assertAlmostEqual(restarted.data['value'], expected)
+        self.assertEqual(restarted.data['initial_previous_operation'], previous)
+        self.assertEqual(restarted.data['initial_previous_elapsed_h'], elapsed)
+        self.assertEqual(restarted.data['terminal_storage_min_h'], 1)
+        self.assertGreaterEqual(restarted.data['forecast'][-1]['storage_end_h'], 1 - 1e-7)
+
     async def test_restart_advances_nonconstant_storage_along_the_previous_plan(self):
         config={**CONFIG,'runtime_h_per_24h':12,'cost_entity':'sensor.cost'}
         original=self.add('dhw',config)
@@ -427,7 +475,8 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
             curve.hass=self.hass
             self.assertTrue(curve.available)
             self.assertEqual(curve.native_value,0)
-            self.assertGreater(len(curve.extra_state_attributes['curve_points']),100)
+            self.assertEqual(curve.extra_state_attributes['curve_step_c'],1)
+            self.assertGreaterEqual(len(curve.extra_state_attributes['curve_points']),66)
             self.assertFalse(level.available)
             self.assertNotIn('forecast',level.extra_state_attributes)
             self.assertFalse(start.available)

@@ -200,13 +200,14 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             level, previous, elapsed, fixed = projected_state(self._plan, planning_at)
             if not low - 1e-7 <= level <= high + 1e-7:
                 raise ValueError("Projected storage level is outside its limits")
-            terminal = self._plan["terminal_storage_min_h"]
         else:
             level = self.config.get("initial_storage_h")
             if level is None:
                 level = low + (high - low) / 2
             previous, elapsed, fixed = 0, 72, None
-            terminal = level
+        # Recompute from capacity, including when resuming a pre-update plan.
+        # Keep the projected state/on-off history; do not inherit its old target.
+        terminal = high / 2
         durations = [(parse_timestamp(row["end"]) - max(planning_at, parse_timestamp(row["start"]))).total_seconds() / 3600 for row in rows]
         self._last_solve_slot = quarter_slot(now)
         self._slot_error = None

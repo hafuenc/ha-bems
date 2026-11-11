@@ -47,6 +47,8 @@ class CharacteristicTests(unittest.TestCase):
             curve=build_characteristic(config,function)
             self.assertEqual(curve['reference_points'],[])
             self.assertEqual(curve['constant_value'],value)
+            self.assertEqual(curve['curve_step_c'],1)
+            self.assertEqual(len(curve['curve_points']),66)  # -25 through +40 °C.
             self.assertTrue(all(p['value']==value and p['region']=='constant' for p in curve['curve_points']))
 
     def test_curve_range_includes_extreme_reference_points(self):
@@ -73,7 +75,7 @@ class CharacteristicTests(unittest.TestCase):
                 self.assertIsNone(curve.native_value)
                 attributes=curve.extra_state_attributes
                 self.assertEqual(attributes['status'],'input_unavailable')
-                self.assertGreater(len(attributes['curve_points']),100)
+                self.assertEqual(attributes['curve_points'],build_characteristic(config,'cop')['curve_points'])
                 self.assertEqual(attributes['reference_points'][0]['value'],2)
             with patch.dict(curve._current.__globals__,{'read_forecast_import':lambda *a: ([{'temperature_c':5}],{'source_entity':'sensor.outdoor'})}):
                 self.assertEqual(curve.native_value,3)

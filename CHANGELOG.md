@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.2
+
+- Reduce the COP and runtime diagnostic curve sampling from 0.5 °C to 1 °C, retaining exact reference points, clipping boundaries and cutoff transitions. Operational COP/runtime calculations retain their full temperature resolution.
+- Set the thermal MILP terminal storage minimum to 50% of configured capacity, independent of the initial or projected storage level. Apply the same rule to setup previews and resumed saved plans without resetting their feed-forward state.
+
 ## 0.12.1
 
 - Fix the Runtime Costs preview when editing an existing item, including setups with EEG inputs. Retain the flat item identifier for load-priority validation without assuming a legacy subentry identifier exists.

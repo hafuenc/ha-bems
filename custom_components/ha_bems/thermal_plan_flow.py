@@ -162,12 +162,11 @@ class ThermalPlanSteps:
         initial = config.get("initial_storage_h")
         if initial is None:
             initial = low + (high - low) / 2
-        previous, elapsed, fixed, terminal = 0, 72, None, initial
+        previous, elapsed, fixed, terminal = 0, 72, None, high / 2
         existing = planners(self.hass).get(identifier)
         if (existing and existing._plan and not config.get("restart_storage_model")
                 and existing._model_key == model_key(config)):
             initial, previous, elapsed, fixed = projected_state(existing._plan, now)
-            terminal = existing._plan["terminal_storage_min_h"]
         durations = [(parse_timestamp(row["end"]) - max(now, parse_timestamp(row["start"]))).total_seconds() / 3600 for row in rows]
         result = await self.hass.async_add_executor_job(solve_plan, [row["cost_eur_per_timestep"] for row in rows],
             runtimes, durations, initial, config, previous, elapsed, allowed, fixed, terminal)

@@ -43,7 +43,7 @@ def build_characteristic(config, function):
     low = min(-25., references[0]["temperature_c"] - 5) if references else -25.
     high = max(40., references[-1]["temperature_c"] + 5) if references else 40.
     samples = {low, high, *(p["temperature_c"] for p in references)}
-    samples.update(low + i * .5 for i in range(int((high - low) / .5) + 1))
+    samples.update(low + i for i in range(int(high - low) + 1))
     cutoff_enabled = runtime and model == "lookup" and config.get("heating_cutoff_enabled", True)
     if cutoff_enabled:
         cutoff = float(config.get("heating_cutoff_c", 20))
@@ -74,7 +74,7 @@ def build_characteristic(config, function):
         "reference_points": references, "curve_points": curves,
         "interpolation": "linear" if references else "constant",
         "extrapolation": "linear" if references else "constant",
-        "display_range_c": [low, high], "curve_step_c": .5,
+        "display_range_c": [low, high], "curve_step_c": 1.,
         "value_basis": "configured_function_at_current_forecast_temperature"}
     if model == "constant":
         attributes["constant_value"] = float(config["runtime_h_per_24h" if runtime else "constant_cop"])

@@ -21,7 +21,7 @@ Attributes:
 - `curve_points`: ordered `{temperature_c, value, raw_value, region, fallback_active}`
   samples of the effective function. `region` is `constant`, `interpolation` or
   `extrapolation`; `raw_value` is before runtime clipping/cutoff or COP fallback.
-- `display_range_c` and `curve_step_c`: normally −25 to +40 °C at 0.5 °C steps,
+- `display_range_c` and `curve_step_c`: normally −25 to +40 °C at 1 °C steps,
   extended when reference points lie outside this range. Exact reference points,
   clipping intersections and both sides of a heating cutoff are included too.
 - `current_temperature_c`, `current_value`, `current_raw_value`, `fallback_active`,
