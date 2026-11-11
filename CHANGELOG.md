@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1
+
+- Fix the Runtime Costs preview when editing an existing item, including setups with EEG inputs. Retain the flat item identifier for load-priority validation without assuming a legacy subentry identifier exists.
+- Add regression coverage for editing Runtime Costs with EEG enabled and disabled.
+
 ## 0.12.0
 
 - Publish the EEG wind creator's state and forecast as interval-average power in

@@ -130,6 +130,23 @@ class EEGIntegrationTests(unittest.IsolatedAsyncioTestCase):
         return {**CONFIG, **INPUTS, 'eeg_enabled': True,
                 CONF_EEG_PRICE: 'eeg-price', CONF_EEG_ENERGY: 'eeg-energy'}
 
+    async def test_flat_runtime_cost_edit_with_eeg_reaches_preview(self):
+        config = self.register_eeg()
+        for enabled in (False, True):
+            flow = HABEMSOptionsFlow()
+            flow.hass = self.hass
+            flow._flat_mode = 'edit'
+            flow._flat_item_id = 'existing-cost'
+            # Flat-item edit forms deliberately have no ConfigSubentry id.
+            flow._subentry = SimpleNamespace(title='Existing cost', data=config)
+            with patch('custom_components.ha_bems.thermal_loads.validate_load_hierarchy',
+                       wraps=validate_load_hierarchy) as validate:
+                result = await flow.async_step_thermal_cost_inputs({'eeg_enabled': enabled})
+            self.assertEqual(result['step_id'], 'thermal_cost_preview')
+            self.assertEqual(validate.call_args_list[0].args[2], 'existing-cost')
+            self.assertEqual(flow._thermal_result['eeg_enabled'], enabled)
+            self.assertEqual(len(flow._thermal_result['forecast']), 289)
+
     async def test_coordinator_refresh_failure_retention_disable_and_opt_out(self):
         config = self.register_eeg()
         plan = ThermalCostCoordinator(self.hass, entry('cost', module=MODULE_THERMAL_COST, **config))

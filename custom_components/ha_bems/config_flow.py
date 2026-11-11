@@ -656,9 +656,9 @@ class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
         from .thermal_loads import validate_load_hierarchy
 
         identifier = getattr(self, "_flat_item_id", None)
-        if subentry := getattr(self, "_subentry", None):
-            identifier = subentry.data.get(CONF_ITEM_ID, subentry.subentry_id)
-        elif isinstance(self, config_entries.OptionsFlow) and not getattr(self, "_flat_mode", None):
+        if identifier is None and (subentry := getattr(self, "_subentry", None)):
+            identifier = subentry.data.get(CONF_ITEM_ID) or getattr(subentry, "subentry_id", None)
+        elif identifier is None and isinstance(self, config_entries.OptionsFlow) and not getattr(self, "_flat_mode", None):
             identifier = self.config_entry.entry_id
         validate_load_hierarchy(self.hass, self._values(), identifier)
         return await async_calculate_cost(self.hass, self._values())
