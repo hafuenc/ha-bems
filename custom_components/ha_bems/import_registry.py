@@ -56,6 +56,9 @@ def read_pv_import(hass, config, now):
     coordinator = coordinators(hass).get(entry_id)
     if coordinator is None:
         raise ForecastConfigurationError("The selected PV input importer is not loaded or has been disabled")
+    from .optimization import provider_snapshot
+
+    coordinator = provider_snapshot(hass, entry_id, coordinator)
     if not snapshot_usable(coordinator, now):
         raise ForecastUnavailable(f"PV input is {coordinator.input_status}: {coordinator.last_exception}")
     rows, details = _read_snapshot(coordinator.data, now, "PV")
@@ -76,6 +79,9 @@ def read_forecast_import(hass, entry_id, module, now):
     coordinator = coordinators(hass).get(entry_id)
     if coordinator is None:
         raise ForecastConfigurationError("The selected forecast importer is not loaded or has been disabled")
+    from .optimization import provider_snapshot
+
+    coordinator = provider_snapshot(hass, entry_id, coordinator)
     if module_type(entry) == MODULE_EEG_WIND:
         # Weather backup policy is owned by the generator. Never extend an
         # exhausted cache via the generic importer's one-hour hold allowance.
@@ -124,6 +130,9 @@ def read_load_input(hass, config, now):
     coordinator = registry.get(entry_id)
     if coordinator is None:
         raise ForecastConfigurationError("The selected building load input is not loaded or has been disabled")
+    from .optimization import provider_snapshot
+
+    coordinator = provider_snapshot(hass, entry_id, coordinator)
     if not snapshot_usable(coordinator, now):
         raise ForecastUnavailable(f"Building load input is unavailable: {coordinator.last_exception}")
     rows, details = _read_snapshot(coordinator.data, now, "Building load")

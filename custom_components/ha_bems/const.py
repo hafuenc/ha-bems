@@ -30,6 +30,8 @@ CONF_ADDITIONAL_LOADS = "additional_load_inputs"
 MODULE_OUTDOOR_TEMP = "outdoor_temperature_forecast"
 MODULE_THERMAL_COST = "thermal_runtime_cost"
 MODULE_THERMAL_PLAN = "thermal_storage_milp"
+MODULE_OPTIMIZATION_MANAGER = "optimization_manager"
+GROUP_OPTIMIZATION = "optimization"
 MODULE_OPERATION_IMPORT = "operation_constraint_import"
 CONF_IMPORT_PRICE = "import_price_entry_id"
 CONF_EXPORT_PRICE = "export_price_entry_id"
@@ -60,12 +62,14 @@ GROUP_IMPORTER = "entity_importer"
 GROUP_ELECTRICAL = "electrical_storage"
 GROUP_THERMAL = "thermal_storage"
 GROUP_TITLES = {
+    GROUP_OPTIMIZATION: "Optimization Manager",
     GROUP_CREATOR: "BEMS entity creator",
     GROUP_IMPORTER: "BEMS forecast importer",
     GROUP_ELECTRICAL: "Electrical storage management",
     GROUP_THERMAL: "Thermal storage management",
 }
 GROUP_MODULES = {
+    GROUP_OPTIMIZATION: (MODULE_OPTIMIZATION_MANAGER,),
     GROUP_CREATOR: (MODULE_SOC, MODULE_LOAD, MODULE_THERMAL_COST, MODULE_EEG_WIND),
     GROUP_IMPORTER: FORECAST_IMPORT_MODULES,
     GROUP_ELECTRICAL: (MODULE_FBC,),

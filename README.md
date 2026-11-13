@@ -23,11 +23,13 @@ fixed tariffs and additional background loads. FBC users choose their PV source.
 under its respective integration entry. Existing
 standalone or grouped entries migrate at startup. Thermal operating costs and a feed-forward thermal MILP operation planner are implemented. Runtime-cost
 forecasts are created under BEMS entity creator.
-Thermal MILP planners calculate on the fixed HH:00/15/30/45 clock; startup and
-reloads can calculate immediately.
-Thermal runtime-cost forecasts refresh on changed shared inputs and the same
-quarter-hour clock, without minute polling. Unchanged inputs within a slot reuse
-the calculation, and identical outputs do not produce duplicate publications.
+The **Optimization Manager** runs operation planners in a dependency-checked
+sequence on the fixed HH:00/15/30/45 clock. Runtime costs are prepared before
+their consuming planner. Configure the sequence and global time budgets in the
+manager entry; **Recalculate now** explicitly starts a complete manual run.
+Input/settings changes and reloads wait for the next clock tick. Connected plans
+publish together, while FBC bypass and seasonal safeguards remain immediate.
+[Optimization Manager setup and failure policy](docs/optimization_manager.md).
 [Service-device setup and migration](docs/grouped_setup.md).
 [Thermal runtime-cost setup and output](docs/thermal_runtime_cost.md).
 

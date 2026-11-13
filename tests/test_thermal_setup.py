@@ -278,6 +278,9 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
         self.hass.config_entries.async_unload_platforms = unload
         with patch.dict('sys.modules', injected):
             await async_setup_entry(self.hass, self.group)
+            from custom_components.ha_bems.optimization import manager
+            control = manager(self.hass)
+            self.assertTrue(await control.async_run())
             await asyncio.gather(*tasks)
             tasks.clear()
             self.assertEqual(len(sensors), 4)
@@ -293,11 +296,14 @@ class ThermalSetupTests(unittest.IsolatedAsyncioTestCase):
             dispatcher.async_dispatcher_send(self.hass, import_signal('import'))
             await asyncio.gather(*tasks)
             tasks.clear()
+            self.assertEqual(costs[0].native_value, original)
+            self.assertTrue(await control.async_run())
             self.assertGreater(costs[0].native_value, original)
             self.assertEqual(costs[0].native_value, costs[1].native_value)
             coordinators(self.hass)['import'].last_update_success = False
             dispatcher.async_dispatcher_send(self.hass, import_signal('import'))
             await asyncio.gather(*tasks)
+            await control.async_run()
             self.assertTrue(all(item.extra_state_attributes['using_previous_forecast'] for item in costs))
             self.assertTrue(all('forecast' in item.extra_state_attributes for item in costs))
             self.assertTrue(await async_unload_entry(self.hass, self.group))

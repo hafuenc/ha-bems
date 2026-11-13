@@ -24,6 +24,7 @@ def entry(identifier, module='pv_forecast_import', **config):
 class Hass:
     def __init__(self):
         self.data = {}
+        self.bus = SimpleNamespace(async_listen_once=lambda *args: lambda: None)
         self.entries = [entry('pv-main', forecast_entity='sensor.pv', forecast_max_age_minutes=180)]
         self.config_entries = SimpleNamespace(async_entries=lambda domain: self.entries)
         self.state = SimpleNamespace(entity_id='sensor.pv', state='0', attributes={

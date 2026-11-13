@@ -33,7 +33,7 @@ class GroupFlowTests(unittest.IsolatedAsyncioTestCase):
         hass.entries = []
         flow = HABEMSConfigFlow()
         flow.hass = hass
-        self.assertEqual((await flow.async_step_user())['menu_options'], ['creator_entry','importer_entry','add_planner'])
+        self.assertEqual((await flow.async_step_user())['menu_options'], ['creator_entry','importer_entry','add_planner','optimization_manager'])
         result = await flow.async_step_creator_entry()
         self.assertEqual(result['title'], 'BEMS entity creator')
         self.assertEqual(result['data'], {'layout': 'separate_entries', 'group':'entity_creator', 'items': {}})
@@ -337,6 +337,7 @@ class GroupRuntimeTests(unittest.IsolatedAsyncioTestCase):
         dispatcher.async_dispatcher_send = lambda *args: None
         events = ModuleType('homeassistant.helpers.event')
         events.async_track_state_change_event = lambda *args: (lambda: None)
+        events.async_track_time_change = lambda *args, **kwargs: (lambda: None)
         injected.update({'homeassistant.const': platform, 'homeassistant.helpers.dispatcher': dispatcher,
                          'homeassistant.helpers.event': events})
         async def forward(_entry, platforms):

@@ -204,9 +204,10 @@ and excluded from Recorder to avoid storing large rolling attribute lists.
 
 `source_updated_at` is the oldest contributing source timestamp, including the
 optional load and valid temperature source. Regenerating the cost forecast does
-not reset it. `generated_at` records the calculation time separately. Sources
-refresh the output through shared-input subscriptions and the fixed
-HH:00/15/30/45 clock, without a separate minute poll. Repeated requests within
+not reset it. `generated_at` records the calculation time separately. The
+Optimization Manager refreshes costs before the consuming planner on the fixed
+HH:00/15/30/45 clock. Changed sources wait for the next run; Recalculate now is
+the explicit manual exception. Repeated requests within
 the same quarter-hour reuse the calculation when the validated inputs and
 settings are unchanged. Input health and coverage are checked before reuse.
 The cost calculation runs outside the event loop.

@@ -418,6 +418,8 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
         self.root.add_update_listener=lambda _:lambda:None
         with patch.dict('sys.modules',injected):
             self.assertTrue(await async_setup_entry(self.hass,self.root))
+            from custom_components.ha_bems.optimization import manager
+            self.assertTrue(await manager(self.hass).async_run())
             self.assertEqual(len(added),9)
             operation=next(item for item in added if hasattr(item,'is_on'))
             duration=next(item for item in added if hasattr(item,'native_value'))
@@ -428,7 +430,7 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(duration.extra_state_attributes['forecast'][0]['duration_end_h'],.5)
             clock.assert_called_once()
             self.assertEqual(clock.call_args.kwargs,{'minute':[0,15,30,45],'second':0})
-            self.assertEqual(source.call_args.args[1],['sensor.cost'])
+            source.assert_not_called()  # Only the manager starts optimization.
             coordinator=self.planners(self.hass)['dhw']
             outputs={item._attr_unique_id:item for item in added}
             level=outputs['dhw_storage_level']
@@ -482,11 +484,9 @@ class ThermalPlannerSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(start.available)
             self.assertIsNone(outputs['dhw_solver_gap'].native_value)
             with patch.object(self.hass,'async_create_task',create=True) as schedule:
-                source.call_args.args[2](None)
-                schedule.assert_not_called()
-                coordinator.awaiting_inputs=True
                 with patch.object(coordinator,'async_request_refresh',new=Mock(return_value=None)):
-                    source.call_args.args[2](None)
+                    clock.call_args.args[1](None)
                     schedule.assert_called_once()
+                    schedule.call_args.args[0].close()
             self.assertTrue(await async_unload_entry(self.hass,self.root))
         self.assertNotIn('dhw',self.planners(self.hass))

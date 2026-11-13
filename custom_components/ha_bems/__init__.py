@@ -28,6 +28,9 @@ async def async_setup(hass, config):
     migrate_constraint_settings(hass)
     await async_flatten_entries(hass)
     await async_register_characteristic_frontend(hass)
+    from .optimization import ensure_manager_entry
+
+    await ensure_manager_entry(hass)
     return True
 
 
@@ -50,7 +53,7 @@ async def async_migrate_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bo
 async def async_setup_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool:
     from homeassistant.const import Platform
 
-    from .const import DOMAIN, MODULE_FBC, MODULE_THERMAL_PLAN
+    from .const import DOMAIN, MODULE_FBC, MODULE_THERMAL_PLAN, MODULE_OPTIMIZATION_MANAGER
     from .entries import enabled_module_entries, module_type
 
     if entry.data.get("migrated_to") or "entry_split_pending" in entry.data or entry.data.get("entry_split_staging"):
@@ -64,6 +67,8 @@ async def async_setup_entry(hass: "HomeAssistant", entry: "ConfigEntry") -> bool
     for item in items:
         await _async_setup_module(hass, item, entry)
     platforms = [Platform.SENSOR]
+    if any(module_type(item) == MODULE_OPTIMIZATION_MANAGER for item in items):
+        platforms.append(Platform.BUTTON)
     if any(module_type(item) == MODULE_THERMAL_PLAN for item in items):
         platforms.append(Platform.BINARY_SENSOR)
     sensor_platforms = list(platforms)
@@ -82,11 +87,16 @@ async def _async_setup_module(hass, entry, parent):
     from homeassistant.helpers.dispatcher import async_dispatcher_send
     from homeassistant.helpers.event import async_track_state_change_event
 
-    from .const import CONF_MODULE, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, FORECAST_IMPORT_MODULES, MODULE_EEG_WIND
+    from .const import CONF_MODULE, MODULE_FBC, MODULE_LOAD, MODULE_SOC, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN, FORECAST_IMPORT_MODULES, MODULE_EEG_WIND, MODULE_OPTIMIZATION_MANAGER
     from .import_registry import coordinators, import_signal, planners
 
     config = {**entry.data, **entry.options}
     module = config.get(CONF_MODULE, MODULE_SOC)
+    from .optimization import ensure_runtime
+
+    control = ensure_runtime(hass) if module in (MODULE_OPTIMIZATION_MANAGER, MODULE_FBC, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN) else None
+    if module == MODULE_OPTIMIZATION_MANAGER:
+        return
     registry = None
     if module == MODULE_EEG_WIND:
         from .wind_coordinator import WindEnergyCoordinator
@@ -115,6 +125,13 @@ async def _async_setup_module(hass, entry, parent):
         registry = planners(hass)
     if registry is not None:
         registry[entry.entry_id] = coordinator
+        if module in (MODULE_FBC, MODULE_THERMAL_COST, MODULE_THERMAL_PLAN):
+            coordinator.identifier = entry.entry_id
+            coordinator.optimization_module = module
+            control.members[entry.entry_id] = coordinator
+            if module == MODULE_THERMAL_PLAN:
+                await coordinator.async_restore_plan()
+            control.restore_output(coordinator)
         previous_input = None
 
         @callback
@@ -133,6 +150,10 @@ async def _async_setup_module(hass, entry, parent):
 
         @callback
         def cleanup():
+            if control and control.members.get(entry.entry_id) is coordinator:
+                if coordinator.data and coordinator.last_update_success:
+                    control.outputs[entry.entry_id] = coordinator.data
+                control.members.pop(entry.entry_id)
             if registry.get(entry.entry_id) is coordinator:
                 registry.pop(entry.entry_id)
                 # Removal must always invalidate consumers, even when the
@@ -142,32 +163,6 @@ async def _async_setup_module(hass, entry, parent):
         @callback
         def refresh(_event):
             hass.async_create_task(coordinator.async_request_refresh())
-
-        if module == MODULE_THERMAL_PLAN:
-            from homeassistant.helpers.dispatcher import async_dispatcher_connect
-            from homeassistant.helpers.event import async_track_time_change
-
-            @callback
-            def input_ready(_event=None):
-                if coordinator.awaiting_inputs:
-                    refresh(None)
-
-            # The planner owns its clock, independent of whether either
-            # output entity is enabled in the entity registry.
-            entry.async_on_unload(async_track_time_change(
-                hass, refresh, minute=[0, 15, 30, 45], second=0))
-            entry.async_on_unload(async_track_state_change_event(
-                hass, [config["cost_entity"]], input_ready))
-            from .operation_constraints import constraint_selection
-
-            source, _ = constraint_selection(hass, config)
-            references = [config.get("runtime_temperature_entry_id")]
-            if source:
-                references.append(source.split(":", 1)[1])
-            for reference in references:
-                if reference:
-                    entry.async_on_unload(async_dispatcher_connect(
-                        hass, import_signal(reference), input_ready))
 
         entry.async_on_unload(cleanup)
         if module != MODULE_FBC:

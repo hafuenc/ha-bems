@@ -85,16 +85,24 @@ def read_constraint_forecast(hass, config, now):
         return None
     kind, identifier = source.split(":", 1)
     if kind == "imported":
-        rows, _ = read_forecast_import(hass, identifier, MODULE_OPERATION_IMPORT, now)
+        from .optimization import current_run, plan_snapshot
+
+        upstream = constraint_dependency(hass, config) if current_run(hass) else None
+        if upstream:
+            rows = permission_rows(plan_snapshot(hass, upstream)["forecast"], {}, now)
+        else:
+            rows, _ = read_forecast_import(hass, identifier, MODULE_OPERATION_IMPORT, now)
     else:
         item = next((item for item in all_module_entries(hass)
                      if item.entry_id == identifier and module_type(item) == MODULE_THERMAL_PLAN), None)
         if item is None or not item_enabled(item):
             raise ValueError("The selected MILP operation plan no longer exists or is disabled")
         coordinator = planners(hass).get(identifier)
-        if coordinator is None or not snapshot_usable(coordinator, now):
+        from .optimization import current_run, plan_snapshot
+
+        if coordinator is None or (not current_run(hass) and not snapshot_usable(coordinator, now)):
             raise ValueError("The selected MILP operation plan is unavailable")
-        rows = permission_rows(coordinator.data.get("forecast"), {}, now)
+        rows = permission_rows(plan_snapshot(hass, identifier).get("forecast"), {}, now)
     return [{**row, "allowed": 1 - row["allowed"] if mode == "inverted" else row["allowed"]} for row in rows]
 
 

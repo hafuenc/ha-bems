@@ -30,6 +30,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 async def _async_setup_item(hass, entry, async_add_entities):
     module = module_type(entry)
+    from .const import MODULE_OPTIMIZATION_MANAGER
+
+    if module == MODULE_OPTIMIZATION_MANAGER:
+        from .optimization import ensure_runtime
+        add_item_entities(async_add_entities, [OptimizationStatusSensor(ensure_runtime(hass))], entry)
+        return
     if module == MODULE_SOC:
         add_item_entities(async_add_entities, [SeasonalSOCSensor(entry)], entry)
         return
@@ -55,6 +61,33 @@ async def _async_setup_item(hass, entry, async_add_entities):
 
         entities.append(ThermalCharacteristicSensor(coordinator, entry, "cop"))
     add_item_entities(async_add_entities, entities, entry)
+
+
+class OptimizationStatusSensor(SensorEntity):
+    _attr_name = "Optimization status"
+    _attr_has_entity_name = True
+    _attr_unique_id = "ha_bems_optimization_manager_status"
+    _attr_icon = "mdi:sort-clock-ascending"
+    _attr_should_poll = False
+
+    def __init__(self, control):
+        from .optimization_entity import device_info
+
+        self.control = control
+        self._attr_device_info = device_info()
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        self.async_on_remove(self.control.listen(self.async_write_ha_state))
+
+    @property
+    def native_value(self):
+        return self.control.status
+
+    @property
+    def extra_state_attributes(self):
+        return {"calculation_schedule": "quarter_hour_clock", "interval_minutes": 15,
+                **self.control.details}
 
 
 class WindEnergySensor(CoordinatorEntity, SensorEntity):

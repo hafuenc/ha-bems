@@ -135,6 +135,11 @@ class ThermalCostCoordinator(DataUpdateCoordinator):
         return result
 
     async def _async_update_data(self):
+        from .optimization import managed_result, UNMANAGED
+
+        existing = managed_result(self)
+        if existing is not UNMANAGED:
+            return existing
         now = dt_util.now()
         try:
             # Always validate current input health/coverage before reusing a

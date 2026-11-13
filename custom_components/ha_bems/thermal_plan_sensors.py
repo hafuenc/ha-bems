@@ -116,6 +116,15 @@ class ThermalPlannerStatusSensor(ThermalPlanEntity, SensorEntity):
     def extra_state_attributes(self):
         data = self.coordinator.data or {}
         valid = self.coordinator.last_update_success and self.current_row is not None
+        from .optimization import manager
+
+        control = manager(self.coordinator.hass)
+        limit = self.coordinator.config.get("solver_time_limit_s", 20)
+        if control:
+            try:
+                limit = control.settings()["planner_time_limit_s"]
+            except ValueError:
+                pass
         return {"plan_available": valid,
                 "using_previous_plan": data.get("using_previous_plan", False),
                 "reason": data.get("refresh_error") if data.get("using_previous_plan") else
@@ -123,7 +132,7 @@ class ThermalPlannerStatusSensor(ThermalPlanEntity, SensorEntity):
                           "Forecast no longer covers the current time" if self.native_value == "expired" else None,
                 "last_successful_plan_at": data.get("generated_at"),
                 "calculation_interval_minutes": 15, "calculation_schedule": "quarter_hour_clock",
-                "solver_time_limit_s": self.coordinator.config.get("solver_time_limit_s", 20),
+                "solver_time_limit_s": limit,
                 "solver_relative_gap_limit": .01}
 
 

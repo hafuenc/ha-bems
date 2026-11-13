@@ -29,7 +29,8 @@ your automations apply them to the equipment.
    steps; the effective times are published in the output attributes.
 6. Optionally select an imported constraint forecast or an existing MILP operation
    plan. Choose **Direct** (1 permits, 0 blocks) or **Inverted** (1 blocks, 0 permits).
-   Permission never forces operation. The default solver limit is 20 seconds.
+   Permission never forces operation. The default global solver limit in
+   **Optimization Manager** is 20 seconds.
 7. Check the feasible-plan preview and save.
 
 **24 h/24h means continuous operation; 12 h/24h means running half the time on
@@ -56,12 +57,12 @@ The heating cutoff sets demand to zero; it does not itself forbid operation.
 ## Feed-forward state and restarts
 
 Optimization starts on the quarter-hour clock: **HH:00, HH:15, HH:30 and HH:45**.
-Each planner solves at most once per slot, using the latest available inputs.
-Forecast updates between those times are used at the next scheduled run.
-Startup, reloads and configuration changes can calculate immediately. If inputs
-are temporarily missing, their arrival can complete the pending run. A failed
-solver attempt waits until the next quarter-hour instead of repeatedly solving.
-The clock remains active even if an output entity is disabled.
+The **Optimization Manager** executes the configured sequence at most once per
+scheduled slot. Forecast and setting changes wait for the next tick; startup and
+reloads restore valid saved plans without solving immediately. **Recalculate now**
+is an explicit manual exception and recalculates the complete sequence, preserving
+current-interval commitments. The clock remains active even if an output entity
+is disabled. See [Optimization Manager](optimization_manager.md).
 
 There is **no equipment feedback**. The estimated storage level advances only
 along the previously published operation plan, assuming that plan was followed.
@@ -108,8 +109,9 @@ from its forecast attributes.
 Existing planner/import configurations retain their effective permissions on
 upgrade: the former importer interpretation moves into each planner's settings.
 
-The downstream planner refreshes its upstream BEMS planner first and consumes
-the resulting validated permissions. Circular dependencies are rejected.
+The manager calculates the upstream BEMS planner first. The downstream planner
+consumes its newly staged validated permissions. Circular dependencies and
+sequences conflicting with dependencies are rejected.
 This is sequential planning: UFH cannot revise the higher-priority DHW plan.
 Check that their combined runtime requirements can fit the shared equipment.
 No fixed subtraction between DHW and UFH runtime settings is applied.

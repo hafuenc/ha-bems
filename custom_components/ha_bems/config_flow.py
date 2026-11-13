@@ -77,6 +77,17 @@ class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
 
     def _finish(self, module):
         values = {**self._values(), CONF_MODULE: module}
+        if module in (MODULE_THERMAL_PLAN, MODULE_THERMAL_COST):
+            from .optimization import manager, ordered_planners
+
+            control = manager(self.hass)
+            if control:
+                identifier = getattr(self, "_flat_item_id", None) or values.get(CONF_ITEM_ID, "new_planner")
+                try:
+                    ordered_planners(self.hass, control.settings()["planner_order"], {identifier: values})
+                except ValueError as err:
+                    return self.async_show_form(step_id="optimization_conflict", data_schema=vol.Schema({}),
+                        errors={"base": "invalid_optimization_sequence"}, description_placeholders={"reason": str(err)})
         if module == MODULE_EEG_WIND and values.get(CONF_ENABLED, True) and not getattr(self, "_wind_unlocked", False):
             return self.async_abort(reason="wind_setup_locked")
         # Retired setting is ignored at runtime and dropped on options save.
@@ -161,6 +172,77 @@ class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
             return await self.async_step_monthly()
         fields = self._name_fields("Battery settings")
         return self.async_show_form(step_id="soc", data_schema=vol.Schema(fields))
+
+    async def async_step_optimization_manager(self, user_input=None):
+        from .const import MODULE_OPTIMIZATION_MANAGER
+        from .entries import all_module_entries, module_type
+        from .optimization import DEFAULT_SETTINGS, ordered_planners, validate_settings
+
+        if not isinstance(self, config_entries.OptionsFlow):
+            await self.async_set_unique_id("optimization_manager")
+            if any(module_type(item) == MODULE_OPTIMIZATION_MANAGER for item in all_module_entries(self.hass)):
+                return self.async_abort(reason="already_configured")
+            self._abort_if_unique_id_configured()
+        errors, reason = {}, ""
+        if user_input is not None:
+            self._remember({**user_input, "name": "Optimization Manager"})
+            try:
+                validate_settings(self._values())
+                order = ordered_planners(self.hass, [] if user_input.get("change_sequence") else self._values().get("planner_order", []))
+            except ValueError as err:
+                errors["base"], reason = "invalid_optimization_sequence", str(err)
+            else:
+                if user_input.get("change_sequence"):
+                    self._optimization_order = []
+                    return await self.async_step_optimization_sequence()
+                self._remember({"planner_order": order})
+                self._draft.pop("change_sequence", None)
+                return self._finish(MODULE_OPTIMIZATION_MANAGER)
+        values = {**DEFAULT_SETTINGS, **self._values(), **(user_input or {})}
+        try:
+            sequence = ordered_planners(self.hass, values["planner_order"])
+            names = {item.entry_id: item.title for item in all_module_entries(self.hass)}
+            current = " → ".join(names[key] for key in sequence) or "No operation planners configured"
+        except ValueError as err:
+            current = str(err)
+        return self.async_show_form(step_id="optimization_manager", errors=errors,
+            description_placeholders={"sequence": current, "reason": reason}, data_schema=vol.Schema({
+                vol.Required("planner_time_limit_s", default=values["planner_time_limit_s"]): _number(1, 120, "s"),
+                vol.Required("total_time_limit_s", default=values["total_time_limit_s"]): _number(1, 840, "s"),
+                vol.Required("change_sequence", default=False): bool}))
+
+    async def async_step_optimization_sequence(self, user_input=None):
+        from .const import MODULE_OPTIMIZATION_MANAGER
+        from .optimization import planning_graph, ordered_planners
+
+        items, dependencies = planning_graph(self.hass)
+        selected = self._optimization_order
+        errors, reason = {}, ""
+        if user_input is not None:
+            key = user_input.get("next_planner")
+            if key in items and key not in selected and dependencies[key] <= set(selected):
+                selected.append(key)
+            else:
+                errors["base"], reason = "invalid_optimization_sequence", "Choose a planner whose dependencies are already scheduled"
+        if len(selected) == len(items):
+            try:
+                ordered_planners(self.hass, selected)
+            except ValueError as err:
+                errors["base"], reason = "invalid_optimization_sequence", str(err)
+            else:
+                self._remember({"planner_order": list(selected)})
+                self._draft.pop("change_sequence", None)
+                return self._finish(MODULE_OPTIMIZATION_MANAGER)
+        choices = [{"value": key, "label": item.title} for key, item in items.items()
+                   if key not in selected and dependencies[key] <= set(selected)]
+        return self.async_show_form(step_id="optimization_sequence", errors=errors,
+            description_placeholders={"sequence": " → ".join(items[key].title for key in selected) or "—",
+                                      "reason": reason}, data_schema=vol.Schema({
+                vol.Required("next_planner"): _choice(choices)}))
+
+    async def async_step_optimization_conflict(self, user_input=None):
+        return await (self.async_step_thermal_plan() if self._values().get(CONF_MODULE) == MODULE_THERMAL_PLAN
+                      else self.async_step_thermal_cost())
 
     async def async_step_monthly(self, user_input=None):
         errors = {}
@@ -688,7 +770,7 @@ class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         self._split_setup = True
-        return self.async_show_menu(step_id="user", menu_options=["creator_entry", "importer_entry", "add_planner"])
+        return self.async_show_menu(step_id="user", menu_options=["creator_entry", "importer_entry", "add_planner", "optimization_manager"])
 
     async def _service_entry(self, group):
         await self.async_set_unique_id(f"service_entry:{group}")
@@ -738,6 +820,10 @@ class HABEMSConfigFlow(_ModuleSteps, config_entries.ConfigFlow, domain=DOMAIN):
 
 class HABEMSOptionsFlow(_ModuleSteps, config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
+        from .const import MODULE_OPTIMIZATION_MANAGER
+
+        if self._values().get(CONF_MODULE) == MODULE_OPTIMIZATION_MANAGER:
+            return await self.async_step_optimization_manager()
         if is_flat(self.config_entry):
             if is_split(self.config_entry):
                 group = self.config_entry.data.get(CONF_GROUP)
@@ -883,6 +969,7 @@ class HABEMSItemFlow(_ModuleSteps, config_entries.ConfigSubentryFlow):
             MODULE_EXPORT_PRICE: self.async_step_export_price, MODULE_OUTDOOR_TEMP: self.async_step_import_temperature,
             MODULE_THERMAL_COST: self.async_step_thermal_cost,
             MODULE_EEG_WIND: self.async_step_eeg_wind,
+            "optimization_manager": self.async_step_optimization_manager,
             MODULE_THERMAL_PLAN: self.async_step_thermal_plan, MODULE_OPERATION_IMPORT: self.async_step_import_operation,
         }[self._values()[CONF_MODULE]]
         return await method()

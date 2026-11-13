@@ -138,6 +138,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         dispatcher.async_dispatcher_send = lambda *args: None
         events = ModuleType('homeassistant.helpers.event')
         events.async_track_state_change_event = lambda *args: (lambda: None)
+        events.async_track_time_change = lambda *args, **kwargs: (lambda: None)
         injected.update({'homeassistant.const': const, 'homeassistant.helpers.dispatcher': dispatcher,
                          'homeassistant.helpers.event': events})
         with patch.dict('sys.modules', injected):
@@ -178,6 +179,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         dispatcher.async_dispatcher_send = lambda *args: None
         events = ModuleType('homeassistant.helpers.event')
         events.async_track_state_change_event = lambda *args: (lambda: None)
+        events.async_track_time_change = lambda *args, **kwargs: (lambda: None)
         injected.update({'homeassistant.const': const,
                          'homeassistant.helpers.dispatcher': dispatcher,
                          'homeassistant.helpers.event': events})

@@ -31,6 +31,8 @@ class BEMSCoordinator(DataUpdateCoordinator):
         await self.async_request_refresh()
 
     async def _async_update_data(self):
+        from .optimization import managed_result, UNMANAGED, input_state
+
         now = dt_util.now()
         try:
             if self.module != MODULE_FBC:
@@ -48,13 +50,16 @@ class BEMSCoordinator(DataUpdateCoordinator):
 
             values = []
             for entity_id in (self.config["soc_entity"], self.config[CONF_ENTITY]):
-                state = self.hass.states.get(entity_id)
+                state = input_state(self.hass, entity_id)
                 if state is None or state.attributes.get("unit_of_measurement") != "%":
                     raise ValueError("SOC and seasonal threshold sources must be available percentages")
                 values.append(validate_threshold(state.state))
             # The seasonal safeguard does not need a working PV forecast.
             if values[0] <= values[1]:
                 return self._maximum_charging_plan(values[1], now)
+            existing = managed_result(self)
+            if existing is not UNMANAGED:
+                return existing
             intervals, source_info = read_pv_import(self.hass, self.config, now)
             load_intervals, load_info = read_load_input(self.hass, self.config, now)
             result = await self.hass.async_add_executor_job(

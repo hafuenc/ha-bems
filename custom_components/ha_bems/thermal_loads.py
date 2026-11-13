@@ -59,12 +59,14 @@ def read_additional_loads(hass, config, now):
         coordinator = planners(hass).get(identifier)
         if entry is None or not item_enabled(entry) or coordinator is None:
             raise ForecastConfigurationError("The selected higher-priority plan was removed, disabled or is not loaded")
-        if not snapshot_usable(coordinator, now):
+        from .optimization import current_run, plan_snapshot, input_state
+
+        if not current_run(hass) and not snapshot_usable(coordinator, now):
             raise ForecastUnavailable("The selected higher-priority plan is unavailable")
-        plan = coordinator.data
+        plan = plan_snapshot(hass, identifier)
         operations = validate_forecast(plan.get("forecast"), now, "operation", True)
         cost_entity = ({**entry.data, **entry.options}).get("cost_entity")
-        state = hass.states.get(cost_entity)
+        state = input_state(hass, cost_entity)
         if state is None or state.state in ("unknown", "unavailable"):
             raise ForecastUnavailable("Electrical power forecast for the higher-priority plan is unavailable")
         if state.attributes.get("unit_of_measurement") != "EUR/timestep" or type(state.attributes.get("schema_version")) is not int or state.attributes["schema_version"] != 1:

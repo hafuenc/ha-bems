@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 — Optimization Manager
+
+- Add a single English-language Optimization Manager with dependency-checked
+  sequence, global solver/time budgets, Recalculate now and run diagnostics.
+- Schedule operation planners centrally on the quarter-hour clock. Settings and
+  forecast changes wait for the next run; explicit manual runs preserve ongoing
+  thermal commitments.
+- Stage runtime costs and upstream plans for downstream calculations, then publish
+  connected groups together with shared run identifiers. Independent groups can
+  succeed when another fails; failed groups retain bounded, marked prior plans.
+- Preserve existing module/entity IDs, thermal history and immediate FBC bypass
+  and seasonal safeguards. Automatically create the manager entry on update.
+
 ## 0.12.2
 
 - Reduce the COP and runtime diagnostic curve sampling from 0.5 °C to 1 °C, retaining exact reference points, clipping boundaries and cutoff transitions. Operational COP/runtime calculations retain their full temperature resolution.

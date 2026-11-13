@@ -8,7 +8,8 @@
         "menu_options": {
           "creator_entry": "BEMS entity creator",
           "importer_entry": "BEMS forecast importer",
-          "add_planner": "Add operation planner"
+          "add_planner": "Add operation planner",
+          "optimization_manager": "Optimization Manager"
         }
       },
       "entity_creator": {
@@ -31,7 +32,7 @@
       },
       "thermal_storage": {
         "title": "Storage duration & operation constraints",
-        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. The lower storage bound is always 0 h. Leave the initial value empty to start at 50% of the storage duration. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. At the end of the planning horizon, storage must be at least 50% of its capacity, independently of the initial or current storage level. The optimizer may finish above 50%. Select an imported constraint forecast or an existing MILP operation plan. Direct: 1 allows operation, 0 blocks it. Inverted: 1 blocks operation, 0 allows it. For DHW to UFH, select the DHW operation plan and invert it. With no constraint selected, interpretation is ignored. {reason}",
+        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. The lower storage bound is always 0 h. Leave the initial value empty to start at 50% of the storage duration. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. At the end of the planning horizon, storage must be at least 50% of its capacity, independently of the initial or current storage level. The optimizer may finish above 50%. Select an imported constraint forecast or an existing MILP operation plan. Direct: 1 allows operation, 0 blocks it. Inverted: 1 blocks operation, 0 allows it. For DHW to UFH, select the DHW operation plan and invert it. With no constraint selected, interpretation is ignored. {reason} Runtime solver limits are configured centrally in Optimization Manager.",
         "data": {
           "storage_duration_h": "Storage duration",
           "initial_storage_h": "Initial storage duration (optional)",
@@ -371,6 +372,26 @@
           "share_percent": "Constant share",
           "wind_curve_text": "Wind speed (m/s); electrical power (kW)"
         }
+      },
+      "optimization_manager": {
+        "title": "Optimization Manager",
+        "description": "All operation planners run in sequence at HH:00, HH:15, HH:30 and HH:45. Settings apply at the next scheduled run. Recalculate now explicitly starts the entire sequence between scheduled runs. Current sequence: {sequence}. The planner limit applies to each MILP solver. The total budget includes input preparation and reserves solver time for remaining planners; results finishing beyond the budget are discarded. Solver cleanup and preparation can slightly exceed the budget. Connected plans are published together; independent groups can complete separately. {reason}",
+        "data": {
+          "planner_time_limit_s": "Maximum solver time per planner",
+          "total_time_limit_s": "Total optimization time budget",
+          "change_sequence": "Change optimization sequence"
+        }
+      },
+      "optimization_sequence": {
+        "title": "Optimization sequence",
+        "description": "Choose each planner in execution order. Only planners whose dependencies have already been selected are offered. Sequence so far: {sequence}. Disabled planners retain their place and are skipped at runtime. The sequence is saved after the final selection. {reason}",
+        "data": {
+          "next_planner": "Next operation planner"
+        }
+      },
+      "optimization_conflict": {
+        "title": "Optimization sequence conflict",
+        "description": "{reason}. Correct the dependency or update the sequence in Optimization Manager, then try again."
       }
     },
     "error": {
@@ -388,7 +409,8 @@
       "wind_setup_disabled": "The bundled EEG unlock key is missing or invalid. Reinstall HA-BEMS or contact its maintainer.",
       "invalid_wind_password": "Incorrect shared release password.",
       "wind_password_locked": "Too many incorrect passwords. Try again in five minutes.",
-      "invalid_wind_settings": "Check coordinates, hub height (10-180 m), share (0-100%) and the curve. Enter at least two strictly increasing, nonnegative wind speeds with finite, nonnegative powers."
+      "invalid_wind_settings": "Check coordinates, hub height (10-180 m), share (0-100%) and the curve. Enter at least two strictly increasing, nonnegative wind speeds with finite, nonnegative powers.",
+      "invalid_optimization_sequence": "The optimization sequence or time limits conflict with the configured dependencies."
     },
     "abort": {
       "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items.",
@@ -736,7 +758,7 @@
       },
       "thermal_storage": {
         "title": "Storage duration & operation constraints",
-        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. The lower storage bound is always 0 h. Leave the initial value empty to start at 50% of the storage duration. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. At the end of the planning horizon, storage must be at least 50% of its capacity, independently of the initial or current storage level. The optimizer may finish above 50%. Select an imported constraint forecast or an existing MILP operation plan. Direct: 1 allows operation, 0 blocks it. Inverted: 1 blocks operation, 0 allows it. For DHW to UFH, select the DHW operation plan and invert it. With no constraint selected, interpretation is ignored. {reason}",
+        "description": "Storage duration expresses thermal capacity as equivalent hours of full-output operation, before ongoing demand is deducted. For example, 6.4 h represents the heat produced in 6.4 operating hours; actual filling/emptying times depend on demand. The lower storage bound is always 0 h. Leave the initial value empty to start at 50% of the storage duration. Use Restart to explicitly reset the model, for example after a long outage. The feed-forward estimate is retained across restarts while its saved plan covers the current time. Changing storage or demand settings restarts the estimate. Minimum on/off times round upward to 15-minute steps and continue across replanning. At the end of the planning horizon, storage must be at least 50% of its capacity, independently of the initial or current storage level. The optimizer may finish above 50%. Select an imported constraint forecast or an existing MILP operation plan. Direct: 1 allows operation, 0 blocks it. Inverted: 1 blocks operation, 0 allows it. For DHW to UFH, select the DHW operation plan and invert it. With no constraint selected, interpretation is ignored. {reason} Runtime solver limits are configured centrally in Optimization Manager.",
         "data": {
           "storage_duration_h": "Storage duration",
           "initial_storage_h": "Initial storage duration (optional)",
@@ -786,6 +808,26 @@
           "share_percent": "Constant share",
           "wind_curve_text": "Wind speed (m/s); electrical power (kW)"
         }
+      },
+      "optimization_manager": {
+        "title": "Optimization Manager",
+        "description": "All operation planners run in sequence at HH:00, HH:15, HH:30 and HH:45. Settings apply at the next scheduled run. Recalculate now explicitly starts the entire sequence between scheduled runs. Current sequence: {sequence}. The planner limit applies to each MILP solver. The total budget includes input preparation and reserves solver time for remaining planners; results finishing beyond the budget are discarded. Solver cleanup and preparation can slightly exceed the budget. Connected plans are published together; independent groups can complete separately. {reason}",
+        "data": {
+          "planner_time_limit_s": "Maximum solver time per planner",
+          "total_time_limit_s": "Total optimization time budget",
+          "change_sequence": "Change optimization sequence"
+        }
+      },
+      "optimization_sequence": {
+        "title": "Optimization sequence",
+        "description": "Choose each planner in execution order. Only planners whose dependencies have already been selected are offered. Sequence so far: {sequence}. Disabled planners retain their place and are skipped at runtime. The sequence is saved after the final selection. {reason}",
+        "data": {
+          "next_planner": "Next operation planner"
+        }
+      },
+      "optimization_conflict": {
+        "title": "Optimization sequence conflict",
+        "description": "{reason}. Correct the dependency or update the sequence in Optimization Manager, then try again."
       }
     },
     "error": {
@@ -803,7 +845,8 @@
       "wind_setup_disabled": "The bundled EEG unlock key is missing or invalid. Reinstall HA-BEMS or contact its maintainer.",
       "invalid_wind_password": "Incorrect shared release password.",
       "wind_password_locked": "Too many incorrect passwords. Try again in five minutes.",
-      "invalid_wind_settings": "Check coordinates, hub height (10-180 m), share (0-100%) and the curve. Enter at least two strictly increasing, nonnegative wind speeds with finite, nonnegative powers."
+      "invalid_wind_settings": "Check coordinates, hub height (10-180 m), share (0-100%) and the curve. Enter at least two strictly increasing, nonnegative wind speeds with finite, nonnegative powers.",
+      "invalid_optimization_sequence": "The optimization sequence or time limits conflict with the configured dependencies."
     },
     "abort": {
       "already_configured": "This service entry already exists. Open Configure on its integration entry to manage its items.",

@@ -144,7 +144,10 @@ class ThermalPlanSteps:
         fields[vol.Required("constraint_mode", default=mode)] = selector.SelectSelector({"mode": "dropdown", "options": [
             {"value": "direct", "label": "Direct: 1 allows operation, 0 blocks operation"},
             {"value": "inverted", "label": "Inverted: 1 blocks operation, 0 allows operation"}]})
-        fields[vol.Required("solver_time_limit_s", default=values.get("solver_time_limit_s", 20))] = number_selector(1, 120, "s")
+        from .optimization import manager
+
+        if manager(self.hass) is None:
+            fields[vol.Required("solver_time_limit_s", default=values.get("solver_time_limit_s", 20))] = number_selector(1, 120, "s")
         return self.async_show_form(step_id="thermal_storage", errors=errors, description_placeholders=placeholders, data_schema=vol.Schema(fields))
 
     async def _async_plan_preview(self):
@@ -154,6 +157,10 @@ class ThermalPlanSteps:
         from .forecast import parse_timestamp
 
         config = self._values()
+        from .optimization import manager
+
+        if control := manager(self.hass):
+            config = {**config, "solver_time_limit_s": control.settings()["planner_time_limit_s"]}
         identifier = getattr(self, "_flat_item_id", None) or config.get("item_id", "new_planner")
         validate_hierarchy(self.hass, identifier, config)
         now = dt_util.now()

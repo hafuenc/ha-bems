@@ -70,8 +70,15 @@ def projected_state(plan, now):
 
 
 async def read_plan_inputs(hass, config, now):
-    rows, info = await _async_read_forecast(hass, {"forecast_entity": config["cost_entity"]},
-        "Thermal runtime cost", "EUR/timestep", "cost_eur_per_timestep", False)
+    from .optimization import current_run, cost_owner, input_state
+
+    if current_run(hass) and cost_owner(hass, config["cost_entity"]):
+        state = input_state(hass, config["cost_entity"])
+        rows = validate_forecast(state.attributes["forecast"], now, "cost_eur_per_timestep", False)
+        info = {"source_updated_at": state.attributes["source_updated_at"]}
+    else:
+        rows, info = await _async_read_forecast(hass, {"forecast_entity": config["cost_entity"]},
+            "Thermal runtime cost", "EUR/timestep", "cost_eur_per_timestep", False)
     rows = rows[:289]
     temperatures = None
     if config["runtime_model"] == "lookup":
@@ -104,6 +111,20 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         # Changes to the storage/demand model explicitly restart its estimate.
         self._model_key = model_key(self.config)
 
+    async def async_restore_plan(self):
+        """Restore published history while waiting for the next common clock tick."""
+        saved = await self._store.async_load()
+        self._loaded = True
+        if not saved or saved.get("model_key") != self._model_key:
+            return
+        self._plan = saved["plan"]
+        now = dt_util.now().astimezone(UTC)
+        retained = self.retained_plan(now, "Waiting for the next Optimization Manager run")
+        if retained:
+            self.data = retained
+            self._last_solve_slot = quarter_slot(parse_timestamp(self._plan["generated_at"]))
+            self.plan_status = self._plan["solver_status"]
+
     def retained_plan(self, now, reason):
         """Keep advancing the last published plan during a bounded refresh gap."""
         if not self._plan or now - parse_timestamp(self._plan["generated_at"]) > timedelta(hours=1):
@@ -126,8 +147,13 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         self._previous_health = health
 
     async def _async_update_data(self):
+        from .optimization import managed_result, UNMANAGED, current_run
+
+        existing = managed_result(self)
+        if existing is not UNMANAGED:
+            return existing
         now = dt_util.now().astimezone(UTC)
-        if self._last_solve_slot == quarter_slot(now):
+        if not current_run(self.hass) and self._last_solve_slot == quarter_slot(now):
             if self._slot_error:
                 if retained := self.retained_plan(now, self._slot_error):
                     return retained
@@ -161,6 +187,9 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         return result
 
     async def _calculate(self):
+        from .optimization import current_run, plan_snapshot
+
+        run = current_run(self.hass)
         now = dt_util.now().astimezone(UTC)
         self.awaiting_inputs = False
         validate_plan_settings(self.config)
@@ -172,8 +201,11 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             coordinator = planners(self.hass).get(upstream)
             if coordinator is None:
                 raise ValueError("The upstream thermal planner is not loaded")
-            await coordinator.async_request_refresh()
-            if not coordinator.last_update_success:
+            if run:
+                plan_snapshot(self.hass, upstream)
+            else:
+                await coordinator.async_request_refresh()
+            if not run and not coordinator.last_update_success:
                 raise ValueError("The upstream thermal planner has no valid plan")
         source, mode = constraint_selection(self.hass, self.config)
         if source and source.startswith("imported:"):
@@ -181,7 +213,8 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             coordinator = coordinators(self.hass).get(reference)
             if coordinator is None:
                 raise ValueError("The selected operation constraint import is not loaded")
-            await coordinator.async_request_refresh()
+            if not run:
+                await coordinator.async_request_refresh()
         rows, runtimes, allowed, info = await read_plan_inputs(self.hass, self.config, now)
         self.awaiting_inputs = False
         # Regular runs model the complete clock-aligned quarter-hour, even
@@ -190,6 +223,10 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         planning_at = now
         if self._last_solve_slot is not None:
             planning_at = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
+        if run:
+            planning_at = run.now
+            if run.reason == "scheduled" and self._plan:
+                planning_at = run.now.replace(minute=(run.now.minute // 15) * 15, second=0, microsecond=0)
         if not self._loaded:
             saved = await self._store.async_load()
             if saved and saved.get("model_key") == self._model_key:
@@ -212,7 +249,8 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
         self._last_solve_slot = quarter_slot(now)
         self._slot_error = None
         result = await self.hass.async_add_executor_job(solve_plan,
-            [row["cost_eur_per_timestep"] for row in rows], runtimes, durations, level, self.config,
+            [row["cost_eur_per_timestep"] for row in rows], runtimes, durations, level,
+            {**self.config, "solver_time_limit_s": run.solver_limit} if run else self.config,
             previous, elapsed, allowed, fixed, terminal)
         if dt_util.now() >= parse_timestamp(rows[0]["end"]):
             raise ValueError("A timestep elapsed during optimization; waiting for refreshed forecasts")
@@ -236,6 +274,7 @@ class ThermalPlanCoordinator(DataUpdateCoordinator):
             "using_previous_plan": False,
             "filled_previous_intervals": sum(row.get(FILL_MARKER, False) for row in forecast),
             **{key: value for key, value in result.items() if key not in ("storage", "operations")}}
-        await self._store.async_save({"model_key": self._model_key, "plan": plan})
+        if not run:
+            await self._store.async_save({"model_key": self._model_key, "plan": plan})
         self._plan = plan
         return plan
