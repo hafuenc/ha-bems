@@ -129,17 +129,17 @@ output on the correct equipment power basis.
 
 The sensor state is the current maximum recommended charging power in W. The
 `forecast` attribute contains interval start/end and `power_w` through midnight.
-Recalculation occurs on input changes and every quarter-hour; numerical work
-runs outside the HA event loop. `status` is `plan_ready`, and `application` is
+The Optimization Manager recalculates FBC in its configured sequence every
+quarter-hour; numerical work runs outside the HA event loop. `status` is `plan_ready`, and `application` is
 `user_automation`. This describes a plan, never confirmation of physical application.
 
-The PV importer's one-minute health checks do not themselves trigger FBC when
-only validation time or source-age metadata changes. Forecast values/coverage,
-input failures/recovery, actual SOC and seasonal threshold changes still trigger
-recalculation. The 15-minute forecast resolution does not impose a strict
-15-minute controller update cycle.
+Forecast, load and settings changes are used at the next scheduled run, or when
+**Recalculate now** explicitly starts a manual whole-sequence run. The PV importer's
+one-minute health checks do not trigger new FBC optimization. Manual bypass and
+the seasonal SOC safeguard remain immediate and require no forecast calculation.
+Re-enabling optimization or leaving the seasonal override waits for the next
+manager run. See [Optimization Manager](optimization_manager.md).
 
-Load-provider changes and switch operations also trigger recalculation.
 `charging_limitation_enabled` describes the switch, `load_consideration_active`
 reports whether the plan used load, and `calculation_input` is `pv_generation`,
 `pv_surplus` or `maximum_charging_override`. A selected load's name, source age
@@ -149,8 +149,10 @@ and coverage use `load_` attributes, separate from PV source metadata.
 overrides. The seasonal-only plan has `forecast_status` equal to
 `not_required_for_seasonal_override`; no synthetic threshold/energy result is
 invented for that path. Otherwise, source metadata and pre-override energy
-diagnostics are included. Invalid input makes the sensor unavailable and removes
-its last exposed forecast; the user's applying automation must handle that state.
+diagnostics are included. Failed manager runs mark retained previous plans for
+at most one hour. Without a usable prior plan, or with invalid SOC/threshold inputs
+outside manual bypass, the sensor becomes unavailable and removes its exposed
+forecast; the user's applying automation must handle that state.
 
 For standalone result review, run `python -m examples.fbc_calculation`. Preserve
 existing operational control until the user decides to enable their applying

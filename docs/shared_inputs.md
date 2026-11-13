@@ -2,6 +2,10 @@
 
 HA-BEMS separates shared input preparation from device strategies.
 
+The [Optimization Manager](optimization_manager.md) schedules operation planners
+centrally. Shared inputs can refresh independently; their changed values are used
+at the next quarter-hour run or an explicit whole-sequence manual run.
+
 - **BEMS entity creator** groups generated inputs: seasonal SOC minimum,
   non-flexible building load and thermal runtime-cost forecasts.
   Existing seasonal percentage entities remain usable.
