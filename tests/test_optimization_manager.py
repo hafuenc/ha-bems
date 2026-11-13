@@ -86,6 +86,22 @@ class OptimizationTests(unittest.IsolatedAsyncioTestCase):
             release.set()
             self.assertTrue(await task)
 
+    async def test_notifications_cannot_inherit_permission_to_start_an_extra_solve(self):
+        from custom_components.ha_bems.optimization import current_run
+
+        dhw, _ = self.pair()
+        original = dhw._async_update_data
+        async def calculate():
+            self.assertIsNotNone(current_run(self.hass))
+            async def notification():
+                self.assertIsNone(current_run(self.hass))
+                with self.assertRaisesRegex(Exception, 'Waiting'):
+                    managed_result(dhw)
+            await asyncio.create_task(notification())
+            return await original()
+        with patch.object(dhw, '_async_update_data', side_effect=calculate):
+            self.assertTrue(await self.control.async_run())
+
     async def test_time_budget_and_quarter_boundary_discard_incomplete_results(self):
         dhw, ufh = self.pair()
         self.assertTrue(await self.control.async_run())

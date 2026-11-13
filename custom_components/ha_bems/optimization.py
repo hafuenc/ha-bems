@@ -1,6 +1,7 @@
 """One clock, immutable run inputs and ordered, staged BEMS planning."""
 
 from contextvars import ContextVar
+import asyncio
 from copy import deepcopy
 from datetime import UTC, timedelta
 import logging
@@ -27,7 +28,7 @@ def _now():
 
 def current_run(hass):
     run = _RUN.get()
-    return run if run and run.hass is hass else None
+    return run if run and run.hass is hass and run.task is asyncio.current_task() else None
 
 
 def manager(hass):
@@ -268,7 +269,7 @@ class OptimizationManager:
             for key in order:
                 if key not in active or registry.get(key) is not active[key]:
                     raise ValueError(f"{items[key].title} is not loaded")
-            run = SimpleNamespace(hass=self.hass, staged={}, target=None, now=now,
+            run = SimpleNamespace(hass=self.hass, task=asyncio.current_task(), staged={}, target=None, now=now,
                 reason=reason, solver_limit=settings["planner_time_limit_s"],
                 providers={key: SimpleNamespace(data=deepcopy(value.data),
                     last_update_success=value.last_update_success, last_exception=value.last_exception,
