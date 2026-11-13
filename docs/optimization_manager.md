@@ -19,10 +19,13 @@ planners before independent FBC planners. Existing item and entity IDs are retai
   capped by the per-planner limit. No new solver starts with less than one second
   available. Preparation and solver cleanup can slightly exceed the budget; late
   results are rejected. This is not a hard process-termination deadline.
-- **Change optimization sequence:** choose the next planner until the complete
-  sequence is defined. Only dependency-ready choices are offered. Disabled
-  planners retain their position. New planners are inserted in a valid position;
-  existing explicit ordering is preserved or a conflict is reported.
+- **1st operation planner, 2nd operation planner, …:** all sequence dropdowns
+  appear on the same settings page, prefilled with the saved order. Every dropdown
+  lists all configured planners. Saving requires each planner exactly once and
+  rejects backward dependencies. Invalid choices remain visible for correction.
+  Disabled planners are labelled and retain their position. New planners receive
+  an additional dropdown, initially inserted in a valid position. If the planner
+  list changes while the page is open, review the refreshed list before saving.
 - **Recalculate now:** run the entire sequence immediately. Repeated presses while
   running are ignored and never queue additional runs. This is the explicit
   exception to the regular once-per-quarter schedule.

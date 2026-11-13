@@ -375,18 +375,26 @@
       },
       "optimization_manager": {
         "title": "Optimization Manager",
-        "description": "All operation planners run in sequence at HH:00, HH:15, HH:30 and HH:45. Settings apply at the next scheduled run. Recalculate now explicitly starts the entire sequence between scheduled runs. Current sequence: {sequence}. The planner limit applies to each MILP solver. The total budget includes input preparation and reserves solver time for remaining planners; results finishing beyond the budget are discarded. Solver cleanup and preparation can slightly exceed the budget. Connected plans are published together; independent groups can complete separately. {reason}",
+        "description": "Set the complete execution order using the position dropdowns below. The saved order is preselected. Each planner must appear exactly once; dependencies are checked when saving. Disabled planners retain their place and are skipped during optimization. Current saved sequence: {sequence}. All operation planners run at HH:00, HH:15, HH:30 and HH:45. Settings apply at the next run; Recalculate now is the explicit manual exception. The solver limit applies per MILP planner. The total time budget includes preparation; late results are discarded. {reason}",
         "data": {
           "planner_time_limit_s": "Maximum solver time per planner",
           "total_time_limit_s": "Total optimization time budget",
-          "change_sequence": "Change optimization sequence"
-        }
-      },
-      "optimization_sequence": {
-        "title": "Optimization sequence",
-        "description": "Choose each planner in execution order. Only planners whose dependencies have already been selected are offered. Sequence so far: {sequence}. Disabled planners retain their place and are skipped at runtime. The sequence is saved after the final selection. {reason}",
-        "data": {
-          "next_planner": "Next operation planner"
+          "planner_position_1": "1st operation planner",
+          "planner_position_2": "2nd operation planner",
+          "planner_position_3": "3rd operation planner",
+          "planner_position_4": "4th operation planner",
+          "planner_position_5": "5th operation planner",
+          "planner_position_6": "6th operation planner",
+          "planner_position_7": "7th operation planner",
+          "planner_position_8": "8th operation planner",
+          "planner_position_9": "9th operation planner",
+          "planner_position_10": "10th operation planner",
+          "planner_position_11": "11th operation planner",
+          "planner_position_12": "12th operation planner",
+          "planner_position_13": "13th operation planner",
+          "planner_position_14": "14th operation planner",
+          "planner_position_15": "15th operation planner",
+          "planner_position_16": "16th operation planner"
         }
       },
       "optimization_conflict": {
@@ -811,18 +819,26 @@
       },
       "optimization_manager": {
         "title": "Optimization Manager",
-        "description": "All operation planners run in sequence at HH:00, HH:15, HH:30 and HH:45. Settings apply at the next scheduled run. Recalculate now explicitly starts the entire sequence between scheduled runs. Current sequence: {sequence}. The planner limit applies to each MILP solver. The total budget includes input preparation and reserves solver time for remaining planners; results finishing beyond the budget are discarded. Solver cleanup and preparation can slightly exceed the budget. Connected plans are published together; independent groups can complete separately. {reason}",
+        "description": "Set the complete execution order using the position dropdowns below. The saved order is preselected. Each planner must appear exactly once; dependencies are checked when saving. Disabled planners retain their place and are skipped during optimization. Current saved sequence: {sequence}. All operation planners run at HH:00, HH:15, HH:30 and HH:45. Settings apply at the next run; Recalculate now is the explicit manual exception. The solver limit applies per MILP planner. The total time budget includes preparation; late results are discarded. {reason}",
         "data": {
           "planner_time_limit_s": "Maximum solver time per planner",
           "total_time_limit_s": "Total optimization time budget",
-          "change_sequence": "Change optimization sequence"
-        }
-      },
-      "optimization_sequence": {
-        "title": "Optimization sequence",
-        "description": "Choose each planner in execution order. Only planners whose dependencies have already been selected are offered. Sequence so far: {sequence}. Disabled planners retain their place and are skipped at runtime. The sequence is saved after the final selection. {reason}",
-        "data": {
-          "next_planner": "Next operation planner"
+          "planner_position_1": "1st operation planner",
+          "planner_position_2": "2nd operation planner",
+          "planner_position_3": "3rd operation planner",
+          "planner_position_4": "4th operation planner",
+          "planner_position_5": "5th operation planner",
+          "planner_position_6": "6th operation planner",
+          "planner_position_7": "7th operation planner",
+          "planner_position_8": "8th operation planner",
+          "planner_position_9": "9th operation planner",
+          "planner_position_10": "10th operation planner",
+          "planner_position_11": "11th operation planner",
+          "planner_position_12": "12th operation planner",
+          "planner_position_13": "13th operation planner",
+          "planner_position_14": "14th operation planner",
+          "planner_position_15": "15th operation planner",
+          "planner_position_16": "16th operation planner"
         }
       },
       "optimization_conflict": {

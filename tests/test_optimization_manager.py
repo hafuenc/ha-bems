@@ -181,21 +181,64 @@ class OptimizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.states['sensor.new_cost'].state, 'unavailable')
         self.assertIs(input_state(self.hass, 'sensor.new_cost'), self.states['sensor.new_cost'])
 
-    async def test_manager_options_only_offer_dependency_ready_choices(self):
+    def manager_flow(self, order=None):
         self.pair()
+        self.hass.entries.append(entry('battery', module='battery_fbc'))
+        manager_entry = entry('manager', module='optimization_manager', planner_order=order or ['dhw','ufh','battery'])
+        self.hass.entries.append(manager_entry)
+        flow = HABEMSOptionsFlow()
+        flow.hass, flow.config_entry = self.hass, manager_entry
+        return flow
+
+    async def test_manager_single_page_prefills_saved_order_and_saves_all_positions(self):
+        flow = self.manager_flow(['battery','dhw','ufh'])
+        form = await flow.async_step_optimization_manager()
+        self.assertEqual(form['step_id'], 'optimization_manager')
+        defaults = form['data_schema']({})
+        self.assertEqual([defaults[f'planner_position_{i}'] for i in (1,2,3)], ['battery','dhw','ufh'])
+        for i in (1,2,3):
+            self.assertEqual(len(form['data_schema'].schema[f'planner_position_{i}'].config['options']), 3)
+        result = await flow.async_step_optimization_manager({'planner_time_limit_s':12, 'total_time_limit_s':90,
+            'planner_position_1':'dhw','planner_position_2':'ufh','planner_position_3':'battery'})
+        self.assertEqual(result['data']['planner_order'], ['dhw', 'ufh', 'battery'])
+        self.assertEqual(result['data']['planner_time_limit_s'], 12)
+        self.assertFalse(any(key.startswith('planner_position_') for key in result['data']))
+
+    async def test_manager_rejects_duplicates_and_backward_dependencies_without_saving(self):
+        flow = self.manager_flow()
+        await flow.async_step_optimization_manager()
+        for order, reason in ((['dhw','dhw','battery'], 'duplicate'), (['ufh','dhw','battery'], 'before'),
+                              (['dhw','ufh','removed'], 'every configured')):
+            values = {'planner_time_limit_s':20,'total_time_limit_s':120,
+                      **{f'planner_position_{i}':key for i,key in enumerate(order,1)}}
+            form = await flow.async_step_optimization_manager(values)
+            self.assertIn('base', form['errors'])
+            self.assertIn(reason, form['description_placeholders']['reason'])
+            self.assertEqual(flow.config_entry.data['planner_order'], ['dhw','ufh','battery'])
+            if reason == 'duplicate':
+                self.assertEqual(form['data_schema']({})['planner_position_2'], 'dhw')
+
+    async def test_manager_preserves_disabled_positions_and_refreshes_changed_planner_list(self):
+        flow = self.manager_flow()
+        self.root.data['items']['ufh']['data']['enabled'] = False
+        form = await flow.async_step_optimization_manager()
+        choices = form['data_schema'].schema['planner_position_2'].config['options']
+        self.assertIn('Disabled', next(choice['label'] for choice in choices if choice['value']=='ufh'))
+        self.hass.entries.append(entry('new', module='battery_fbc'))
+        result = await flow.async_step_optimization_manager({'planner_time_limit_s':20,'total_time_limit_s':120,
+            'planner_position_1':'dhw','planner_position_2':'ufh','planner_position_3':'battery'})
+        self.assertIn('changed while', result['description_placeholders']['reason'])
+        self.assertIn('planner_position_4', result['data_schema'].schema)
+
+    async def test_manager_with_no_planners_can_save_time_limits(self):
         manager_entry = entry('manager', module='optimization_manager')
         self.hass.entries.append(manager_entry)
         flow = HABEMSOptionsFlow()
         flow.hass, flow.config_entry = self.hass, manager_entry
-        form = await flow.async_step_optimization_manager({'planner_time_limit_s': 12,
-            'total_time_limit_s': 90, 'change_sequence': True})
-        self.assertEqual(form['step_id'], 'optimization_sequence')
-        self.assertEqual(form['data_schema'].schema['next_planner'].config['options'], [{'value': 'dhw', 'label': 'dhw'}])
-        form = await flow.async_step_optimization_sequence({'next_planner': 'dhw'})
-        self.assertEqual(form['data_schema'].schema['next_planner'].config['options'], [{'value': 'ufh', 'label': 'ufh'}])
-        result = await flow.async_step_optimization_sequence({'next_planner': 'ufh'})
-        self.assertEqual(result['data']['planner_order'], ['dhw', 'ufh'])
-        self.assertEqual(result['data']['planner_time_limit_s'], 12)
+        form = await flow.async_step_optimization_manager()
+        self.assertEqual(len(form['data_schema'].schema), 2)
+        result = await flow.async_step_optimization_manager({'planner_time_limit_s':10,'total_time_limit_s':100})
+        self.assertEqual(result['data']['planner_order'], [])
 
     async def test_real_cost_and_milp_chain_accounts_for_fresh_dhw_electrical_load(self):
         from tests.test_thermal_setup import thermal_hass, INPUTS

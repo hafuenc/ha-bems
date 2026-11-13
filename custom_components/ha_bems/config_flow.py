@@ -55,6 +55,14 @@ def _percentage_entity():
     }]})
 
 
+def _planner_position(index):
+    """Use translated ordinal labels, with readable names beyond the common 16."""
+    if index <= 16:
+        return f"planner_position_{index}"
+    suffix = "th" if 10 <= index % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(index % 10, "th")
+    return f"{index}{suffix} operation planner"
+
+
 class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
     """Share configuration steps between initial setup and later options."""
 
@@ -176,7 +184,8 @@ class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
     async def async_step_optimization_manager(self, user_input=None):
         from .const import MODULE_OPTIMIZATION_MANAGER
         from .entries import all_module_entries, module_type
-        from .optimization import DEFAULT_SETTINGS, ordered_planners, validate_settings
+        from .optimization import DEFAULT_SETTINGS, ordered_planners, planning_graph, validate_settings
+        from .entries import item_enabled
 
         if not isinstance(self, config_entries.OptionsFlow):
             await self.async_set_unique_id("optimization_manager")
@@ -184,61 +193,46 @@ class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
                 return self.async_abort(reason="already_configured")
             self._abort_if_unique_id_configured()
         errors, reason = {}, ""
-        if user_input is not None:
-            self._remember({**user_input, "name": "Optimization Manager"})
-            try:
-                validate_settings(self._values())
-                order = ordered_planners(self.hass, [] if user_input.get("change_sequence") else self._values().get("planner_order", []))
-            except ValueError as err:
-                errors["base"], reason = "invalid_optimization_sequence", str(err)
-            else:
-                if user_input.get("change_sequence"):
-                    self._optimization_order = []
-                    return await self.async_step_optimization_sequence()
-                self._remember({"planner_order": order})
-                self._draft.pop("change_sequence", None)
-                return self._finish(MODULE_OPTIMIZATION_MANAGER)
-        values = {**DEFAULT_SETTINGS, **self._values(), **(user_input or {})}
+        items, _ = planning_graph(self.hass)
+        values = {**DEFAULT_SETTINGS, **self._values()}
         try:
             sequence = ordered_planners(self.hass, values["planner_order"])
-            names = {item.entry_id: item.title for item in all_module_entries(self.hass)}
-            current = " → ".join(names[key] for key in sequence) or "No operation planners configured"
-        except ValueError as err:
-            current = str(err)
-        return self.async_show_form(step_id="optimization_manager", errors=errors,
-            description_placeholders={"sequence": current, "reason": reason}, data_schema=vol.Schema({
-                vol.Required("planner_time_limit_s", default=values["planner_time_limit_s"]): _number(1, 120, "s"),
-                vol.Required("total_time_limit_s", default=values["total_time_limit_s"]): _number(1, 840, "s"),
-                vol.Required("change_sequence", default=False): bool}))
-
-    async def async_step_optimization_sequence(self, user_input=None):
-        from .const import MODULE_OPTIMIZATION_MANAGER
-        from .optimization import planning_graph, ordered_planners
-
-        items, dependencies = planning_graph(self.hass)
-        selected = self._optimization_order
-        errors, reason = {}, ""
+        except ValueError:
+            # An obsolete/conflicting saved order must remain editable.
+            sequence = list(dict.fromkeys(key for key in values["planner_order"] if key in items))
+            sequence.extend(key for key in items if key not in sequence)
         if user_input is not None:
-            key = user_input.get("next_planner")
-            if key in items and key not in selected and dependencies[key] <= set(selected):
-                selected.append(key)
-            else:
-                errors["base"], reason = "invalid_optimization_sequence", "Choose a planner whose dependencies are already scheduled"
-        if len(selected) == len(items):
             try:
-                ordered_planners(self.hass, selected)
+                validate_settings(user_input)
+                if getattr(self, "_optimization_item_ids", set(items)) != set(items):
+                    raise ValueError("The configured planners changed while this page was open. Review all positions and save again")
+                order = [user_input.get(_planner_position(index)) for index in range(1, len(items) + 1)]
+                if len(order) != len(set(order)):
+                    raise ValueError("Each operation planner must be selected exactly once; duplicate selections are not allowed")
+                if set(order) != set(items):
+                    raise ValueError("Select every configured operation planner exactly once")
+                ordered_planners(self.hass, order)
             except ValueError as err:
                 errors["base"], reason = "invalid_optimization_sequence", str(err)
             else:
-                self._remember({"planner_order": list(selected)})
-                self._draft.pop("change_sequence", None)
+                self._remember({"name": values.get("name", "Optimization Manager"), "planner_order": order,
+                    "planner_time_limit_s": user_input["planner_time_limit_s"],
+                    "total_time_limit_s": user_input["total_time_limit_s"]})
                 return self._finish(MODULE_OPTIMIZATION_MANAGER)
-        choices = [{"value": key, "label": item.title} for key, item in items.items()
-                   if key not in selected and dependencies[key] <= set(selected)]
-        return self.async_show_form(step_id="optimization_sequence", errors=errors,
-            description_placeholders={"sequence": " → ".join(items[key].title for key in selected) or "—",
-                                      "reason": reason}, data_schema=vol.Schema({
-                vol.Required("next_planner"): _choice(choices)}))
+        self._optimization_item_ids = set(items)
+        values.update(user_input or {})
+        fields = {
+            vol.Required("planner_time_limit_s", default=values["planner_time_limit_s"]): _number(1, 120, "s"),
+            vol.Required("total_time_limit_s", default=values["total_time_limit_s"]): _number(1, 840, "s")}
+        choices = [{"value": key, "label": item.title + (" (Disabled — skipped during optimization)" if not item_enabled(item) else "")}
+                   for key, item in items.items()]
+        for index, identifier in enumerate(sequence, 1):
+            field = _planner_position(index)
+            selected = values.get(field, identifier)
+            fields[vol.Required(field, default=selected if selected in items else identifier)] = _choice(choices)
+        current = " → ".join(items[key].title for key in sequence) or "No operation planners configured"
+        return self.async_show_form(step_id="optimization_manager", errors=errors,
+            description_placeholders={"sequence": current, "reason": reason}, data_schema=vol.Schema(fields))
 
     async def async_step_optimization_conflict(self, user_input=None):
         return await (self.async_step_thermal_plan() if self._values().get(CONF_MODULE) == MODULE_THERMAL_PLAN

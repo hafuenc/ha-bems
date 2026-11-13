@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.2
+
+- Show all optimization sequence positions on one settings page, prefilled with
+  the saved order and labelled 1st, 2nd, 3rd, etc. Keep disabled planners visible.
+- Validate complete, unique selections and dependencies when saving. Preserve
+  invalid choices for correction and detect planner changes while editing.
+
 ## 0.13.1
 
 - Create the automatic Optimization Manager entry after integration setup can
