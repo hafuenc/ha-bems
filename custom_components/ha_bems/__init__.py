@@ -30,7 +30,9 @@ async def async_setup(hass, config):
     await async_register_characteristic_frontend(hass)
     from .optimization import ensure_manager_entry
 
-    await ensure_manager_entry(hass)
+    # Creating an entry can wait for this integration's setup to finish. Do not
+    # await that flow from inside the setup it is waiting for.
+    hass.async_create_task(ensure_manager_entry(hass))
     return True
 
 

@@ -102,6 +102,26 @@ class OptimizationTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(dhw, '_async_update_data', side_effect=calculate):
             self.assertTrue(await self.control.async_run())
 
+    async def test_first_setup_does_not_wait_for_manager_entry_setup(self):
+        from custom_components.ha_bems import async_setup
+
+        ready = asyncio.Event()
+        tasks = []
+        self.hass.async_create_task = lambda coro: tasks.append(asyncio.create_task(coro))
+        async def entry_creation(hass):
+            await ready.wait()  # New entry setup needs integration setup to return.
+        boundaries = {
+            'custom_components.ha_bems.migration': SimpleNamespace(async_flatten_entries=AsyncMock()),
+            'custom_components.ha_bems.constraint_migration': SimpleNamespace(migrate_constraint_settings=lambda hass: None),
+            'custom_components.ha_bems.frontend': SimpleNamespace(async_register_characteristic_frontend=AsyncMock())}
+        with patch.dict('sys.modules', boundaries), patch(
+                'custom_components.ha_bems.optimization.ensure_manager_entry', side_effect=entry_creation):
+            self.assertTrue(await asyncio.wait_for(async_setup(self.hass, {}), 1))
+            self.assertEqual(len(tasks), 1)
+            self.assertFalse(tasks[0].done())
+            ready.set()
+            await asyncio.gather(*tasks)
+
     async def test_time_budget_and_quarter_boundary_discard_incomplete_results(self):
         dhw, ufh = self.pair()
         self.assertTrue(await self.control.async_run())

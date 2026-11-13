@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.1
+
+- Create the automatic Optimization Manager entry after integration setup can
+  finish, avoiding a first-start setup deadlock. Add a regression test for an
+  entry-creation flow that waits for integration readiness.
+
 ## 0.13.0 — Optimization Manager
 
 - Add a single English-language Optimization Manager with dependency-checked
