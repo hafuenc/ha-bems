@@ -333,6 +333,9 @@ chained modules cannot reset the four-slot allowance.
 Cost entities retain their last valid forecast during brief refresh failures,
 using the current interval's value and preserving its original timestamp.
 Fallback COP is reserved for prolonged temperature failures or invalid COPs.
+COP lookups interpolate linearly between reference points and hold the nearest
+endpoint COP outside the table's temperature range. Runtime-demand lookups keep
+their linear extrapolation and configured runtime limits.
 Thermal planners keep their existing feed-forward plan through brief refresh
 failures, for at most one hour and only while it covers the current time.
 Diagnostics identify retained outputs and their refresh error. Successful

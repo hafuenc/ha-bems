@@ -13,7 +13,7 @@ def characteristic_values(config, function, temperatures):
         if config["runtime_model"] == "constant":
             return [(v, v, False) for v in values]
         points = sorted((p["temperature_c"], p["runtime_h_per_24h"]) for p in config["runtime_points"])
-        return [(v, interpolate_cop(t, points), False) for t, v in zip(temperatures, values)]
+        return [(v, interpolate_cop(t, points, extrapolate=True), False) for t, v in zip(temperatures, values)]
     validate_settings(config)
     if config["cop_model"] == "constant":
         value = float(config["constant_cop"])
@@ -49,8 +49,11 @@ def build_characteristic(config, function):
         cutoff = float(config.get("heating_cutoff_c", 20))
         if low <= cutoff <= high:
             samples.update((cutoff, min(high, cutoff + 1e-6)))
-    # Include every clipping kink and COP fallback boundary, not just grid samples.
+    # Runtime curves extrapolate and include every clipping kink. COP curves hold
+    # positive endpoints, so they have no extrapolated zero/fallback boundary.
     for index, (left, right) in enumerate(zip(references, references[1:])):
+        if not runtime:
+            break
         slope = (right["value"] - left["value"]) / (right["temperature_c"] - left["temperature_c"])
         if slope == 0:
             continue
@@ -73,7 +76,7 @@ def build_characteristic(config, function):
         "input_unit": "°C", "output_unit": "h/24h" if runtime else "dimensionless",
         "reference_points": references, "curve_points": curves,
         "interpolation": "linear" if references else "constant",
-        "extrapolation": "linear" if references else "constant",
+        "extrapolation": ("linear" if runtime else "constant_endpoint") if references else "constant",
         "display_range_c": [low, high], "curve_step_c": 1.,
         "value_basis": "configured_function_at_current_forecast_temperature"}
     if model == "constant":

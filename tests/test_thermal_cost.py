@@ -103,6 +103,8 @@ class COPTests(unittest.TestCase):
         points = cop_points([{"temperature_c": 12, "cop": 4}, {"temperature_c": -8, "cop": 2}])
         self.assertEqual(points, [(-8, 2), (12, 4)])
         for temperature, expected in ((-18, 1), (-8, 2), (2, 3), (12, 4), (22, 5)):
+            self.assertAlmostEqual(interpolate_cop(temperature, points, extrapolate=True), expected)
+        for temperature, expected in ((-50, 2), (-8, 2), (2, 3), (12, 4), (40, 4)):
             self.assertAlmostEqual(interpolate_cop(temperature, points), expected)
         self.assertEqual(len(cop_points([{"temperature_c": i, "cop": i + 1} for i in range(10)])), 10)
         for invalid in ([], [{"temperature_c": 0, "cop": 3}],
@@ -113,11 +115,16 @@ class COPTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cop_points(invalid)
 
-    def test_nonpositive_cop_and_missing_temperature_use_explicit_fallback(self):
+    def test_endpoint_hold_and_missing_temperature_fallback(self):
         config = {**CONFIG, "cop_model": "lookup", "fallback_cop": 3,
                   "cop_points": [{"temperature_c": -8, "cop": 2}, {"temperature_c": 12, "cop": 4}]}
         self.assertAlmostEqual(calculate(config, temperature=2)["current_cop"], 3)
-        for temperature in (-50, None):
+        for temperature, expected in ((-50, 2), (40, 4)):
+            result = calculate(config, temperature=temperature)
+            self.assertFalse(result['cop_fallback_active'])
+            self.assertEqual(result['current_cop'], expected)
+            self.assertAlmostEqual(result['current_electrical_power_w'], config['thermal_power_kw'] * 1000 / expected)
+        for temperature in (None,):
             result = calculate(config, temperature=temperature)
             self.assertTrue(result["cop_fallback_active"])
             self.assertEqual(result["cop_fallback_intervals"], 289)
@@ -127,7 +134,8 @@ class COPTests(unittest.TestCase):
         temperature[0]["temperature_c"] = -50
         result = calculate_cost_forecast(config, NOW, rows(0), rows(.3, "price_eur_per_kwh"),
                                         rows(.1, "price_eur_per_kwh"), temperatures=temperature)
-        self.assertEqual(result["cop_fallback_intervals"], 1)
-        self.assertTrue(result["forecast"][0]["cop_fallback"])
+        self.assertEqual(result["cop_fallback_intervals"], 0)
+        self.assertEqual(result["forecast"][0]["cop"], 2)
+        self.assertFalse(result["forecast"][0]["cop_fallback"])
         self.assertFalse(result["forecast"][1]["cop_fallback"])
         self.assertFalse(calculate()["cop_fallback_active"])

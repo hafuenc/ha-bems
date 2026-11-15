@@ -54,7 +54,7 @@ Each runtime-cost setup asks for:
    it adds linearly interpolated points within the existing temperature range.
    Reference temperatures must be unique and COPs positive; points are sorted
    automatically. The lookup model linearly interpolates between reference points
-   and extrapolates using the nearest end segment.
+   and holds the nearest endpoint COP outside the reference temperature range.
    No supply temperature is modelled. A lookup also requires an outdoor temperature
    registration and a positive fallback COP.
 3. Electricity/PV/load registrations and an optional export power limit. With the
@@ -221,8 +221,9 @@ updates. A retained forecast keeps its original generation time and expiry.
 
 A brief temperature refresh failure retains the last valid cost forecast for
 at most one hour, selecting its current interval rather than freezing one state.
+COP stays at the nearest endpoint outside the reference temperature range.
 Only a prolonged failure, exhausted forecast-fill allowance, or invalid
-extrapolated COP uses the configured fallback COP. Attributes expose
+calculated COP uses the configured fallback COP. Attributes expose
 `cop_fallback_active`, `cop_fallback_intervals`, `cop_fallback_reason` and
 `temperature_input_error`; affected records set `cop_fallback: true`. Recovery
 restores normal lookup operation automatically.

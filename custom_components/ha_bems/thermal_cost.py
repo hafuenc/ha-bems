@@ -64,8 +64,16 @@ def validate_settings(config):
         number(config.get("curtailed_price_eur_per_kwh", 0), "Curtailed PV price")
 
 
-def interpolate_cop(temperature, points):
-    """Use the nearest end segment for linear extrapolation, as in MATLAB."""
+def interpolate_cop(temperature, points, *, extrapolate=False):
+    """Interpolate COP linearly and hold endpoints outside the lookup range.
+
+    Runtime-demand curves explicitly opt into linear extrapolation.
+    """
+    if not extrapolate:
+        if temperature <= points[0][0]:
+            return points[0][1]
+        if temperature >= points[-1][0]:
+            return points[-1][1]
     index = max(0, min(len(points) - 2, bisect_right([point[0] for point in points], temperature) - 1))
     (x0, y0), (x1, y1) = points[index:index + 2]
     return y0 + (temperature - x0) * (y1 - y0) / (x1 - x0)
@@ -131,7 +139,7 @@ def calculate_cost_forecast(config, now, pv, import_prices, export_prices,
                 if not isfinite(cop) or cop <= 0:
                     cop = config["fallback_cop"]
                     fallback = True
-                    reasons.add("Interpolated/extrapolated COP is non-positive or non-finite")
+                    reasons.add("Calculated COP is non-positive or non-finite")
         else:
             cop = config["constant_cop"]
         power = config["thermal_power_kw"] * 1000 / cop

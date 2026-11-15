@@ -18,15 +18,17 @@ RUNTIME={**PLAN_CONFIG,'runtime_model':'lookup',
 
 
 class CharacteristicTests(unittest.TestCase):
-    def test_reference_interpolation_extrapolation_and_fallback(self):
+    def test_reference_interpolation_and_endpoint_hold(self):
         result=build_characteristic(COP,'cop')
         points={p['temperature_c']:p for p in result['curve_points']}
         self.assertEqual(points[5]['value'],3)
-        self.assertEqual(points[15]['value'],5)
+        self.assertEqual(points[15]['value'],4)
         self.assertEqual(points[15]['region'],'extrapolation')
-        self.assertEqual(points[-10]['value'],3)
-        self.assertTrue(points[-10]['fallback_active'])
-        self.assertEqual(points[-10]['raw_value'],0)
+        self.assertEqual(points[-10]['value'],2)
+        self.assertFalse(points[-10]['fallback_active'])
+        self.assertEqual(points[-10]['raw_value'],2)
+        self.assertEqual(result['extrapolation'],'constant_endpoint')
+        self.assertFalse(any(p['fallback_active'] for p in result['curve_points']))
         self.assertEqual(len(result['reference_points']),2)
         json.dumps(result,allow_nan=False)
 
@@ -41,6 +43,8 @@ class CharacteristicTests(unittest.TestCase):
         self.assertEqual(points[15+1e-6]['value'],0)
         self.assertEqual(points[20]['value'],0)
         self.assertEqual(result['output_unit'],'h/24h')
+        self.assertEqual(result['extrapolation'],'linear')
+        self.assertEqual(points[-20]['raw_value'],30)
 
     def test_constant_models_without_temperature(self):
         for config,function,value in [(COST_CONFIG,'cop',3.5),(PLAN_CONFIG,'runtime_requirement',12)]:

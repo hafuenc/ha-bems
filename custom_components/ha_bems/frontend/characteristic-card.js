@@ -36,7 +36,9 @@ class BEMSCharacteristicCard extends HTMLElement {
       this.shadowRoot.innerHTML = `<ha-card><div style="padding:20px">${esc(this._config.title || "BEMS characteristic")} · Waiting for characteristic data</div></ha-card>`;
       return;
     }
-    const xMin = Math.min(...points.map(p => p.temperature_c)), xMax = Math.max(...points.map(p => p.temperature_c));
+    const xMin = finite(this._config.x_min) ? this._config.x_min : Math.min(...points.map(p => p.temperature_c));
+    const xMax = finite(this._config.x_max) ? this._config.x_max : Math.max(...points.map(p => p.temperature_c));
+    if (xMax <= xMin) throw new Error("x_max must be greater than x_min");
     const values = points.map(p => p.value).concat(series.flatMap(s => (s.attributes.reference_points || []).map(p => p.value))).filter(finite);
     const yMin = Math.min(0,...values), yTop = Math.max(1,...values);
     const yMax = yTop + (yTop-yMin)*.08;
@@ -53,6 +55,7 @@ class BEMSCharacteristicCard extends HTMLElement {
     for(let xx=firstTick;xx<=xMax;xx+=10) {
       graph+=`<line class="grid" x1="${x(xx)}" x2="${x(xx)}" y1="${T}" y2="${H-B}"/><text x="${x(xx)}" y="${H-B+21}" text-anchor="middle">${fmt(xx)}</text>`;
     }
+    graph+=`<defs><clipPath id="plot-area"><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"/></clipPath></defs><g clip-path="url(#plot-area)">`;
     for(const s of series) {
       let segment=[], kind=null;
       const flush=()=>{
@@ -72,6 +75,7 @@ class BEMSCharacteristicCard extends HTMLElement {
         graph+=`<circle cx="${x(a.current_temperature_c)}" cy="${y(a.current_value)}" r="6" fill="${esc(s.color)}" stroke="var(--primary-text-color,black)" stroke-width="2"><title>${esc(s.name)} · current: ${fmt(a.current_temperature_c)} °C / ${fmt(a.current_value)}</title></circle>`;
       }
     }
+    graph+='</g>';
     const unit=this._config.y_label || (series[0].attributes.output_unit==='h/24h'?'Required runtime (h/24h)':'COP');
     graph+=`<text x="${(L+W-R)/2}" y="${H-7}" text-anchor="middle">Outdoor temperature (°C)</text><text transform="translate(17 ${(T+H-B)/2}) rotate(-90)" text-anchor="middle">${esc(unit)}</text>`;
     const legend=series.map(s=>{
@@ -86,7 +90,7 @@ class BEMSCharacteristicCard extends HTMLElement {
       .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}.note{padding:12px 18px 16px;font-size:12px;color:var(--secondary-text-color)}
     </style><ha-card><div class="title">${esc(this._config.title || "BEMS characteristic")}</div>
       <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(this._config.title || unit)}">${graph}</svg>
-      <div class="legend">${legend}</div><div class="note">Hollow points: reference values · solid: interpolation · dashed: extrapolation · filled points: current values. Runtime limits and heating cutoff are included; red segments indicate fallback COP.</div></ha-card>`;
+      <div class="legend">${legend}</div><div class="note">Hollow points: reference values · solid: interpolation · dashed: outside reference range (COP holds the nearest endpoint; runtime extrapolates) · filled points: current values. Runtime limits and heating cutoff are included; red segments indicate fallback COP.</div></ha-card>`;
   }
 }
 if(!customElements.get("bems-characteristic-card"))customElements.define("bems-characteristic-card",BEMSCharacteristicCard);

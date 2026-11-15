@@ -219,7 +219,7 @@
         },
         "data_description": {
           "thermal_power_kw": "Nominal thermal output of the heat pump (e.g. 7 kW), or rated heat output of an electric heating element. Electrical power is this output divided by COP.",
-          "cop_model": "Constant COP: e.g. a ground source heat pump, or a direct electric heating element with COP = 1. Outdoor temperature dependent COP: e.g. an air source heat pump; define 2–10 outdoor temperature/COP reference points in a lookup table for linear interpolation and extrapolation."
+          "cop_model": "Constant COP: e.g. a ground source heat pump, or a direct electric heating element with COP = 1. Outdoor temperature dependent COP: e.g. an air source heat pump; define 2–10 outdoor temperature/COP reference points in a lookup table for linear interpolation between points and constant endpoint values outside their temperature range."
         }
       },
       "thermal_cop_constant": {
@@ -231,7 +231,7 @@
       },
       "thermal_cop_table": {
         "title": "Outdoor temperature dependent COP",
-        "description": "For an air source heat pump, select a registered outdoor temperature forecast and define 2–10 reference points in a lookup table in the next step. COP is interpolated linearly between reference points; outside their temperature range, the nearest end segment is extrapolated linearly. Brief temperature refresh failures retain the previous valid cost forecast for up to one hour. Prolonged failures, exhausted missing-data allowance and non-positive extrapolated COPs use the fallback COP and are flagged in the output attributes. Register a temperature source under BEMS forecast importer first.",
+        "description": "For an air source heat pump, select a registered outdoor temperature forecast and define 2–10 reference points in a lookup table in the next step. COP is interpolated linearly between reference points; outside their temperature range, the nearest reference COP is held constant. Brief temperature refresh failures retain the previous valid cost forecast for up to one hour. Prolonged failures, exhausted missing-data allowance and invalid COPs use the fallback COP and are flagged in the output attributes. Register a temperature source under BEMS forecast importer first.",
         "data": {
           "temperature_entry_id": "Outdoor temperature forecast",
           "cop_point_count": "Number of reference points",
@@ -587,7 +587,7 @@
         },
         "data_description": {
           "thermal_power_kw": "Nominal thermal output of the heat pump (e.g. 7 kW), or rated heat output of an electric heating element. Electrical power is this output divided by COP.",
-          "cop_model": "Constant COP: e.g. a ground source heat pump, or a direct electric heating element with COP = 1. Outdoor temperature dependent COP: e.g. an air source heat pump; define 2–10 outdoor temperature/COP reference points in a lookup table for linear interpolation and extrapolation."
+          "cop_model": "Constant COP: e.g. a ground source heat pump, or a direct electric heating element with COP = 1. Outdoor temperature dependent COP: e.g. an air source heat pump; define 2–10 outdoor temperature/COP reference points in a lookup table for linear interpolation between points and constant endpoint values outside their temperature range."
         }
       },
       "thermal_cop_constant": {
@@ -599,7 +599,7 @@
       },
       "thermal_cop_table": {
         "title": "Outdoor temperature dependent COP",
-        "description": "For an air source heat pump, select a registered outdoor temperature forecast and define 2–10 reference points in a lookup table in the next step. COP is interpolated linearly between reference points; outside their temperature range, the nearest end segment is extrapolated linearly. Brief temperature refresh failures retain the previous valid cost forecast for up to one hour. Prolonged failures, exhausted missing-data allowance and non-positive extrapolated COPs use the fallback COP and are flagged in the output attributes. Register a temperature source under BEMS forecast importer first.",
+        "description": "For an air source heat pump, select a registered outdoor temperature forecast and define 2–10 reference points in a lookup table in the next step. COP is interpolated linearly between reference points; outside their temperature range, the nearest reference COP is held constant. Brief temperature refresh failures retain the previous valid cost forecast for up to one hour. Prolonged failures, exhausted missing-data allowance and invalid COPs use the fallback COP and are flagged in the output attributes. Register a temperature source under BEMS forecast importer first.",
         "data": {
           "temperature_entry_id": "Outdoor temperature forecast",
           "cop_point_count": "Number of reference points",
@@ -954,7 +954,7 @@
           },
           "data_description": {
             "thermal_power_kw": "Nominal thermal output of the heat pump (e.g. 7 kW), or rated heat output of an electric heating element. Electrical power is this output divided by COP.",
-            "cop_model": "Constant COP: e.g. a ground source heat pump, or a direct electric heating element with COP = 1. Outdoor temperature dependent COP: e.g. an air source heat pump; define 2–10 outdoor temperature/COP reference points in a lookup table for linear interpolation and extrapolation."
+            "cop_model": "Constant COP: e.g. a ground source heat pump, or a direct electric heating element with COP = 1. Outdoor temperature dependent COP: e.g. an air source heat pump; define 2–10 outdoor temperature/COP reference points in a lookup table for linear interpolation between points and constant endpoint values outside their temperature range."
           }
         },
         "thermal_cop_constant": {
@@ -966,7 +966,7 @@
         },
         "thermal_cop_table": {
           "title": "Outdoor temperature dependent COP",
-          "description": "For an air source heat pump, select a registered outdoor temperature forecast and define 2–10 reference points in a lookup table in the next step. COP is interpolated linearly between reference points; outside their temperature range, the nearest end segment is extrapolated linearly. Brief temperature refresh failures retain the previous valid cost forecast for up to one hour. Prolonged failures, exhausted missing-data allowance and non-positive extrapolated COPs use the fallback COP and are flagged in the output attributes. Register a temperature source under BEMS forecast importer first.",
+          "description": "For an air source heat pump, select a registered outdoor temperature forecast and define 2–10 reference points in a lookup table in the next step. COP is interpolated linearly between reference points; outside their temperature range, the nearest reference COP is held constant. Brief temperature refresh failures retain the previous valid cost forecast for up to one hour. Prolonged failures, exhausted missing-data allowance and invalid COPs use the fallback COP and are flagged in the output attributes. Register a temperature source under BEMS forecast importer first.",
           "data": {
             "temperature_entry_id": "Outdoor temperature forecast",
             "cop_point_count": "Number of reference points",

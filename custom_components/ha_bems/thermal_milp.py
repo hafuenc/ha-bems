@@ -53,7 +53,7 @@ def required_runtimes(config, temperatures, count):
     result = []
     for temperature in temperatures:
         number(temperature, "Outdoor temperature")
-        runtime = min(config.get("runtime_max_h", 24), max(config.get("runtime_min_h", 0), interpolate_cop(temperature, points)))
+        runtime = min(config.get("runtime_max_h", 24), max(config.get("runtime_min_h", 0), interpolate_cop(temperature, points, extrapolate=True)))
         if config.get("heating_cutoff_enabled", True) and temperature > config.get("heating_cutoff_c", 20):
             runtime = 0
         result.append(runtime)

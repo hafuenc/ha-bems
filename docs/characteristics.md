@@ -31,8 +31,10 @@ Attributes:
   `heating_cutoff_c` and `heating_cutoff_comparison`.
 
 Above the heating cutoff (strictly `temperature > cutoff`), runtime is zero,
-including when the configured minimum is positive. Non-positive/non-finite COP
-extrapolations use the configured fallback COP and are marked in the curve.
+including when the configured minimum is positive. COP is linearly interpolated
+between reference points and holds the nearest endpoint outside their range.
+The `extrapolation` attribute is `constant_endpoint` for COP lookups and `linear`
+for runtime lookups. A missing temperature input can still activate COP fallback.
 Reference and curve lists are excluded from recorder attributes to avoid
 duplicating static curves on every state update. The small numeric sensor state
 can still be inspected in normal HA History.
@@ -43,7 +45,7 @@ The optional display is bundled with HA-BEMS and served by Home Assistant.
 Add this dashboard resource once as a **JavaScript module**:
 
 ```text
-/ha_bems/characteristic-card.js?v=0.10.4
+/ha_bems/characteristic-card.js?v=0.13.3
 ```
 
 The version query avoids stale browser copies after updates. No additional HACS
@@ -63,8 +65,9 @@ entities:
 ```
 
 Use a separate card for runtime sensors with `y_label: Required runtime (h/24h)`.
-Hollow markers show reference values, solid/dashed lines show interpolation and
-extrapolation, and filled markers show current values. COP fallback segments are
+Hollow markers show reference values, solid lines show interpolation, dashed lines
+show endpoint holds for COP or extrapolation for runtime, and filled markers show
+current values. COP fallback segments are
 red. The card is read-only: settings remain in the integration's normal HA flow.
 Add a relative History link below each chart selecting all plotted entities, for
 example `/history?entity_id=sensor.example_dhw_cop_characteristic,sensor.example_ufh_cop_characteristic`.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.3
+
+- Hold the nearest COP reference value below and above the lookup temperature
+  range, while retaining linear interpolation between points. Use the same
+  endpoint behavior in runtime costs and diagnostic curves, avoiding near-zero
+  cold extrapolations and jumps to fallback COP. Preserve runtime-demand curve
+  extrapolation, existing reference points and missing-temperature fallback.
+- Describe endpoint holds in setup help and chart annotations. Honor configured
+  chart temperature bounds and clip plotted lines and markers to the plot area.
+
 ## 0.13.2
 
 - Show all optimization sequence positions on one settings page, prefilled with
