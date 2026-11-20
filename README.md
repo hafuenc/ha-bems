@@ -133,7 +133,7 @@ remain supported; missing or invalid source states make them unavailable without
 a silent fallback. [Threshold setup and semantics](docs/seasonal_soc.md).
 
 **Non-flexible load profile** scales annual non-flexible consumption in kWh to
-15-minute intervals using bundled BDEW/VDEW H0, H25 or a constant curve. It exposes
+15-minute intervals using bundled BDEW/VDEW H0, H25, G25 (commercial) or a constant curve. It exposes
 current estimated power in W and a rolling 72-hour `forecast` attribute.
 The full local calendar year's energy matches the annual input, including leap
 years and DST. Holiday setup offers Austria/Germany and a country-specific

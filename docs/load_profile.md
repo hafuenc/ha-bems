@@ -1,9 +1,9 @@
 # Non-flexible load profile
 
 Add **HA-BEMS → BEMS entity creator → Non-flexible load profile**. Enter the
-annual non-flexible consumption in kWh and choose H0, H25 or constant. Settings
+annual non-flexible consumption in kWh and choose H0, H25, G25 or constant. Settings
 remain editable through the entry's Configure action. Setup and Configure both
-link the original H0/H25 profile tables and BDEW background/application notes.
+link the original H0/H25/G25 profile tables and BDEW background/application notes.
 
 The annual input represents behind-the-meter demand before PV/battery balancing.
 Exclude flexible loads that will be separately scheduled (heat pump, EV) to
@@ -16,12 +16,15 @@ automatic substitute for total non-flexible demand.
   types, with the household day-of-year dynamisation polynomial.
 - H25 uses BDEW's 2025 household table, twelve calendar months and three day
   types, with the published household dynamisation polynomial.
+- G25 uses BDEW's 2025 commercial table, twelve calendar months and three day
+  types. The household dynamisation polynomial is not applied to G25, as required
+  by BDEW's application notes.
 - Constant distributes the annual energy uniformly over every real quarter-hour
   in the local calendar year. Leap years therefore have a lower constant power
   for the same annual kWh.
 
 Original numeric tables are bundled locally; no online profile service is used.
-All three profiles are normalised over the actual selected calendar year so the
+All four profiles are normalised over the actual selected calendar year so the
 integral equals the annual input. This annual normalisation is an HA-BEMS
 adaptation for demand estimation, not a claim of certified settlement profiles.
 The dynamisation polynomial is applied without intermediate rounding before

@@ -309,6 +309,7 @@ class _ModuleSteps(WindSetupSteps, ThermalPlanSteps):
         fields[vol.Required("load_profile", default=values.get("load_profile", "H0"))] = _choice([
             {"value": "H0", "label": "H0"},
             {"value": "H25", "label": "H25"},
+            {"value": "G25", "label": "G25 — Commercial"},
             {"value": "constant", "label": "Constant throughout the year"},
         ])
         fields[vol.Required("holiday_country", default=values.get("holiday_country", "AT"))] = _choice([

@@ -9,18 +9,18 @@ override. Attribution is retained in the Python port.
 
 ## Standard load profile tables
 
-`custom_components/ha_bems/data/load_profiles.json` contains numeric household
+`custom_components/ha_bems/data/load_profiles.json` contains numeric household and commercial
 profile tables extracted from the original BDEW/VDEW downloads. It includes
 SHA-256 hashes of the downloaded source archives/workbooks.
 
 - H0: `Haushalt-Lastprofil.xls`, sheet `Profil`, from
   [VDEW Profile.zip](https://www.bdew.de/media/documents/Profile.zip), 1999/2000.
-- H25: sheet `H25`, from
+- H25 and G25: sheets `H25` and `G25`, from
   [BDEW 2025 workbook](https://www.bdew.de/media/documents/Kopie_von_Repr%C3%A4sentative_Profile_BDEW_H25_G25_L25_P25_S25_Ver%C3%B6ffentlichung.xlsx).
 - [BDEW source and application notes](https://www.bdew.de/energie/standardlastprofile-strom/).
 
 The packaged table stores W per 1,000 kWh/year before dynamisation and annual
-normalisation. H25 source values (kWh/quarter-hour for 1,000,000 kWh/year) were
+normalisation. H25/G25 source values (kWh/quarter-hour for 1,000,000 kWh/year) were
 multiplied by four to obtain these units. H0 already uses the target units.
 The original workbooks and publications are not bundled or relicensed.
 

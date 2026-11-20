@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.4
+
+- Add BDEW G25 (commercial) to the non-flexible load profile setup and settings.
+  Bundle the original 2025 monthly tables without household dynamisation,
+  retaining annual-energy normalisation, holiday calendars and DST handling.
+- Preserve existing profile selections and document G25's calculation and sources.
+
 ## 0.13.3
 
 - Hold the nearest COP reference value below and above the lookup temperature

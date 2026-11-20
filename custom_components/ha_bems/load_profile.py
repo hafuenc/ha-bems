@@ -24,7 +24,7 @@ def year_shape(year: int, timezone: str, profile: str, country: str, subdivision
     Compute off the HA event loop. UTC stepping explicitly preserves both
     autumn repeated hours and omits nonexistent spring hours.
     """
-    if profile not in ("H0", "H25", "constant"):
+    if profile not in ("H0", "H25", "G25", "constant"):
         raise ValueError("Unknown load profile")
     tz = ZoneInfo(timezone)
     first = datetime(year, 1, 1, tzinfo=tz).astimezone(UTC)
@@ -45,7 +45,7 @@ def year_shape(year: int, timezone: str, profile: str, country: str, subdivision
                 day = "saturday"
             else:
                 day = "workday"
-            if profile == "H25":
+            if profile in ("H25", "G25"):
                 period = str(date.month)
             elif (5, 15) <= (date.month, date.day) <= (9, 14):
                 period = "summer"
@@ -54,8 +54,10 @@ def year_shape(year: int, timezone: str, profile: str, country: str, subdivision
             else:
                 period = "transition"
             day_number = date.timetuple().tm_yday
-            dynamic = (-3.92e-10 * day_number**4 + 3.2e-7 * day_number**3
-                       - 7.02e-5 * day_number**2 + 2.1e-3 * day_number + 1.24)
+            # BDEW's commercial G25 table must not use household dynamisation.
+            dynamic = 1.0 if profile == "G25" else (
+                -3.92e-10 * day_number**4 + 3.2e-7 * day_number**3
+                - 7.02e-5 * day_number**2 + 2.1e-3 * day_number + 1.24)
             value = tables[profile][period][day][local.hour * 4 + local.minute // 15] * dynamic
         weights.append(value)
         cursor += STEP
